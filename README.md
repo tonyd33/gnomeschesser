@@ -45,8 +45,8 @@ See the [Gleam shop](https://shop.gleam.run/) for more information on merch.
 ## Submissions
 
 Submissions should be Gleam web servers and may use either the Erlang or JavaScript
-targets. Templates for both are provided in the `erlang-template` and
-`javascript-template` directories respectively.
+targets. Templates for both are provided in the `erlang_template` and
+`javascript_template` directories respectively.
 
 Submissions will be pitted against each other by a client running the
 [chess.js](https://github.com/jhlywa/chess.js) library for tracking and validation.
@@ -78,15 +78,52 @@ number of submissions.
   - If you wish to update your entry before the tournament closes, please reach out
     to me via [Bluesky](https://bsky.app/profile/ihh.dev) or in the #chess-tournament
     channel in [my Discord](https://discord.com/invite/bWrctJ7).
-- You may only use a limited set of external libraries. See [the libraries list](#libraries)
+- You may only use a limited set of external libraries. See [the libraries list](#libraries).
   for more information.
 - You may not do any IO operations to the filesystem or network.
 - FFI is not allowed.
-- Your bot may not use more than the following resources:
+- Your bot may not use more than the following resources. These will be enforced by Docker:
   - 2 CPU cores
   - 512mb of RAM
 - Each move will be timed out after 5 seconds.
 - If your bot fails three times for the same turn, either by timing out or by failing
   to make a legal move, it will forfeit the match.
+- You may not modify the provided Dockerfile.
+- The bots will run on Gleam 1.8.1.
+  - The JavaScript bot will run on Node.
 
-###
+### Libraries
+
+The following is a list of libraries allowed on each target. If you feel that the list
+is missing something, please open an issue.
+
+You may use any dev dependencies you wish, but they must not be included in the built
+output.
+
+#### All targets
+
+- [gleam_stdlib](https://hexdocs.pm/gleam_stdlib/index.html)
+- [gleam_http](https://hexdocs.pm/gleam_http/index.html)
+- [gleam_json](https://hexdocs.pm/gleam_json/index.html)
+- [gleam_community_maths](https://hexdocs.pm/gleam_community_maths/index.html)
+- [flash](https://hexdocs.pm/flash/index.html)
+- [iv](https://hexdocs.pm/iv/index.html)
+- [glearray](https://hexdocs.pm/glearray/index.html)
+- [snag](https://hexdocs.pm/snag/index.html)
+
+#### Erlang
+
+- [gleam_erlang](https://hexdocs.pm/gleam_erlang/index.html)
+- [gleam_otp](https://hexdocs.pm/gleam_otp/index.html)
+- [mist](https://hexdocs.pm/mist/index.html)
+- [wisp](https://hexdocs.pm/wisp/index.html)
+
+#### JavaScript
+
+- [gleam_javascript](https://hexdocs.pm/gleam_javascript/index.html)
+- [glen](https://hexdocs.pm/glen/index.html)
+
+## Newsletter
+
+To be kept up to date with the latest news and updates, rule changes and so forth,
+subscribe to the [Gleam Chess newsletter](https://buttondown.com/gleamchess).
