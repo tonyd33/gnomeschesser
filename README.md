@@ -131,3 +131,7 @@ output.
 
 To be kept up to date with the latest news and updates, rule changes and so forth,
 subscribe to the [Gleam Chess newsletter](https://buttondown.com/gleamchess).
+
+## Useful resources
+
+- [The Chess Programming Wiki](https://www.chessprogramming.org/Main_Page)
