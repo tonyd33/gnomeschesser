@@ -90,7 +90,8 @@ number of submissions.
   to make a legal move, it will forfeit the match.
 - You may not modify the provided Dockerfile.
 - The bots will run on Gleam 1.8.1.
-  - The JavaScript bot will run on Node.
+  - The JavaScript bot will run on Deno, as that's what's best supported by Glen.
+- You may not modify the project names (sorry, it'll break Dockerfiles!).
 
 ### Libraries
 
