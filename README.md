@@ -54,6 +54,9 @@ Submissions will be pitted against each other by a client running the
 The format of the tournament is yet to be decided and will likely depend on the
 number of submissions.
 
+Submissions should be made [here](https://docs.google.com/forms/d/e/1FAIpQLSfhmo_0zxN7IDIEL6ZHZiyDaNJ2Y7_rkdt661DTaCdK2oHpSA/viewform?usp=dialog).
+The submission deadline is **noon UTC on June 8th 2025**.
+
 ## How to participate
 
 - Install [Gleam](https://gleam.run) and clone the this repository.
