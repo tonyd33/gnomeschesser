@@ -60,7 +60,7 @@ number of submissions.
 - Create a new directory for your submission and copy the `erlang-template` or
   `javascript-template` directory into it.
 - Ensure you can run `gleam run` and the webserver starts correctly on port `8000`.
-- Fill out the `move` function in `src/chess.gleam` with your bot's logic.
+- Fill out the `move` function in `src/<target>_template/chess.gleam` with your bot's logic.
   - The function should return a `Result(String, String)` where the `Ok` variant
     is a move in [SAN](<https://en.wikipedia.org/wiki/Algebraic_notation_(chess)>)
     format. The client will validate using `chess.js`'s permissive move parser
