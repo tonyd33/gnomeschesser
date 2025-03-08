@@ -38,7 +38,7 @@ An additional prize will be awarded to the entry with the most interesting strat
 - 1st place: $500, a Lucy T-shirt and a Lucy mug
 - 2nd place: $300 and a T-shirt OR mug
 - 3rd place: $100 and a T-shirt OR mug
-- Most interesting strategy: $50
+- Most interesting strategy: $50 and a T-shirt OR mug
 
 See the [Gleam shop](https://shop.gleam.run/) for more information on merch.
 
