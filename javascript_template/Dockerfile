@@ -1,4 +1,4 @@
-FROM ghcr.io/gleam-lang/gleam:v1.8.1-node-slim AS builder
+FROM ghcr.io/gleam-lang/gleam:v1.9.1-node-slim AS builder
 
 WORKDIR /build
 COPY . /build
@@ -6,7 +6,7 @@ COPY . /build
 # Compile the project
 RUN gleam build --target javascript
 
-FROM denoland/deno:alpine-2.2.2
+FROM denoland/deno:alpine-2.2.3
 
 WORKDIR /app
 COPY --from=builder /build/build/dev/javascript /app
