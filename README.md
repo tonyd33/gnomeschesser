@@ -7,6 +7,15 @@ This is a friendly competition to see who can create the best chess bot in the
 the tournament will be turned into a Twitch stream or YouTube video on
 [my channel](https://youtube.com/IsaacHarrisHolt).
 
+## Changelog
+
+### 2025-03-11
+
+- Added [birl](https://hexdocs.pm/birl/index.html),
+  [gtempo](https://hexdocs.pm/gtempo/index.html) and
+  [gleam_time](https://hexdocs.pm/gleam_time/index.html) as allowed libraries for all
+  targets
+
 ## How does it work?
 
 Essentially, each entry will be a Gleam web server that responds to HTTP requests sent
@@ -109,11 +118,14 @@ output.
 - [gleam_stdlib](https://hexdocs.pm/gleam_stdlib/index.html)
 - [gleam_http](https://hexdocs.pm/gleam_http/index.html)
 - [gleam_json](https://hexdocs.pm/gleam_json/index.html)
+- [gleam_time](https://hexdocs.pm/gleam_time/index.html)
 - [gleam_community_maths](https://hexdocs.pm/gleam_community_maths/index.html)
 - [flash](https://hexdocs.pm/flash/index.html)
 - [iv](https://hexdocs.pm/iv/index.html)
 - [glearray](https://hexdocs.pm/glearray/index.html)
 - [snag](https://hexdocs.pm/snag/index.html)
+- [birl](https://hexdocs.pm/birl/index.html)
+- [gtempo](https://hexdocs.pm/gtempo/index.html)
 
 #### Erlang
 
