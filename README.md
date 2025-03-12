@@ -91,7 +91,7 @@ The submission deadline is **noon UTC on June 8th 2025**.
 
 ## How to participate
 
-- Install [Gleam](https://gleam.run) and clone the this repository.
+- Install [Gleam](https://gleam.run) and clone this repository.
 - Create a new directory for your submission and copy the `erlang-template` or
   `javascript-template` directory into it.
 - Ensure you can run `gleam run` and the webserver starts correctly on port `8000`.
