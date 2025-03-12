@@ -111,7 +111,7 @@ The submission deadline is **noon UTC on June 8th 2025**.
   - Your bot will also forfeit if it fails or times out **15** times total during the
     match. See #5 for details. 
 - You may not modify the provided Dockerfile.
-- The bots will run on Gleam 1.8.1.
+- The bots will run on Gleam **1.9.1**.
   - The JavaScript bot will run on Deno, as that's what's best supported by Glen.
 - You may not modify the project names (sorry, it'll break Dockerfiles!).
 
