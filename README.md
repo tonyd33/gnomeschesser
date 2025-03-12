@@ -16,6 +16,8 @@ the tournament will be turned into a Twitch stream or YouTube video on
 - Added a new rule to limit the total number of failures a bot is allowed per game
   before forfeiting. This is to prevent the potential workaround outlined in #5.
   The limit is currently **15** failures.
+- Added new prizes! Thanks [CodeCrafters](https://www.codecrafters.io/) for the
+  sponsorship!
 
 ### 2025-03-11
 
@@ -52,12 +54,25 @@ tournament.
 
 An additional prize will be awarded to the entry with the most interesting strategy.
 
-- 1st place: $500, a Lucy T-shirt and a Lucy mug
-- 2nd place: $300 and a T-shirt OR mug
-- 3rd place: $100 and a T-shirt OR mug
-- Most interesting strategy: $50 and a T-shirt OR mug
+- 1st place: $500, a Lucy T-shirt and a Lucy mug, and CodeCrafters VIP memberships for
+  you and your team
+- 2nd place: $300 and a T-shirt OR mug, and 1 year CodeCrafters memberships for you
+  and your team
+- 3rd place: $100 and a T-shirt OR mug, and 3 month CodeCrafters memberships for you
+  and your team
+- Most interesting strategy: $50 and a T-shirt OR mug, and 1 month CodeCrafters
+  memberships for you and your team
 
 See the [Gleam shop](https://shop.gleam.run/) for more information on merch.
+
+### CodeCrafters
+
+Thanks to [CodeCrafters](https://www.codecrafters.io/) for sponsoring the prizes!
+Check them out for an awesome way to get better at coding.
+
+<a href="https://www.codecrafters.io/" target="_blank" rel="noopener noreferrer">
+    <img src="https://codecrafters.io/_next/static/media/logo.df7bb93f.png" width="200px">
+</a>
 
 ## Submissions
 
@@ -109,7 +124,7 @@ The submission deadline is **noon UTC on June 8th 2025**.
 - If your bot fails three times for the same turn, either by timing out or by failing
   to make a legal move, it will forfeit the match.
   - Your bot will also forfeit if it fails or times out **15** times total during the
-    match. See #5 for details. 
+    match. See #5 for details.
 - You may not modify the provided Dockerfile.
 - The bots will run on Gleam **1.9.1**.
   - The JavaScript bot will run on Deno, as that's what's best supported by Glen.
