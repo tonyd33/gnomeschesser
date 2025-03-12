@@ -9,12 +9,20 @@ the tournament will be turned into a Twitch stream or YouTube video on
 
 ## Changelog
 
+### 2025-03-12
+
+- Updated Dockerfiles (#4, thanks @MoeDevelops!) to be a bit slimmer. You may still
+  use the old Dockerfiles, which are now prefixed with `pre-2025-03-11-`.
+- Added a new rule to limit the total number of failures a bot is allowed per game
+  before forfeiting. This is to prevent the potential workaround outlined in #5.
+  The limit is currently **15** failures.
+
 ### 2025-03-11
 
 - Added [birl](https://hexdocs.pm/birl/index.html),
   [gtempo](https://hexdocs.pm/gtempo/index.html) and
   [gleam_time](https://hexdocs.pm/gleam_time/index.html) as allowed libraries for all
-  targets
+  targets.
 
 ## How does it work?
 
@@ -100,6 +108,8 @@ The submission deadline is **noon UTC on June 8th 2025**.
 - Each move will be timed out after 5 seconds.
 - If your bot fails three times for the same turn, either by timing out or by failing
   to make a legal move, it will forfeit the match.
+  - Your bot will also forfeit if it fails or times out **15** times total during the
+    match. See #5 for details. 
 - You may not modify the provided Dockerfile.
 - The bots will run on Gleam 1.8.1.
   - The JavaScript bot will run on Deno, as that's what's best supported by Glen.
