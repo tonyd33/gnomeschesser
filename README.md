@@ -9,6 +9,11 @@ the tournament will be turned into a Twitch stream or YouTube video on
 
 ## Changelog
 
+### 2025-03-15
+
+- Added a testing script to the `testing_utils` directory. See
+  [the section on testing](#testing) for more information.
+
 ### 2025-03-12
 
 - Updated Dockerfiles (#4, thanks @MoeDevelops!) to be a bit slimmer. You may still
@@ -163,6 +168,14 @@ output.
 
 - [gleam_javascript](https://hexdocs.pm/gleam_javascript/index.html)
 - [glen](https://hexdocs.pm/glen/index.html)
+
+## Testing
+
+The [`testing_utils`](./testing_utils) directory contains a Deno test script that
+will run a suite of test moves against your bot. Feel free to use it as you see fit.
+
+Run the tests with `deno run test`, assuming your bot is running on port `8000`
+(which it should be!).
 
 ## Newsletter
 
