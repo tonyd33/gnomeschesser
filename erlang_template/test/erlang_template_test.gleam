@@ -1,4 +1,4 @@
-import erlang_template/chess.{Board, Game, fen_to_game}
+import erlang_template/chess.{Piece, load_fen}
 import gleam/dict
 import gleeunit
 import gleeunit/should
@@ -7,91 +7,104 @@ pub fn main() {
   gleeunit.main()
 }
 
-// Examples taken from: https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation#Examples
-pub fn fen_to_game_starting_position_test() {
-  let Game(Board(cells)) =
-    fen_to_game("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+// See: https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation#Examples
+pub fn load_fen_starting_position_test() {
+  let assert Ok(game) =
+    load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
   let expected_cells =
     [
-      #(#(0, 0), #(chess.Rook, chess.White)),
-      #(#(1, 0), #(chess.Knight, chess.White)),
-      #(#(2, 0), #(chess.Bishop, chess.White)),
-      #(#(3, 0), #(chess.Queen, chess.White)),
-      #(#(4, 0), #(chess.King, chess.White)),
-      #(#(5, 0), #(chess.Bishop, chess.White)),
-      #(#(6, 0), #(chess.Knight, chess.White)),
-      #(#(7, 0), #(chess.Rook, chess.White)),
-      #(#(0, 1), #(chess.Pawn, chess.White)),
-      #(#(1, 1), #(chess.Pawn, chess.White)),
-      #(#(2, 1), #(chess.Pawn, chess.White)),
-      #(#(3, 1), #(chess.Pawn, chess.White)),
-      #(#(4, 1), #(chess.Pawn, chess.White)),
-      #(#(5, 1), #(chess.Pawn, chess.White)),
-      #(#(6, 1), #(chess.Pawn, chess.White)),
-      #(#(7, 1), #(chess.Pawn, chess.White)),
-      #(#(0, 7), #(chess.Rook, chess.Black)),
-      #(#(1, 7), #(chess.Knight, chess.Black)),
-      #(#(2, 7), #(chess.Bishop, chess.Black)),
-      #(#(3, 7), #(chess.Queen, chess.Black)),
-      #(#(4, 7), #(chess.King, chess.Black)),
-      #(#(5, 7), #(chess.Bishop, chess.Black)),
-      #(#(6, 7), #(chess.Knight, chess.Black)),
-      #(#(7, 7), #(chess.Rook, chess.Black)),
-      #(#(0, 6), #(chess.Pawn, chess.Black)),
-      #(#(1, 6), #(chess.Pawn, chess.Black)),
-      #(#(2, 6), #(chess.Pawn, chess.Black)),
-      #(#(3, 6), #(chess.Pawn, chess.Black)),
-      #(#(4, 6), #(chess.Pawn, chess.Black)),
-      #(#(5, 6), #(chess.Pawn, chess.Black)),
-      #(#(6, 6), #(chess.Pawn, chess.Black)),
-      #(#(7, 6), #(chess.Pawn, chess.Black)),
+      #(chess.A1, Piece(chess.White, chess.Rook)),
+      #(chess.B1, Piece(chess.White, chess.Knight)),
+      #(chess.C1, Piece(chess.White, chess.Bishop)),
+      #(chess.D1, Piece(chess.White, chess.Queen)),
+      #(chess.E1, Piece(chess.White, chess.King)),
+      #(chess.F1, Piece(chess.White, chess.Bishop)),
+      #(chess.G1, Piece(chess.White, chess.Knight)),
+      #(chess.H1, Piece(chess.White, chess.Rook)),
+      #(chess.A2, Piece(chess.White, chess.Pawn)),
+      #(chess.B2, Piece(chess.White, chess.Pawn)),
+      #(chess.C2, Piece(chess.White, chess.Pawn)),
+      #(chess.D2, Piece(chess.White, chess.Pawn)),
+      #(chess.E2, Piece(chess.White, chess.Pawn)),
+      #(chess.F2, Piece(chess.White, chess.Pawn)),
+      #(chess.G2, Piece(chess.White, chess.Pawn)),
+      #(chess.H2, Piece(chess.White, chess.Pawn)),
+      #(chess.A8, Piece(chess.Black, chess.Rook)),
+      #(chess.B8, Piece(chess.Black, chess.Knight)),
+      #(chess.C8, Piece(chess.Black, chess.Bishop)),
+      #(chess.D8, Piece(chess.Black, chess.Queen)),
+      #(chess.E8, Piece(chess.Black, chess.King)),
+      #(chess.F8, Piece(chess.Black, chess.Bishop)),
+      #(chess.G8, Piece(chess.Black, chess.Knight)),
+      #(chess.H8, Piece(chess.Black, chess.Rook)),
+      #(chess.A7, Piece(chess.Black, chess.Pawn)),
+      #(chess.B7, Piece(chess.Black, chess.Pawn)),
+      #(chess.C7, Piece(chess.Black, chess.Pawn)),
+      #(chess.D7, Piece(chess.Black, chess.Pawn)),
+      #(chess.E7, Piece(chess.Black, chess.Pawn)),
+      #(chess.F7, Piece(chess.Black, chess.Pawn)),
+      #(chess.G7, Piece(chess.Black, chess.Pawn)),
+      #(chess.H7, Piece(chess.Black, chess.Pawn)),
     ]
     |> dict.from_list
 
-  cells |> should.equal(expected_cells)
+  game.board |> should.equal(expected_cells)
 }
 
-pub fn fen_to_game_e4_test() {
-  let Game(Board(cells)) =
-    fen_to_game("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1")
+// See: https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation#Examples
+pub fn load_fen_e4_test() {
+  let assert Ok(game) =
+    load_fen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1")
 
   let expected_cells =
     [
-      #(#(0, 0), #(chess.Rook, chess.White)),
-      #(#(1, 0), #(chess.Knight, chess.White)),
-      #(#(2, 0), #(chess.Bishop, chess.White)),
-      #(#(3, 0), #(chess.Queen, chess.White)),
-      #(#(4, 0), #(chess.King, chess.White)),
-      #(#(5, 0), #(chess.Bishop, chess.White)),
-      #(#(6, 0), #(chess.Knight, chess.White)),
-      #(#(7, 0), #(chess.Rook, chess.White)),
-      #(#(0, 1), #(chess.Pawn, chess.White)),
-      #(#(1, 1), #(chess.Pawn, chess.White)),
-      #(#(2, 1), #(chess.Pawn, chess.White)),
-      #(#(3, 1), #(chess.Pawn, chess.White)),
-      #(#(4, 3), #(chess.Pawn, chess.White)),
-      #(#(5, 1), #(chess.Pawn, chess.White)),
-      #(#(6, 1), #(chess.Pawn, chess.White)),
-      #(#(7, 1), #(chess.Pawn, chess.White)),
-      #(#(0, 7), #(chess.Rook, chess.Black)),
-      #(#(1, 7), #(chess.Knight, chess.Black)),
-      #(#(2, 7), #(chess.Bishop, chess.Black)),
-      #(#(3, 7), #(chess.Queen, chess.Black)),
-      #(#(4, 7), #(chess.King, chess.Black)),
-      #(#(5, 7), #(chess.Bishop, chess.Black)),
-      #(#(6, 7), #(chess.Knight, chess.Black)),
-      #(#(7, 7), #(chess.Rook, chess.Black)),
-      #(#(0, 6), #(chess.Pawn, chess.Black)),
-      #(#(1, 6), #(chess.Pawn, chess.Black)),
-      #(#(2, 6), #(chess.Pawn, chess.Black)),
-      #(#(3, 6), #(chess.Pawn, chess.Black)),
-      #(#(4, 6), #(chess.Pawn, chess.Black)),
-      #(#(5, 6), #(chess.Pawn, chess.Black)),
-      #(#(6, 6), #(chess.Pawn, chess.Black)),
-      #(#(7, 6), #(chess.Pawn, chess.Black)),
+      #(chess.A1, Piece(chess.White, chess.Rook)),
+      #(chess.B1, Piece(chess.White, chess.Knight)),
+      #(chess.C1, Piece(chess.White, chess.Bishop)),
+      #(chess.D1, Piece(chess.White, chess.Queen)),
+      #(chess.E1, Piece(chess.White, chess.King)),
+      #(chess.F1, Piece(chess.White, chess.Bishop)),
+      #(chess.G1, Piece(chess.White, chess.Knight)),
+      #(chess.H1, Piece(chess.White, chess.Rook)),
+      #(chess.A2, Piece(chess.White, chess.Pawn)),
+      #(chess.B2, Piece(chess.White, chess.Pawn)),
+      #(chess.C2, Piece(chess.White, chess.Pawn)),
+      #(chess.D2, Piece(chess.White, chess.Pawn)),
+      #(chess.E4, Piece(chess.White, chess.Pawn)),
+      #(chess.F2, Piece(chess.White, chess.Pawn)),
+      #(chess.G2, Piece(chess.White, chess.Pawn)),
+      #(chess.H2, Piece(chess.White, chess.Pawn)),
+      #(chess.A8, Piece(chess.Black, chess.Rook)),
+      #(chess.B8, Piece(chess.Black, chess.Knight)),
+      #(chess.C8, Piece(chess.Black, chess.Bishop)),
+      #(chess.D8, Piece(chess.Black, chess.Queen)),
+      #(chess.E8, Piece(chess.Black, chess.King)),
+      #(chess.F8, Piece(chess.Black, chess.Bishop)),
+      #(chess.G8, Piece(chess.Black, chess.Knight)),
+      #(chess.H8, Piece(chess.Black, chess.Rook)),
+      #(chess.A7, Piece(chess.Black, chess.Pawn)),
+      #(chess.B7, Piece(chess.Black, chess.Pawn)),
+      #(chess.C7, Piece(chess.Black, chess.Pawn)),
+      #(chess.D7, Piece(chess.Black, chess.Pawn)),
+      #(chess.E7, Piece(chess.Black, chess.Pawn)),
+      #(chess.F7, Piece(chess.Black, chess.Pawn)),
+      #(chess.G7, Piece(chess.Black, chess.Pawn)),
+      #(chess.H7, Piece(chess.Black, chess.Pawn)),
     ]
     |> dict.from_list
 
-  cells |> should.equal(expected_cells)
+  game.board |> should.equal(expected_cells)
+}
+
+pub fn load_fen_fail_test() {
+  // has an extra row
+  let assert Error(_) =
+    load_fen("/rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1")
+  // has an extra piece
+  let assert Error(_) =
+    load_fen("prnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1")
+  // has an extra row + piece
+  let assert Error(_) =
+    load_fen("p/rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1")
 }
