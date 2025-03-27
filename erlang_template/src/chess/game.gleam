@@ -1,4 +1,3 @@
-import chess/move
 import chess/piece
 import chess/player
 import chess/square
@@ -26,7 +25,7 @@ pub type Game {
     halfmove_clock: Int,
     fullmove_number: Int,
     // TODO: Possibly don't need this
-    moves: List(move.Move),
+    history: List(Game),
   )
 }
 
@@ -114,7 +113,7 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
       en_passant_target_square: en_passant_target_square,
       halfmove_clock: halfmove_clock,
       fullmove_number: fullmove_number,
-      moves: [],
+      history: [],
     ),
   )
 }
@@ -137,10 +136,6 @@ pub fn move(
 }
 
 pub fn update_fen(fen: String) -> Result(Game, Nil) {
-  todo
-}
-
-pub fn apply_move(game: Game, move: move.Move) -> Result(Game, Nil) {
   todo
 }
 
