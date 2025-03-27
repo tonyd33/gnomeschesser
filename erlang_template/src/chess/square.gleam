@@ -1,28 +1,4 @@
-import gleam/dict.{type Dict}
 import gleam/int
-
-pub type Player {
-  White
-  Black
-}
-
-pub type PieceSymbol {
-  Pawn
-  Knight
-  Bishop
-  Rook
-  Queen
-  King
-}
-
-pub type Piece {
-  Piece(player: Player, symbol: PieceSymbol)
-}
-
-pub type Castle {
-  KingSide
-  QueenSide
-}
 
 // This manual formatting gets ruined by the formatter and I don't think
 // there's any option to suppress formatting for a line range :(
@@ -242,25 +218,94 @@ pub const squares: List(Square) = [
   H1,
 ]
 
-pub type Game {
-  Game(
-    board: Dict(Square, Piece),
-    active_color: Player,
-    // TODO: Change to List(#(Player, Castle))
-    castling_availability: String,
-    // TODO: Change into Square
-    en_passant_target_square: String,
-    halfmove_clock: Int,
-    fullmove_number: Int,
-    // TODO: Possibly don't need this
-    moves: List(Move),
-  )
+// Extracts the zero-based file of an 0x88 square.
+pub fn file(square: Int) -> Int {
+  int.bitwise_and(square, 0xf)
 }
 
-/// Standard Algebraic Notation
-/// https://en.wikipedia.org/wiki/Algebraic_notation_(chess)
-pub type SAN =
-  String
+// Extracts the zero-based rank of an 0x88 square.
+pub fn rank(square: Int) -> Int {
+  int.bitwise_shift_right(square, 4)
+}
 
-pub type Move =
-  SAN
+/// Converts a 0x88 square to algebraic notation
+pub fn algebraic(square: Int) -> Result(Square, Nil) {
+  let f = file(square)
+  let r = rank(square)
+
+  case f, r {
+    0, 0 -> Ok(A8)
+    0, 1 -> Ok(A7)
+    0, 2 -> Ok(A6)
+    0, 3 -> Ok(A5)
+    0, 4 -> Ok(A4)
+    0, 5 -> Ok(A3)
+    0, 6 -> Ok(A2)
+    0, 7 -> Ok(A1)
+
+    1, 0 -> Ok(B8)
+    1, 1 -> Ok(B7)
+    1, 2 -> Ok(B6)
+    1, 3 -> Ok(B5)
+    1, 4 -> Ok(B4)
+    1, 5 -> Ok(B3)
+    1, 6 -> Ok(B2)
+    1, 7 -> Ok(B1)
+
+    2, 0 -> Ok(C8)
+    2, 1 -> Ok(C7)
+    2, 2 -> Ok(C6)
+    2, 3 -> Ok(C5)
+    2, 4 -> Ok(C4)
+    2, 5 -> Ok(C3)
+    2, 6 -> Ok(C2)
+    2, 7 -> Ok(C1)
+
+    3, 0 -> Ok(D8)
+    3, 1 -> Ok(D7)
+    3, 2 -> Ok(D6)
+    3, 3 -> Ok(D5)
+    3, 4 -> Ok(D4)
+    3, 5 -> Ok(D3)
+    3, 6 -> Ok(D2)
+    3, 7 -> Ok(D1)
+
+    4, 0 -> Ok(E8)
+    4, 1 -> Ok(E7)
+    4, 2 -> Ok(E6)
+    4, 3 -> Ok(E5)
+    4, 4 -> Ok(E4)
+    4, 5 -> Ok(E3)
+    4, 6 -> Ok(E2)
+    4, 7 -> Ok(E1)
+
+    5, 0 -> Ok(F8)
+    5, 1 -> Ok(F7)
+    5, 2 -> Ok(F6)
+    5, 3 -> Ok(F5)
+    5, 4 -> Ok(F4)
+    5, 5 -> Ok(F3)
+    5, 6 -> Ok(F2)
+    5, 7 -> Ok(F1)
+
+    6, 0 -> Ok(G8)
+    6, 1 -> Ok(G7)
+    6, 2 -> Ok(G6)
+    6, 3 -> Ok(G5)
+    6, 4 -> Ok(G4)
+    6, 5 -> Ok(G3)
+    6, 6 -> Ok(G2)
+    6, 7 -> Ok(G1)
+
+    7, 0 -> Ok(H8)
+    7, 1 -> Ok(H7)
+    7, 2 -> Ok(H6)
+    7, 3 -> Ok(H5)
+    7, 4 -> Ok(H4)
+    7, 5 -> Ok(H3)
+    7, 6 -> Ok(H2)
+    7, 7 -> Ok(H1)
+
+    _, _ -> Error(Nil)
+  }
+}

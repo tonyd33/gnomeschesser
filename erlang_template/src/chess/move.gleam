@@ -1,4 +1,10 @@
-import chess/chess.{type Move}
+/// Standard Algebraic Notation
+/// https://en.wikipedia.org/wiki/Algebraic_notation_(chess)
+pub type SAN =
+  String
+
+pub type Move =
+  SAN
 
 pub fn is_capture(move: Move) -> Bool {
   todo
