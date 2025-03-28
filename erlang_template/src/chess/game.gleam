@@ -5,6 +5,7 @@ import gleam/dict.{type Dict}
 import gleam/dynamic/decode
 import gleam/int
 import gleam/list
+import gleam/option.{type Option}
 import gleam/pair
 import gleam/result
 import gleam/string
@@ -16,15 +17,18 @@ pub type Castle {
 
 pub type Game {
   Game(
-    board: Dict(square.Square, piece.Piece),
+    // Private
+    // How we store the board internally is easily subject to change and should
+    // not be used outside of this module. Use the stable public functions
+    // provided in this module instead
+    private_board: Dict(square.Square, piece.Piece),
+    // Public
+    // These fields are very unlikely to change
     active_color: player.Player,
-    // TODO: Change to List(#(Player, Castle))
-    castling_availability: String,
-    // TODO: Change into Square
-    en_passant_target_square: String,
+    castling_availability: List(#(player.Player, Castle)),
+    en_passant_target_square: Option(square.Square),
     halfmove_clock: Int,
     fullmove_number: Int,
-    // TODO: Possibly don't need this
     history: List(Game),
   )
 }
@@ -101,9 +105,26 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
   use halfmove_clock <- result.try(int.parse(halfmove_clock))
   use fullmove_number <- result.try(int.parse(fullmove_number))
 
+  let castling_availability =
+    castling_availability
+    |> string.to_graphemes
+    |> list.fold([], fn(castling_availability, char) {
+      castling_availability
+      |> list.append(case char {
+        "K" -> [#(player.White, KingSide)]
+        "Q" -> [#(player.White, QueenSide)]
+        "k" -> [#(player.Black, KingSide)]
+        "q" -> [#(player.Black, QueenSide)]
+        _ -> []
+      })
+    })
+  let en_passant_target_square =
+    square.from_string(en_passant_target_square)
+    |> option.from_result
+
   Ok(
     Game(
-      board: board,
+      private_board: board,
       active_color: case active_color {
         "w" -> player.White
         "b" -> player.Black
@@ -135,11 +156,19 @@ pub fn move(
   todo
 }
 
-pub fn update_fen(fen: String) -> Result(Game, Nil) {
+pub fn update_fen(fen: String, game: Game) -> Result(Game, Nil) {
   todo
 }
 
 pub fn piece_at(game: Game, square: square.Square) -> Result(piece.Piece, Nil) {
+  todo
+}
+
+pub fn empty_at(game: Game, square: square.Square) -> Bool {
+  todo
+}
+
+pub fn find_piece(game: Game, piece: piece.Piece) -> List(square.Square) {
   todo
 }
 
@@ -165,4 +194,8 @@ pub fn is_threefold_repetition(game: Game) -> Bool {
 
 pub fn ascii(game: Game) -> String {
   todo
+}
+
+pub fn pieces(game: Game) -> List(#(square.Square, piece.Piece)) {
+  game.private_board |> dict.to_list
 }
