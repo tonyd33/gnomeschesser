@@ -1,19 +1,21 @@
+import chess/util
 import gleam/int
 import gleam/string
 
-// This manual formatting gets ruined by the formatter and I don't think
-// there's any option to suppress formatting for a line range :(
-// I keep a copy here in the comments so it's still readable.
-// pub type Square {
-//   A8 B8 C8 D8 E8 F8 G8 H8
-//   A7 B7 C7 D7 E7 F7 G7 H7
-//   A6 B6 C6 D6 E6 F6 G6 H6
-//   A5 B5 C5 D5 E5 F5 G5 H5
-//   A4 B4 C4 D4 E4 F4 G4 H4
-//   A3 B3 C3 D3 E3 F3 G3 H3
-//   A2 B2 C2 D2 E2 F2 G2 H2
-//   A1 B1 C1 D1 E1 F1 G1 H1
-// }
+/// This manual formatting gets ruined by the formatter and I don't think
+/// there's any option to suppress formatting for a line range :(
+/// I keep a copy here in the comments so it's still readable.
+/// pub type Square {
+///   A8 B8 C8 D8 E8 F8 G8 H8
+///   A7 B7 C7 D7 E7 F7 G7 H7
+///   A6 B6 C6 D6 E6 F6 G6 H6
+///   A5 B5 C5 D5 E5 F5 G5 H5
+///   A4 B4 C4 D4 E4 F4 G4 H4
+///   A3 B3 C3 D3 E3 F3 G3 H3
+///   A2 B2 C2 D2 E2 F2 G2 H2
+///   A1 B1 C1 D1 E1 F1 G1 H1
+/// }
+///
 pub type Square {
   A8
   B8
@@ -83,6 +85,7 @@ pub type Square {
 
 /// See chess.js reference:
 /// https://github.com/jhlywa/chess.js/blob/d68055f4dae7c06d100f21d385906743dce47abc/src/chess.ts#L205
+///
 pub fn ox88(square: Square) -> Int {
   case square {
     A8 -> 0
@@ -220,16 +223,19 @@ pub const squares: List(Square) = [
 ]
 
 /// Extracts the zero-based file of an 0x88 square.
+///
 pub fn file(square: Int) -> Int {
   int.bitwise_and(square, 0xf)
 }
 
 /// Extracts the zero-based rank of an 0x88 square.
+///
 pub fn rank(square: Int) -> Int {
   int.bitwise_shift_right(square, 4)
 }
 
 /// Converts a 0x88 square to algebraic notation
+///
 pub fn algebraic(square: Int) -> Result(Square, Nil) {
   let f = file(square)
   let r = rank(square)
@@ -309,6 +315,89 @@ pub fn algebraic(square: Int) -> Result(Square, Nil) {
 
     _, _ -> Error(Nil)
   }
+}
+
+pub fn string(square: Square) {
+  case square {
+    A8 -> "a8"
+    B8 -> "b8"
+    C8 -> "c8"
+    D8 -> "d8"
+    E8 -> "e8"
+    F8 -> "f8"
+    G8 -> "g8"
+    H8 -> "h8"
+    A7 -> "a7"
+    B7 -> "b7"
+    C7 -> "c7"
+    D7 -> "d7"
+    E7 -> "e7"
+    F7 -> "f7"
+    G7 -> "g7"
+    H7 -> "h7"
+    A6 -> "a6"
+    B6 -> "b6"
+    C6 -> "c6"
+    D6 -> "d6"
+    E6 -> "e6"
+    F6 -> "f6"
+    G6 -> "g6"
+    H6 -> "h6"
+    A5 -> "a5"
+    B5 -> "b5"
+    C5 -> "c5"
+    D5 -> "d5"
+    E5 -> "e5"
+    F5 -> "f5"
+    G5 -> "g5"
+    H5 -> "h5"
+    A4 -> "a4"
+    B4 -> "b4"
+    C4 -> "c4"
+    D4 -> "d4"
+    E4 -> "e4"
+    F4 -> "f4"
+    G4 -> "g4"
+    H4 -> "h4"
+    A3 -> "a3"
+    B3 -> "b3"
+    C3 -> "c3"
+    D3 -> "d3"
+    E3 -> "e3"
+    F3 -> "f3"
+    G3 -> "g3"
+    H3 -> "h3"
+    A2 -> "a2"
+    B2 -> "b2"
+    C2 -> "c2"
+    D2 -> "d2"
+    E2 -> "e2"
+    F2 -> "f2"
+    G2 -> "g2"
+    H2 -> "h2"
+    A1 -> "a1"
+    B1 -> "b1"
+    C1 -> "c1"
+    D1 -> "d1"
+    E1 -> "e1"
+    F1 -> "f1"
+    G1 -> "g1"
+    H1 -> "h1"
+  }
+}
+
+pub fn string_rank(square: Square) {
+  square
+  |> string
+  |> string.last
+  |> util.result_expect
+}
+
+pub fn string_file(square: Square) {
+  square
+  |> string
+  |> string.first
+  |> util.result_expect
 }
 
 pub fn from_string(square: String) -> Result(Square, Nil) {

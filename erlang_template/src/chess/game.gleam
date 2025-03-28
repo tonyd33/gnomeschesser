@@ -146,6 +146,30 @@ pub fn turn(game: Game) -> player.Player {
   game.active_color
 }
 
+pub fn new(
+  board board: Dict(square.Square, piece.Piece),
+  active_color active_color: player.Player,
+  castling_availability castling_availability: List(#(player.Player, Castle)),
+  en_passant_target_square en_passant_target_square: Option(square.Square),
+  halfmove_clock halfmove_clock: Int,
+  fullmove_number fullmove_number: Int,
+  history history: List(Game),
+) -> Game {
+  Game(
+    board,
+    active_color,
+    castling_availability,
+    en_passant_target_square,
+    halfmove_clock,
+    fullmove_number,
+    history,
+  )
+}
+
+pub fn board(game: Game) -> Dict(square.Square, piece.Piece) {
+  game.board
+}
+
 pub fn castling_availability(game: Game) -> List(#(player.Player, Castle)) {
   game.castling_availability
 }
@@ -191,7 +215,14 @@ pub fn repetition_count(game: Game) -> Int {
 }
 
 pub fn piece_at(game: Game, square: square.Square) -> Result(piece.Piece, Nil) {
-  todo
+  game.board |> dict.get(square)
+}
+
+pub fn square_empty(game: Game, square: square.Square) -> Bool {
+  case piece_at(game, square) {
+    Ok(_) -> False
+    Error(_) -> True
+  }
 }
 
 pub fn empty_at(game: Game, square: square.Square) -> Bool {
