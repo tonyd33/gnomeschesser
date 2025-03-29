@@ -160,6 +160,14 @@ pub fn update_fen(fen: String, game: Game) -> Result(Game, Nil) {
   todo
 }
 
+pub fn to_fen(game: Game) -> String {
+  todo
+}
+
+pub fn equal(g1: Game, g2: Game) -> Bool {
+  todo
+}
+
 pub fn piece_at(game: Game, square: square.Square) -> Result(piece.Piece, Nil) {
   todo
 }
@@ -172,7 +180,7 @@ pub fn find_piece(game: Game, piece: piece.Piece) -> List(square.Square) {
   todo
 }
 
-pub fn is_attacked(game: Game, square: square.Square) -> Bool {
+pub fn is_attacked(game: Game, square: square.Square, by: player.Player) -> Bool {
   todo
 }
 
