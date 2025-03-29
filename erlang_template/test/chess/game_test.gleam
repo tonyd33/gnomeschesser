@@ -51,7 +51,8 @@ pub fn load_fen_starting_position_test() {
     |> dict.from_list,
   )
 
-  game.castling_availability
+  game
+  |> game.castling_availability
   |> dict.from_list
   |> should.equal(
     [
@@ -110,7 +111,8 @@ pub fn load_fen_e4_test() {
     |> dict.from_list,
   )
 
-  game.castling_availability
+  game
+  |> game.castling_availability
   |> dict.from_list
   |> should.equal(
     [

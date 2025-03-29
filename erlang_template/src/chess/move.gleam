@@ -5,6 +5,7 @@ import chess/game
 pub type SAN =
   String
 
+/// TODO: After we stop type-aliasing, turn this into an opaque type
 pub type Move =
   SAN
 

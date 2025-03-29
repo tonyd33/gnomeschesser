@@ -15,15 +15,9 @@ pub type Castle {
   QueenSide
 }
 
-pub type Game {
+pub opaque type Game {
   Game(
-    // Private
-    // How we store the board internally is easily subject to change and should
-    // not be used outside of this module. Use the stable public functions
-    // provided in this module instead
-    private_board: Dict(square.Square, piece.Piece),
-    // Public
-    // These fields are very unlikely to change
+    board: Dict(square.Square, piece.Piece),
     active_color: player.Player,
     castling_availability: List(#(player.Player, Castle)),
     en_passant_target_square: Option(square.Square),
@@ -31,6 +25,15 @@ pub type Game {
     fullmove_number: Int,
     history: List(Game),
   )
+}
+
+/// TODO: Probably move this into robot.gleam later
+pub fn move(
+  fen: String,
+  turn: player.Player,
+  failed_moves: List(String),
+) -> Result(String, String) {
+  todo
 }
 
 pub fn load_fen(fen: String) -> Result(Game, Nil) {
@@ -124,7 +127,7 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
 
   Ok(
     Game(
-      private_board: board,
+      board: board,
       active_color: case active_color {
         "w" -> player.White
         "b" -> player.Black
@@ -139,24 +142,31 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
   )
 }
 
-pub fn player_decoder() {
-  use player_string <- decode.then(decode.string)
-  case player_string {
-    "white" -> decode.success(player.White)
-    "black" -> decode.success(player.Black)
-    _ -> decode.failure(player.White, "Invalid player")
-  }
+pub fn turn(game: Game) -> player.Player {
+  game.active_color
 }
 
-pub fn move(
-  fen: String,
-  turn: player.Player,
-  failed_moves: List(String),
-) -> Result(String, String) {
-  todo
+pub fn castling_availability(game: Game) -> List(#(player.Player, Castle)) {
+  game.castling_availability
 }
 
-pub fn update_fen(fen: String, game: Game) -> Result(Game, Nil) {
+pub fn en_passant_target_square(game: Game) -> Option(square.Square) {
+  game.en_passant_target_square
+}
+
+pub fn halfmove_clock(game: Game) -> Int {
+  game.halfmove_clock
+}
+
+pub fn fullmove_number(game: Game) -> Int {
+  game.fullmove_number
+}
+
+pub fn history(game: Game) -> List(Game) {
+  game.history
+}
+
+pub fn update_fen(game: Game, fen: String) -> Result(Game, Nil) {
   todo
 }
 
@@ -164,7 +174,19 @@ pub fn to_fen(game: Game) -> String {
   todo
 }
 
+/// Returns whether the games are equal, where equality is determined by the
+/// equality used for threefold repetition:
+/// https://en.wikipedia.org/wiki/Threefold_repetition
+///
 pub fn equal(g1: Game, g2: Game) -> Bool {
+  todo
+}
+
+/// Returns the number of times this game state has repeated in the game's
+/// history, where equality is determined by the equality used for threefold
+/// repetition: https://en.wikipedia.org/wiki/Threefold_repetition
+///
+pub fn repetition_count(game: Game) -> Int {
   todo
 }
 
@@ -184,6 +206,26 @@ pub fn is_attacked(game: Game, square: square.Square, by: player.Player) -> Bool
   todo
 }
 
+/// Returns the position and pieces that are attacking a square.
+///
+pub fn attackers(
+  game: Game,
+  square: square.Square,
+) -> List(#(square.Square, piece.Piece)) {
+  todo
+}
+
+/// Returns the position and pieces that are attacking a square of a certain
+/// color. `by` is the color that is *attacking*.
+///
+pub fn attackers_by_player(
+  game: Game,
+  square: square.Square,
+  by: player.Player,
+) -> List(#(square.Square, piece.Piece)) {
+  todo
+}
+
 pub fn is_check(game: Game) -> Bool {
   todo
 }
@@ -200,10 +242,23 @@ pub fn is_threefold_repetition(game: Game) -> Bool {
   todo
 }
 
+/// There are certain board configurations in which it is impossible for either
+/// player to win if both players are playing optimally. This functions returns
+/// true iff that's the case. See the same function in chess.js:
+/// https://github.com/jhlywa/chess.js/blob/dc1f397bc0195dda45e12f0ddf3322550cbee078/src/chess.ts#L1123
+///
+pub fn is_insufficient_material(game: Game) -> Bool {
+  todo
+}
+
+pub fn is_game_over(game: Game) -> Bool {
+  todo
+}
+
 pub fn ascii(game: Game) -> String {
   todo
 }
 
 pub fn pieces(game: Game) -> List(#(square.Square, piece.Piece)) {
-  game.private_board |> dict.to_list
+  game.board |> dict.to_list
 }
