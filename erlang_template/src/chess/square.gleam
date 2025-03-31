@@ -1,4 +1,5 @@
 import gleam/int
+import gleam/string
 
 // This manual formatting gets ruined by the formatter and I don't think
 // there's any option to suppress formatting for a line range :(
@@ -218,12 +219,12 @@ pub const squares: List(Square) = [
   H1,
 ]
 
-// Extracts the zero-based file of an 0x88 square.
+/// Extracts the zero-based file of an 0x88 square.
 pub fn file(square: Int) -> Int {
   int.bitwise_and(square, 0xf)
 }
 
-// Extracts the zero-based rank of an 0x88 square.
+/// Extracts the zero-based rank of an 0x88 square.
 pub fn rank(square: Int) -> Int {
   int.bitwise_shift_right(square, 4)
 }
@@ -307,5 +308,75 @@ pub fn algebraic(square: Int) -> Result(Square, Nil) {
     7, 7 -> Ok(H1)
 
     _, _ -> Error(Nil)
+  }
+}
+
+pub fn from_string(square: String) -> Result(Square, Nil) {
+  case square |> string.lowercase {
+    "a8" -> Ok(A8)
+    "b8" -> Ok(B8)
+    "c8" -> Ok(C8)
+    "d8" -> Ok(D8)
+    "e8" -> Ok(E8)
+    "f8" -> Ok(F8)
+    "g8" -> Ok(G8)
+    "h8" -> Ok(H8)
+    "a7" -> Ok(A7)
+    "b7" -> Ok(B7)
+    "c7" -> Ok(C7)
+    "d7" -> Ok(D7)
+    "e7" -> Ok(E7)
+    "f7" -> Ok(F7)
+    "g7" -> Ok(G7)
+    "h7" -> Ok(H7)
+    "a6" -> Ok(A6)
+    "b6" -> Ok(B6)
+    "c6" -> Ok(C6)
+    "d6" -> Ok(D6)
+    "e6" -> Ok(E6)
+    "f6" -> Ok(F6)
+    "g6" -> Ok(G6)
+    "h6" -> Ok(H6)
+    "a5" -> Ok(A5)
+    "b5" -> Ok(B5)
+    "c5" -> Ok(C5)
+    "d5" -> Ok(D5)
+    "e5" -> Ok(E5)
+    "f5" -> Ok(F5)
+    "g5" -> Ok(G5)
+    "h5" -> Ok(H5)
+    "a4" -> Ok(A4)
+    "b4" -> Ok(B4)
+    "c4" -> Ok(C4)
+    "d4" -> Ok(D4)
+    "e4" -> Ok(E4)
+    "f4" -> Ok(F4)
+    "g4" -> Ok(G4)
+    "h4" -> Ok(H4)
+    "a3" -> Ok(A3)
+    "b3" -> Ok(B3)
+    "c3" -> Ok(C3)
+    "d3" -> Ok(D3)
+    "e3" -> Ok(E3)
+    "f3" -> Ok(F3)
+    "g3" -> Ok(G3)
+    "h3" -> Ok(H3)
+    "a2" -> Ok(A2)
+    "b2" -> Ok(B2)
+    "c2" -> Ok(C2)
+    "d2" -> Ok(D2)
+    "e2" -> Ok(E2)
+    "f2" -> Ok(F2)
+    "g2" -> Ok(G2)
+    "h2" -> Ok(H2)
+    "a1" -> Ok(A1)
+    "b1" -> Ok(B1)
+    "c1" -> Ok(C1)
+    "d1" -> Ok(D1)
+    "e1" -> Ok(E1)
+    "f1" -> Ok(F1)
+    "g1" -> Ok(G1)
+    "h1" -> Ok(H1)
+    _ -> Error(Nil)
   }
 }

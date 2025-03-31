@@ -10,7 +10,10 @@ pub fn load_fen_starting_position_test() {
   let assert Ok(game) =
     load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
-  let expected_cells =
+  game
+  |> game.pieces
+  |> dict.from_list
+  |> should.equal(
     [
       #(square.A1, piece.Piece(player.White, piece.Rook)),
       #(square.B1, piece.Piece(player.White, piece.Knight)),
@@ -45,9 +48,21 @@ pub fn load_fen_starting_position_test() {
       #(square.G7, piece.Piece(player.Black, piece.Pawn)),
       #(square.H7, piece.Piece(player.Black, piece.Pawn)),
     ]
-    |> dict.from_list
+    |> dict.from_list,
+  )
 
-  game.board |> should.equal(expected_cells)
+  game
+  |> game.castling_availability
+  |> dict.from_list
+  |> should.equal(
+    [
+      #(player.White, game.KingSide),
+      #(player.White, game.QueenSide),
+      #(player.Black, game.KingSide),
+      #(player.Black, game.QueenSide),
+    ]
+    |> dict.from_list,
+  )
 }
 
 // See: https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation#Examples
@@ -55,7 +70,10 @@ pub fn load_fen_e4_test() {
   let assert Ok(game) =
     load_fen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1")
 
-  let expected_cells =
+  game
+  |> game.pieces
+  |> dict.from_list
+  |> should.equal(
     [
       #(square.A1, piece.Piece(player.White, piece.Rook)),
       #(square.B1, piece.Piece(player.White, piece.Knight)),
@@ -90,9 +108,21 @@ pub fn load_fen_e4_test() {
       #(square.G7, piece.Piece(player.Black, piece.Pawn)),
       #(square.H7, piece.Piece(player.Black, piece.Pawn)),
     ]
-    |> dict.from_list
+    |> dict.from_list,
+  )
 
-  game.board |> should.equal(expected_cells)
+  game
+  |> game.castling_availability
+  |> dict.from_list
+  |> should.equal(
+    [
+      #(player.White, game.KingSide),
+      #(player.White, game.QueenSide),
+      #(player.Black, game.KingSide),
+      #(player.Black, game.QueenSide),
+    ]
+    |> dict.from_list,
+  )
 }
 
 pub fn load_fen_fail_test() {

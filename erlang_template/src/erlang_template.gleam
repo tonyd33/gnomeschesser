@@ -1,4 +1,5 @@
 import chess/game
+import chess/player
 import gleam/dynamic/decode
 import gleam/erlang/process
 import gleam/json
@@ -30,7 +31,7 @@ fn handle_request(request: Request) -> Response {
 
 fn move_decoder() {
   use fen <- decode.field("fen", decode.string)
-  use turn <- decode.field("turn", game.player_decoder())
+  use turn <- decode.field("turn", player.player_decoder())
   use failed_moves <- decode.field("failed_moves", decode.list(decode.string))
   decode.success(#(fen, turn, failed_moves))
 }
