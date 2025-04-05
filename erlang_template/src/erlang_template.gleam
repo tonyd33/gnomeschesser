@@ -1,4 +1,3 @@
-import chess/game
 import chess/move
 import chess/player
 import chess/robot
@@ -14,76 +13,46 @@ pub fn main() {
   wisp.configure_logger()
   let secret_key_base = wisp.random_string(64)
 
-  let robot_mailbox = process.new_subject()
-  let handler_mailbox = process.new_subject()
-
+  let robot = robot.init()
   let assert Ok(_) =
-    handle_request(_, robot_mailbox, handler_mailbox)
+    handle_request(_, robot)
     |> wisp_mist.handler(secret_key_base)
     |> mist.new
     |> mist.bind("0.0.0.0")
     |> mist.port(8000)
     |> mist.start_http
-
-  robot.run(robot_mailbox, handler_mailbox)
 }
 
-fn handle_request(
-  request: Request,
-  robot_mailbox: Subject(robot.UpdateMessage),
-  handler_mailbox: Subject(robot.ResponseMessage),
-) -> Response {
+fn handle_request(request: Request, robot: robot.Robot) -> Response {
   case wisp.path_segments(request) {
-    ["move"] -> handle_move(request, robot_mailbox, handler_mailbox)
+    ["move"] -> handle_move(request, robot)
     _ -> wisp.ok()
   }
 }
 
-fn move_decoder() -> decode.Decoder(#(String, player.Player, List(String))) {
+type MoveRequest {
+  MoveRequest(fen: move.SAN, turn: player.Player, failed_moves: List(move.SAN))
+}
+
+fn move_decoder() -> decode.Decoder(MoveRequest) {
   use fen <- decode.field("fen", decode.string)
   use turn <- decode.field("turn", player.player_decoder())
   use failed_moves <- decode.field("failed_moves", decode.list(decode.string))
-  decode.success(#(fen, turn, failed_moves))
+  decode.success(MoveRequest(fen:, turn:, failed_moves:))
 }
 
-fn handle_move(
-  request: Request,
-  robot_mailbox: Subject(robot.UpdateMessage),
-  handler_mailbox: Subject(robot.ResponseMessage),
-) -> Response {
+fn handle_move(request: Request, robot: robot.Robot) -> Response {
   use body <- wisp.require_string_body(request)
-  let decode_result = json.parse(body, move_decoder())
-  case decode_result {
+  case json.parse(body, move_decoder()) {
     Error(_) -> wisp.bad_request()
-    Ok(move) -> {
-      process.send(robot_mailbox, robot.NewFen(move.0))
-      let move_result = get_best_move_at_timeout(4900, handler_mailbox)
-      case move_result {
+    Ok(MoveRequest(fen:, turn: _, failed_moves:)) -> {
+      let result = robot.get_best_move(robot, fen, failed_moves)
+      case result {
         Ok(move) -> wisp.ok() |> wisp.string_body(move)
         Error(Nil) ->
           wisp.internal_server_error()
           |> wisp.string_body("Didn't get a move")
       }
     }
-  }
-}
-
-fn get_best_move_at_timeout(
-  timeout: Int,
-  handler_mailbox: Subject(robot.ResponseMessage),
-) -> Result(move.SAN, Nil) {
-  process.send_after(handler_mailbox, timeout, robot.Timeout)
-  do_get_best_move_at_timeout(None, handler_mailbox)
-}
-
-fn do_get_best_move_at_timeout(
-  best_move: Option(move.SAN),
-  handler_mailbox: Subject(robot.ResponseMessage),
-) -> Result(move.SAN, Nil) {
-  let message = process.receive_forever(handler_mailbox)
-  case message {
-    robot.Timeout -> option.to_result(best_move, Nil)
-    robot.NewBestMove(move) ->
-      do_get_best_move_at_timeout(Some(move), handler_mailbox)
   }
 }

@@ -1,45 +1,84 @@
 import chess/game.{type Game}
 import chess/move
 import gleam/erlang/process.{type Subject}
+import gleam/list
+import gleam/option.{type Option, None, Some}
+import gleam/result
 
-pub type UpdateMessage {
-  NewFen(fen: String)
+pub opaque type Robot {
+  Robot(subject: Subject(UpdateMessage))
 }
 
-pub type ResponseMessage {
+type UpdateMessage {
+  Update(
+    fen: String,
+    failed_moves: List(move.SAN),
+    response_subject: Subject(ResponseMessage),
+  )
+}
+
+type ResponseMessage {
   Timeout
   NewBestMove(move: move.SAN)
 }
 
-pub fn run(
-  mailbox: Subject(UpdateMessage),
-  response_mailbox: Subject(ResponseMessage),
-) {
-  let assert Ok(initial_state) =
-    game.load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
-  main_loop(initial_state, mailbox, response_mailbox)
+pub fn init() -> Robot {
+  let subject = process.new_subject()
+  process.start(
+    fn() {
+      let assert Ok(initial_state) =
+        game.load_fen(
+          "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        )
+      main_loop(initial_state, subject, None)
+    },
+    True,
+  )
+  Robot(subject:)
+}
+
+pub fn get_best_move(
+  robot: Robot,
+  fen: String,
+  failed_moves: List(move.SAN),
+) -> Result(move.SAN, Nil) {
+  let response_subject = process.new_subject()
+  process.send_after(response_subject, 4900, Timeout)
+  process.send(robot.subject, Update(fen:, failed_moves:, response_subject:))
+  do_get_best_move(response_subject)
+}
+
+fn do_get_best_move(subject: Subject(ResponseMessage)) -> Result(move.SAN, Nil) {
+  case process.receive(subject, 7500) {
+    Error(Nil) -> panic as "Never received the timeout"
+    Ok(Timeout) -> Error(Nil)
+    Ok(NewBestMove(move)) -> do_get_best_move(subject) |> result.or(Ok(move))
+  }
 }
 
 fn main_loop(
   state: Game,
-  mailbox: Subject(UpdateMessage),
-  response_mailbox: Subject(ResponseMessage),
+  update: Subject(UpdateMessage),
+  response_subject: Option(Subject(ResponseMessage)),
 ) {
-  let message = process.receive(mailbox, 0)
-  let new_state = case message {
-    Ok(NewFen(_fen)) -> {
-      state
-      // update game and state and stuff
-    }
-    Error(Nil) -> {
-      let new_best_move: move.SAN = "Nc6"
+  let message = process.receive(update, 0)
+  let #(state, response_subject) = case message {
+    Ok(Update(_fen, _failed_moves, response_subject)) -> {
       let new_state = state
-      // perform another step of the calculations
-
-      process.send(response_mailbox, NewBestMove(new_best_move))
-      new_state
+      // update game and state and stuff
+      #(new_state, Some(response_subject))
     }
+    Error(Nil) -> #(state, response_subject)
   }
 
-  main_loop(new_state, mailbox, response_mailbox)
+  let assert Ok(new_best_move) = move.moves(state) |> list.first
+  // perform another step of the calculations
+
+  case response_subject {
+    Some(response_subject) ->
+      process.send(response_subject, NewBestMove(new_best_move))
+    None -> Nil
+  }
+
+  main_loop(state, update, response_subject)
 }
