@@ -20,7 +20,7 @@ import gleam/result
 /// Examples:
 /// ```gleam
 /// let prime_number_result = int.floor_divide(7, 2)
-/// |> assert_result(
+/// |> expect_or(
 ///    fn(x) {
 ///      is_prime = list.range(2, x)
 ///      |> list.all(fn(p) { {x % p} != 0 })
@@ -32,11 +32,11 @@ import gleam/result
 ///
 /// ```gleam
 /// let even_number_result = int.floor_divide(7, 2)
-/// |> assert_result(fn(x) { {x % 2} == 0 }, fn(_) { Nil })
+/// |> expect_or(fn(x) { {x % 2} == 0 }, fn(_) { Nil })
 /// // -> Error(Nil)
 /// ```
 ///
-pub fn assert_result(
+pub fn expect_or(
   res: Result(a, b),
   pred: fn(a) -> Bool,
   otherwise: fn(a) -> b,
@@ -49,7 +49,7 @@ pub fn assert_result(
   })
 }
 
-pub fn result_expect(res: Result(a, b)) -> a {
+pub fn expect_unsafe_panic(res: Result(a, b)) -> a {
   let assert Ok(val) = res
   val
 }

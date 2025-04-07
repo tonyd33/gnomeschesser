@@ -1,6 +1,6 @@
-import chess/util
 import gleam/int
 import gleam/string
+import util/result_addons
 
 /// This manual formatting gets ruined by the formatter and I don't think
 /// there's any option to suppress formatting for a line range :(
@@ -390,14 +390,14 @@ pub fn string_rank(square: Square) {
   square
   |> string
   |> string.last
-  |> util.result_expect
+  |> result_addons.expect_unsafe_panic
 }
 
 pub fn string_file(square: Square) {
   square
   |> string
   |> string.first
-  |> util.result_expect
+  |> result_addons.expect_unsafe_panic
 }
 
 pub fn from_string(square: String) -> Result(Square, Nil) {

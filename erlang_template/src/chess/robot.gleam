@@ -1,5 +1,4 @@
 import chess/game.{type Game}
-import chess/move
 import gleam/erlang/process.{type Subject}
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -12,14 +11,14 @@ pub opaque type Robot {
 type UpdateMessage {
   Update(
     fen: String,
-    failed_moves: List(move.SAN),
+    failed_moves: List(game.SAN),
     response_subject: Subject(ResponseMessage),
   )
 }
 
 type ResponseMessage {
   Timeout
-  NewBestMove(move: move.SAN)
+  NewBestMove(move: game.SAN)
 }
 
 pub fn init() -> Robot {
@@ -40,15 +39,15 @@ pub fn init() -> Robot {
 pub fn get_best_move(
   robot: Robot,
   fen: String,
-  failed_moves: List(move.SAN),
-) -> Result(move.SAN, Nil) {
+  failed_moves: List(game.SAN),
+) -> Result(game.SAN, Nil) {
   let response_subject = process.new_subject()
   process.send_after(response_subject, 4900, Timeout)
   process.send(robot.subject, Update(fen:, failed_moves:, response_subject:))
   do_get_best_move(response_subject)
 }
 
-fn do_get_best_move(subject: Subject(ResponseMessage)) -> Result(move.SAN, Nil) {
+fn do_get_best_move(subject: Subject(ResponseMessage)) -> Result(game.SAN, Nil) {
   case process.receive(subject, 7500) {
     Error(Nil) -> panic as "Never received the timeout"
     Ok(Timeout) -> Error(Nil)
@@ -71,7 +70,8 @@ fn main_loop(
     Error(Nil) -> #(state, response_subject)
   }
 
-  let assert Ok(new_best_move) = move.moves(state) |> list.first
+  let assert Ok(new_best_move) =
+    game.moves(state) |> list.first |> result.map(game.move_to_san)
   // perform another step of the calculations
 
   case response_subject {
