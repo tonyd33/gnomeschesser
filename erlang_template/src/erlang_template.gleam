@@ -2,9 +2,8 @@ import chess/game
 import chess/player
 import chess/robot
 import gleam/dynamic/decode
-import gleam/erlang/process.{type Subject}
+import gleam/erlang/process
 import gleam/json
-import gleam/option.{type Option, None, Some}
 import mist
 import wisp.{type Request, type Response}
 import wisp/wisp_mist
@@ -21,6 +20,7 @@ pub fn main() {
     |> mist.bind("0.0.0.0")
     |> mist.port(8000)
     |> mist.start_http
+  process.sleep_forever()
 }
 
 fn handle_request(request: Request, robot: robot.Robot) -> Response {
