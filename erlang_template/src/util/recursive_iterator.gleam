@@ -11,7 +11,7 @@
 //// toList :: Iterator a -> [a]
 //// toList (Iterator start fnext) = toList' start fnext []
 ////   where toList' x fnext acc = case fnext x of
-////           Next x' -> acc ++ [x']
+////           Next x' -> toList' x' fnext (acc ++ [x'])
 ////           _       -> acc
 //// ```
 

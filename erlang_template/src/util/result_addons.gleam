@@ -53,3 +53,26 @@ pub fn expect_unsafe_panic(res: Result(a, b)) -> a {
   let assert Ok(val) = res
   val
 }
+
+/// Similar guard to bool.guard and should be used similarly in situations
+/// where we'd like to short-circuit execution of a function *not returning a
+/// result* based on whether a result was successful. If the function returns a
+/// result, `result.try` should be used. Note that this ends up discarding the
+/// error.
+///
+/// Examples:
+/// ```gleam
+/// fn get_a_list() -> List(a) {
+///   use needed_value <- guard(dangerous(), [])
+///   // ...
+///   // a lot of code
+///   // ...
+/// }
+/// ```
+///
+pub fn guard(result: Result(a, e), or default: b, apply fun: fn(a) -> b) {
+  case result {
+    Ok(x) -> fun(x)
+    Error(_) -> default
+  }
+}

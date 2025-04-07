@@ -423,21 +423,146 @@ pub fn moves_no_move_into_check_test() {
   |> should.equal(["Kh2"])
 }
 
-/// TODO: Test condition 1 on https://en.wikipedia.org/wiki/Castling#Requirements
-pub fn moves_castle_1_testicles() {
-  todo
+/// Can castle either side since all conditions are met.
+///    +------------------------+
+///  8 | r  .  .  .  k  .  .  r |
+///  7 | p  p  p  p  p  p  p  p |
+///  6 | .  .  .  .  .  .  .  . |
+///  5 | .  .  .  .  .  .  .  . |
+///  4 | .  .  .  .  .  .  .  . |
+///  3 | .  .  .  .  .  .  .  . |
+///  2 | P  P  P  P  P  P  P  P |
+///  1 | R  .  .  .  K  .  .  R |
+///    +------------------------+
+///      a  b  c  d  e  f  g  h
+pub fn moves_castle_test() {
+  let assert Ok(game) =
+    load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1")
+  game.moves(game)
+  |> list.map(game.move_to_san)
+  |> list.sort(string.compare)
+  |> should.equal([
+    "Kd1", "Kf1", "O-O", "O-O-O", "Rb1", "Rc1", "Rd1", "Rf1", "Rg1", "a3", "a4",
+    "b3", "b4", "c3", "c4", "d3", "d4", "e3", "e4", "f3", "f4", "g3", "g4", "h3",
+    "h4",
+  ])
 }
 
-pub fn moves_castle_2_testicles() {
-  todo
+/// For whatever reason, white can't castle anymore (denoted in FEN)
+///    +------------------------+
+///  8 | r  .  .  .  k  .  .  r |
+///  7 | p  p  p  p  p  p  p  p |
+///  6 | .  .  .  .  .  .  .  . |
+///  5 | .  .  .  .  .  .  .  . |
+///  4 | .  .  .  .  .  .  .  . |
+///  3 | .  .  .  .  .  .  .  . |
+///  2 | P  P  P  P  P  P  P  P |
+///  1 | R  .  .  .  K  .  .  R |
+///    +------------------------+
+///      a  b  c  d  e  f  g  h
+pub fn moves_castle_ineligible_test() {
+  let assert Ok(game) =
+    load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w kq - 0 1")
+  game.moves(game)
+  |> list.map(game.move_to_san)
+  |> list.sort(string.compare)
+  |> should.equal([
+    "Kd1", "Kf1", "Rb1", "Rc1", "Rd1", "Rf1", "Rg1", "a3", "a4", "b3", "b4",
+    "c3", "c4", "d3", "d4", "e3", "e4", "f3", "f4", "g3", "g4", "h3", "h4",
+  ])
 }
 
-pub fn moves_castle_3_testicles() {
-  todo
+/// White has moved its rook and is no longer eligible for castling.
+///    +------------------------+
+///  8 | r  .  .  .  k  .  .  r |
+///  7 | p  p  p  p  p  p  p  p |
+///  6 | .  .  .  .  .  .  .  . |
+///  5 | .  .  .  .  .  .  .  . |
+///  4 | .  .  .  .  .  .  .  . |
+///  3 | .  .  .  .  .  .  .  . |
+///  2 | P  P  P  P  P  P  P  P |
+///  1 | .  .  .  R  K  .  .  R |
+///    +------------------------+
+///      a  b  c  d  e  f  g  h
+pub fn moves_castle_not_moved_test() {
+  let assert Ok(game) =
+    load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/3RK2R w Kkq - 1 1")
+  game.moves(game)
+  |> list.map(game.move_to_san)
+  |> list.sort(string.compare)
+  |> should.equal([
+    "Kf1", "O-O", "Ra1", "Rb1", "Rc1", "Rf1", "Rg1", "a3", "a4", "b3", "b4",
+    "c3", "c4", "d3", "d4", "e3", "e4", "f3", "f4", "g3", "g4", "h3", "h4",
+  ])
 }
 
-pub fn moves_castle_4_testicles() {
-  todo
+/// There's a piece in between the king and its rook
+///    +------------------------+
+///  8 | r  .  .  .  k  .  .  r |
+///  7 | p  p  p  p  p  p  p  p |
+///  6 | .  .  .  .  .  .  .  . |
+///  5 | .  .  .  .  .  .  .  . |
+///  4 | .  .  .  .  .  .  .  . |
+///  3 | .  .  .  .  .  .  .  . |
+///  2 | P  P  P  P  P  P  P  P |
+///  1 | R  .  B  .  K  .  .  R |
+///    +------------------------+
+///      a  b  c  d  e  f  g  h
+pub fn moves_castle_no_block_test() {
+  let assert Ok(game) =
+    load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R1B1K2R w KQkq - 0 1")
+  game.moves(game)
+  |> list.map(game.move_to_san)
+  |> list.sort(string.compare)
+  |> should.equal([
+    "Kd1", "Kf1", "O-O", "Rb1", "Rf1", "Rg1", "a3", "a4", "b3", "b4", "c3", "c4",
+    "d3", "d4", "e3", "e4", "f3", "f4", "g3", "g4", "h3", "h4",
+  ])
+}
+
+/// Black king in check and therefore cannot castle
+///    +------------------------+
+///  8 | r  .  .  .  k  .  .  r |
+///  7 | .  .  .  .  .  .  .  . |
+///  6 | .  .  .  .  .  .  B  . |
+///  5 | .  .  .  .  .  .  .  . |
+///  4 | .  .  .  .  .  .  .  . |
+///  3 | .  .  .  .  .  .  .  . |
+///  2 | .  .  .  .  .  .  .  . |
+///  1 | .  .  .  .  K  .  .  . |
+///    +------------------------+
+///      a  b  c  d  e  f  g  h
+pub fn moves_castle_no_check_test() {
+  let assert Ok(game) = load_fen("r3k2r/8/6B1/8/8/8/8/4K3 b kq - 0 1")
+  game.moves(game)
+  |> list.map(game.move_to_san)
+  |> list.sort(string.compare)
+  |> should.equal(["Kd7", "Kd8", "Ke7", "Kf8"])
+}
+
+/// White cannot castle queenside because Black's queen controls c1.
+/// White can castle kingside even though the h1-rook is under attack.
+///    +------------------------+
+///  8 | .  .  .  .  k  .  .  . |
+///  7 | .  .  .  .  .  .  .  . |
+///  6 | .  .  q  .  .  .  .  . |
+///  5 | .  .  .  .  .  .  .  . |
+///  4 | .  .  .  .  .  .  .  . |
+///  3 | .  .  .  .  .  .  .  . |
+///  2 | .  .  .  .  .  .  .  . |
+///  1 | R  .  .  .  K  .  .  R |
+///    +------------------------+
+///      a  b  c  d  e  f  g  h
+pub fn moves_castle_passthrough_test() {
+  let assert Ok(game) = load_fen("4k3/8/2q5/8/8/8/8/R3K2R w KQ - 0 1")
+  game.moves(game)
+  |> list.map(game.move_to_san)
+  |> list.sort(string.compare)
+  |> should.equal([
+    "Kd1", "Kd2", "Ke2", "Kf1", "Kf2", "O-O", "Ra2", "Ra3", "Ra4", "Ra5", "Ra6",
+    "Ra7", "Ra8+", "Rb1", "Rc1", "Rd1", "Rf1", "Rg1", "Rh2", "Rh3", "Rh4", "Rh5",
+    "Rh6", "Rh7", "Rh8+",
+  ])
 }
 
 // END: move.moves tests
