@@ -13,3 +13,10 @@ pub fn player_decoder() {
     _ -> decode.failure(White, "Invalid player")
   }
 }
+
+pub fn opponent(player: Player) -> Player {
+  case player {
+    White -> Black
+    Black -> White
+  }
+}

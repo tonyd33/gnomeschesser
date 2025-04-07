@@ -1,4 +1,4 @@
-import chess/move
+import chess/game
 import chess/player
 import chess/robot
 import gleam/dynamic/decode
@@ -31,7 +31,7 @@ fn handle_request(request: Request, robot: robot.Robot) -> Response {
 }
 
 type MoveRequest {
-  MoveRequest(fen: move.SAN, turn: player.Player, failed_moves: List(move.SAN))
+  MoveRequest(fen: game.SAN, turn: player.Player, failed_moves: List(game.SAN))
 }
 
 fn move_decoder() -> decode.Decoder(MoveRequest) {
