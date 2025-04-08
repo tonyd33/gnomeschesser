@@ -3,9 +3,7 @@ import chess/player
 import chess/square
 import gleam/bool
 import gleam/dict.{type Dict}
-import gleam/dynamic/decode
 import gleam/int
-import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/pair
@@ -439,7 +437,7 @@ fn find_player_king(
 /// Validate a move is internally consistent. If it's not, the program will
 /// crash. Use this only when debugging.
 ///
-fn validate_move(move: InternalMove, game: Game) -> Nil {
+fn assert_move_sanity_checks(move: InternalMove, game: Game) -> Nil {
   let InternalMove(player, from, to, piece, captured, promotion, flags) = move
   let opponent = player.opponent(player)
 
@@ -509,7 +507,7 @@ fn apply_internal_move(game: Game, move: InternalMove) -> Result(Game, Nil) {
   // When actually competing though, we don't want the program to crash, even
   // if something's incorrect though.
   // #ifdef DEV
-  validate_move(move, game)
+  assert_move_sanity_checks(move, game)
   // #endif
 
   let is_kingside_castle = set.contains(flags, KingsideCastle)
@@ -525,9 +523,6 @@ fn apply_internal_move(game: Game, move: InternalMove) -> Result(Game, Nil) {
         player.Black -> -16
       }
       let square = square.algebraic(to + offset)
-      // #ifdef DEV
-      let assert Ok(_) = square
-      // #endif
       option.from_result(square)
     }
     False -> None
@@ -676,7 +671,9 @@ fn king_castle_moves(game: Game) {
   let us = turn(game)
   let them = player.opponent(us)
 
-  use king_piece <- result_addons.guard(find_player_king(game, us), [])
+  let king = find_player_king(game, us)
+  use king_piece: #(square.Square, piece.Piece) <-
+    fn(fun) { king |> result.map(fun) |> result.unwrap([]) }
 
   let castling_availability = set.from_list(game.castling_availability)
 

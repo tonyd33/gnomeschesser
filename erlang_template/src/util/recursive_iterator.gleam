@@ -80,11 +80,3 @@ pub fn to_list(iterator: RecursiveIterator(a)) -> List(a) {
   // But we'll have to reverse it again
   |> list.reverse
 }
-
-fn to_list_inner(iterator: RecursiveIterator(a), x: a, xs: List(a)) -> List(a) {
-  let xsp = list.append(xs, [x])
-  case iterator.next(x) {
-    Next(xp) -> to_list_inner(iterator, xp, xsp)
-    End -> xsp
-  }
-}
