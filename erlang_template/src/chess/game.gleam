@@ -3,9 +3,7 @@ import chess/player
 import chess/square
 import gleam/bool
 import gleam/dict.{type Dict}
-import gleam/dynamic/decode
 import gleam/int
-import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/pair
@@ -439,7 +437,7 @@ fn find_player_king(
 /// Validate a move is internally consistent. If it's not, the program will
 /// crash. Use this only when debugging.
 ///
-fn validate_move(move: InternalMove, game: Game) -> Nil {
+fn assert_move_sanity_checks(move: InternalMove, game: Game) -> Nil {
   let InternalMove(player, from, to, piece, captured, promotion, flags) = move
   let opponent = player.opponent(player)
 
@@ -509,7 +507,7 @@ fn apply_internal_move(game: Game, move: InternalMove) -> Result(Game, Nil) {
   // When actually competing though, we don't want the program to crash, even
   // if something's incorrect though.
   // #ifdef DEV
-  validate_move(move, game)
+  assert_move_sanity_checks(move, game)
   // #endif
 
   let is_kingside_castle = set.contains(flags, KingsideCastle)
@@ -525,9 +523,6 @@ fn apply_internal_move(game: Game, move: InternalMove) -> Result(Game, Nil) {
         player.Black -> -16
       }
       let square = square.algebraic(to + offset)
-      // #ifdef DEV
-      let assert Ok(_) = square
-      // #endif
       option.from_result(square)
     }
     False -> None
@@ -635,6 +630,8 @@ fn apply_internal_move(game: Game, move: InternalMove) -> Result(Game, Nil) {
 fn internal_moves(game: Game) -> List(InternalMove) {
   let us = turn(game)
   let them = player.opponent(us)
+  let castle_moves: List(InternalMove) = king_castle_moves(game)
+
   game
   |> pieces
   |> list.fold([], fn(moves, x) {
@@ -644,153 +641,7 @@ fn internal_moves(game: Game) -> List(InternalMove) {
 
     let from = square.ox88(square)
     let standard_moves = case piece.symbol {
-      piece.Pawn -> {
-        let offsets: List(Int) = pawn_offsets(piece.player)
-        let assert [single, double, x1, x2] = offsets
-
-        let single_jump_moves = {
-          let to = from + single
-          let single_jump =
-            square.algebraic(to)
-            |> result.map(empty_at(game, _))
-            // Only create move if square is empty
-            |> result.try(fn(empty) {
-              case empty {
-                True ->
-                  Ok(InternalMove(
-                    player: us,
-                    from: from,
-                    to: to,
-                    piece: piece.Pawn,
-                    captured: None,
-                    promotion: None,
-                    flags: set.new(),
-                  ))
-                False -> Error(Nil)
-              }
-            })
-          [single_jump]
-        }
-
-        let double_jump_moves = {
-          let to = from + double
-          let double_jump_moves =
-            square.algebraic(to)
-            // Ensure this square our second rank
-            |> result_addons.expect_or(
-              fn(_) { { 8 - square.rank(from) } == second_rank(us) },
-              fn(_) { Nil },
-            )
-            |> result.map(empty_at(game, _))
-            // Only create move if square is empty
-            |> result.try(fn(empty) {
-              case empty {
-                True ->
-                  Ok(InternalMove(
-                    player: us,
-                    from: from,
-                    to: to,
-                    piece: piece.Pawn,
-                    captured: None,
-                    promotion: None,
-                    flags: set.from_list([BigPawn]),
-                  ))
-                False -> Error(Nil)
-              }
-            })
-          [double_jump_moves]
-        }
-
-        let make_x_moves = fn(jump) {
-          let to = from + jump
-          let standard_x_move =
-            square.algebraic(to)
-            |> result.try(piece_at(game, _))
-            |> result_addons.expect_or(fn(x) { x.player != us }, fn(_) { Nil })
-            |> result.map(fn(x) {
-              InternalMove(
-                player: us,
-                from: from,
-                to: to,
-                piece: piece.Pawn,
-                captured: Some(x.symbol),
-                promotion: None,
-                flags: set.from_list([Capture]),
-              )
-            })
-
-          let ep_move =
-            square.algebraic(to)
-            |> result_addons.expect_or(
-              fn(to_alg) {
-                en_passant_target_square(game)
-                |> option.map(fn(ep_square) { ep_square == to_alg })
-                |> option.unwrap(False)
-              },
-              fn(_) { Nil },
-            )
-            |> result.map(fn(_) {
-              InternalMove(
-                player: us,
-                from: from,
-                to: to,
-                piece: piece.Pawn,
-                captured: Some(piece.Pawn),
-                promotion: None,
-                flags: set.from_list([EnPassant, Capture]),
-              )
-            })
-
-          [standard_x_move, ep_move]
-        }
-
-        // Some of the moves might hit an end square, but we don't account for
-        // it until we use this function. If the move leads to a promotion,
-        // "fan" out the moves to all the promotion moves.
-        let fan_promotion_moves = fn(move: InternalMove) -> List(InternalMove) {
-          // If the pawn isn't moving to the last rank, then it's not a
-          // promotion move. This condition works for both white and black
-          // because pawns can't move backwards
-          let rank = square.rank(move.to)
-          use <- bool.guard(rank != 0 && rank != 7, [move])
-
-          // We have to promote the pawn then
-          let promotion_candidates = [
-            piece.Queen,
-            piece.Rook,
-            piece.Bishop,
-            piece.Knight,
-          ]
-
-          promotion_candidates
-          |> list.map(fn(candidate) {
-            InternalMove(
-              player: move.player,
-              to: move.to,
-              from: move.from,
-              piece: move.piece,
-              captured: move.captured,
-              promotion: Some(candidate),
-              flags: move.flags |> set.insert(Promotion),
-            )
-          })
-        }
-
-        let x1_moves = make_x_moves(x1)
-        let x2_moves = make_x_moves(x2)
-
-        let pawn_moves =
-          list.flatten([
-            single_jump_moves,
-            double_jump_moves,
-            x1_moves,
-            x2_moves,
-          ])
-          |> list.filter_map(fn(x) { x })
-          |> list.flat_map(fan_promotion_moves)
-
-        pawn_moves
-      }
+      piece.Pawn -> pawn_moves(game, square)
       _ -> {
         piece_offsets(piece)
         |> list.flat_map(fn(offset) {
@@ -802,130 +653,269 @@ fn internal_moves(game: Game) -> List(InternalMove) {
         })
       }
     }
+    moves |> list.append(standard_moves)
+  })
+  |> list.append(castle_moves)
+  |> list.filter(fn(move) {
+    // We should continue using assert here rather than silently failing.
+    // If we failed to apply the move here, we really fucked something up.
+    let assert Ok(new_game) = apply_internal_move(game, move)
 
-    // TODO: Stop using assert.
-    // But there really should be a king piece!!
-    let assert Ok(king_piece) = find_player_king(game, us)
+    find_player_king(new_game, us)
+    |> result.map(fn(x) { !is_attacked(new_game, x.0, them) })
+    |> result.unwrap(True)
+  })
+}
 
-    let moves = moves |> list.append(standard_moves)
+fn king_castle_moves(game: Game) {
+  let us = turn(game)
+  let them = player.opponent(us)
 
-    let castle_moves: List(InternalMove) = {
-      let castling_availability = set.from_list(game.castling_availability)
+  let king = find_player_king(game, us)
+  use king_piece: #(square.Square, piece.Piece) <-
+    fn(fun) { king |> result.map(fun) |> result.unwrap([]) }
 
-      let kingside = {
-        use <- bool.guard(
-          !set.contains(castling_availability, #(us, KingSide)),
-          Error(Nil),
-        )
-        let castling_from_square = square.ox88(king_piece.0)
-        let castling_to_square = castling_from_square + 2
+  let castling_availability = set.from_list(game.castling_availability)
 
-        let should_be_empty_squares = [
-          castling_from_square + 1,
-          castling_from_square,
-        ]
-        let should_be_safe_squares = [
-          castling_from_square,
-          castling_from_square + 1,
-        ]
+  let kingside = {
+    use <- bool.guard(
+      !set.contains(castling_availability, #(us, KingSide)),
+      Error(Nil),
+    )
+    let castling_from_square = square.ox88(king_piece.0)
+    let castling_to_square = castling_from_square + 2
 
-        use _ <- result.try(
-          result.all(
-            list.flatten([
-              should_be_empty_squares
-                |> list.map(fn(x) {
-                  square.algebraic(x)
-                  |> result.map(empty_at(game, _))
-                }),
-              should_be_safe_squares
-                |> list.map(fn(x) {
-                  square.algebraic(x)
-                  |> result.map(is_attacked(game, _, them))
-                  |> result.map(fn(x) { !x })
-                }),
-            ]),
-          )
-          |> result.map(list.all(_, fn(x) { x }))
-          |> result_addons.expect_or(fn(x) { x }, fn(_) { Nil }),
-        )
+    let should_be_empty_squares = [castling_from_square + 1, castling_to_square]
+    let should_be_safe_squares = [
+      castling_from_square,
+      castling_from_square + 1,
+    ]
 
-        Ok(InternalMove(
+    use _ <- result.try(
+      result.all(
+        list.flatten([
+          should_be_empty_squares
+            |> list.map(fn(x) {
+              square.algebraic(x)
+              |> result.map(empty_at(game, _))
+            }),
+          should_be_safe_squares
+            |> list.map(fn(x) {
+              square.algebraic(x)
+              |> result.map(is_attacked(game, _, them))
+              |> result.map(fn(x) { !x })
+            }),
+        ]),
+      )
+      |> result.map(list.all(_, fn(x) { x }))
+      |> result_addons.expect_or(fn(x) { x }, fn(_) { Nil }),
+    )
+
+    Ok(InternalMove(
+      player: us,
+      to: castling_to_square,
+      from: castling_from_square,
+      piece: piece.King,
+      captured: None,
+      promotion: None,
+      flags: set.from_list([KingsideCastle]),
+    ))
+  }
+  let queenside = {
+    use <- bool.guard(
+      !set.contains(castling_availability, #(us, QueenSide)),
+      Error(Nil),
+    )
+    let castling_from_square = square.ox88(king_piece.0)
+    let castling_to_square = castling_from_square - 2
+
+    let should_be_empty_squares = [
+      castling_from_square - 1,
+      castling_from_square - 2,
+      castling_from_square - 3,
+    ]
+    let should_be_safe_squares = [
+      castling_from_square,
+      castling_from_square - 1,
+      castling_from_square - 2,
+    ]
+
+    use _ <- result.try(
+      result.all(
+        list.flatten([
+          should_be_empty_squares
+            |> list.map(fn(x) {
+              square.algebraic(x)
+              |> result.map(empty_at(game, _))
+            }),
+          should_be_safe_squares
+            |> list.map(fn(x) {
+              square.algebraic(x)
+              |> result.map(is_attacked(game, _, them))
+              |> result.map(fn(x) { !x })
+            }),
+        ]),
+      )
+      |> result.map(list.all(_, fn(x) { x }))
+      |> result_addons.expect_or(fn(x) { x }, fn(_) { Nil }),
+    )
+    Ok(InternalMove(
+      player: us,
+      to: castling_to_square,
+      from: castling_from_square,
+      piece: piece.King,
+      captured: None,
+      promotion: None,
+      flags: set.from_list([QueensideCastle]),
+    ))
+  }
+
+  [kingside, queenside] |> list.filter_map(fn(x) { x })
+}
+
+fn pawn_moves(game: Game, square: square.Square) {
+  let us = turn(game)
+  let from = square.ox88(square)
+  let offsets: List(Int) = pawn_offsets(us)
+  let assert [single, double, x1, x2] = offsets
+
+  let single_jump_moves = {
+    let to = from + single
+    let single_jump =
+      square.algebraic(to)
+      |> result.map(empty_at(game, _))
+      // Only create move if square is empty
+      |> result.try(fn(empty) {
+        case empty {
+          True ->
+            Ok(InternalMove(
+              player: us,
+              from: from,
+              to: to,
+              piece: piece.Pawn,
+              captured: None,
+              promotion: None,
+              flags: set.new(),
+            ))
+          False -> Error(Nil)
+        }
+      })
+    [single_jump]
+  }
+
+  let double_jump_moves = {
+    let to = from + double
+    let double_jump_moves =
+      square.algebraic(to)
+      // Ensure this square our second rank
+      |> result_addons.expect_or(
+        fn(_) { { 8 - square.rank(from) } == second_rank(us) },
+        fn(_) { Nil },
+      )
+      |> result.map(empty_at(game, _))
+      // Only create move if square is empty
+      |> result.try(fn(empty) {
+        case empty {
+          True ->
+            Ok(InternalMove(
+              player: us,
+              from: from,
+              to: to,
+              piece: piece.Pawn,
+              captured: None,
+              promotion: None,
+              flags: set.from_list([BigPawn]),
+            ))
+          False -> Error(Nil)
+        }
+      })
+    [double_jump_moves]
+  }
+
+  let make_x_moves = fn(jump) {
+    let to = from + jump
+    let standard_x_move =
+      square.algebraic(to)
+      |> result.try(piece_at(game, _))
+      |> result_addons.expect_or(fn(x) { x.player != us }, fn(_) { Nil })
+      |> result.map(fn(x) {
+        InternalMove(
           player: us,
-          to: castling_from_square,
-          from: castling_to_square,
-          piece: piece.King,
-          captured: None,
+          from: from,
+          to: to,
+          piece: piece.Pawn,
+          captured: Some(x.symbol),
           promotion: None,
-          flags: set.from_list([KingsideCastle]),
-        ))
-      }
-      let queenside = {
-        use <- bool.guard(
-          !set.contains(castling_availability, #(us, QueenSide)),
-          Error(Nil),
+          flags: set.from_list([Capture]),
         )
-        let castling_from_square = square.ox88(king_piece.0)
-        let castling_to_square = castling_from_square - 2
-
-        let should_be_empty_squares = [
-          castling_from_square - 1,
-          castling_from_square - 2,
-          castling_from_square - 3,
-        ]
-        let should_be_safe_squares = [
-          castling_from_square,
-          castling_from_square - 1,
-          castling_from_square - 2,
-        ]
-
-        use _ <- result.try(
-          result.all(
-            list.flatten([
-              should_be_empty_squares
-                |> list.map(fn(x) {
-                  square.algebraic(x)
-                  |> result.map(empty_at(game, _))
-                }),
-              should_be_safe_squares
-                |> list.map(fn(x) {
-                  square.algebraic(x)
-                  |> result.map(is_attacked(game, _, them))
-                  |> result.map(fn(x) { !x })
-                }),
-            ]),
-          )
-          |> result.map(list.all(_, fn(x) { x }))
-          |> result_addons.expect_or(fn(x) { x }, fn(_) { Nil }),
-        )
-        Ok(InternalMove(
-          player: us,
-          to: castling_from_square,
-          from: castling_to_square,
-          piece: piece.King,
-          captured: None,
-          promotion: None,
-          flags: set.from_list([QueensideCastle]),
-        ))
-      }
-
-      [kingside, queenside] |> list.filter_map(fn(x) { x })
-    }
-
-    let moves =
-      moves
-      |> list.append(castle_moves)
-      |> list.filter(fn(move) {
-        // We should continue using assert here rather than silently failing.
-        // If we failed to apply the move here, we really fucked something up.
-        let assert Ok(new_game) = apply_internal_move(game, move)
-
-        find_player_king(new_game, us)
-        |> result.map(fn(x) { !is_attacked(new_game, x.0, them) })
-        |> result.unwrap(True)
       })
 
-    moves
-  })
+    let ep_move =
+      square.algebraic(to)
+      |> result_addons.expect_or(
+        fn(to_alg) {
+          en_passant_target_square(game)
+          |> option.map(fn(ep_square) { ep_square == to_alg })
+          |> option.unwrap(False)
+        },
+        fn(_) { Nil },
+      )
+      |> result.map(fn(_) {
+        InternalMove(
+          player: us,
+          from: from,
+          to: to,
+          piece: piece.Pawn,
+          captured: Some(piece.Pawn),
+          promotion: None,
+          flags: set.from_list([EnPassant, Capture]),
+        )
+      })
+
+    [standard_x_move, ep_move]
+  }
+
+  // Some of the moves might hit an end square, but we don't account for
+  // it until we use this function. If the move leads to a promotion,
+  // "fan" out the moves to all the promotion moves.
+  let fan_promotion_moves = fn(move: InternalMove) -> List(InternalMove) {
+    // If the pawn isn't moving to the last rank, then it's not a
+    // promotion move. This condition works for both white and black
+    // because pawns can't move backwards
+    let rank = square.rank(move.to)
+    use <- bool.guard(rank != 0 && rank != 7, [move])
+
+    // We have to promote the pawn then
+    let promotion_candidates = [
+      piece.Queen,
+      piece.Rook,
+      piece.Bishop,
+      piece.Knight,
+    ]
+
+    promotion_candidates
+    |> list.map(fn(candidate) {
+      InternalMove(
+        player: move.player,
+        to: move.to,
+        from: move.from,
+        piece: move.piece,
+        captured: move.captured,
+        promotion: Some(candidate),
+        flags: move.flags |> set.insert(Promotion),
+      )
+    })
+  }
+
+  let x1_moves = make_x_moves(x1)
+  let x2_moves = make_x_moves(x2)
+
+  let pawn_moves =
+    list.flatten([single_jump_moves, double_jump_moves, x1_moves, x2_moves])
+    |> list.filter_map(fn(x) { x })
+    |> list.flat_map(fan_promotion_moves)
+
+  pawn_moves
 }
 
 /// Cast a "ray" from `from` in the `offset` direction and collect positions.

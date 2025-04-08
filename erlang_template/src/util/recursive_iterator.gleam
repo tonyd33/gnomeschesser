@@ -11,7 +11,7 @@
 //// toList :: Iterator a -> [a]
 //// toList (Iterator start fnext) = toList' start fnext []
 ////   where toList' x fnext acc = case fnext x of
-////           Next x' -> acc ++ [x']
+////           Next x' -> toList' x' fnext (acc ++ [x'])
 ////           _       -> acc
 //// ```
 
@@ -79,12 +79,4 @@ pub fn to_list(iterator: RecursiveIterator(a)) -> List(a) {
   fold(iterator, [], fn(acc, x) { [x, ..acc] })
   // But we'll have to reverse it again
   |> list.reverse
-}
-
-fn to_list_inner(iterator: RecursiveIterator(a), x: a, xs: List(a)) -> List(a) {
-  let xsp = list.append(xs, [x])
-  case iterator.next(x) {
-    Next(xp) -> to_list_inner(iterator, xp, xsp)
-    End -> xsp
-  }
 }
