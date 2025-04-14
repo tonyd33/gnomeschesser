@@ -1,39 +1,37 @@
-import chess/game.{type Game}
+import chess/evaluate
+import chess/game
+import gleam/bool
 import gleam/erlang/process.{type Subject}
-import gleam/list
+import gleam/int
 import gleam/option.{type Option, None, Some}
-import gleam/result
 
 pub opaque type Robot {
-  Robot(subject: Subject(UpdateMessage))
+  Robot(main_subject: Subject(UpdateMessage))
 }
 
 type UpdateMessage {
   Update(
     fen: String,
     failed_moves: List(game.SAN),
-    response_subject: Subject(ResponseMessage),
+    handler_subject: Subject(HandlerMessage),
   )
 }
 
-type ResponseMessage {
-  Timeout
-  NewBestMove(move: game.SAN)
+type HandlerMessage {
+  GetBestMove(response: Subject(game.SAN))
+  UpdateBestMove(move: game.SAN)
+}
+
+type RobotState {
+  RobotState(
+    game: game.Game,
+    current_search_depth: Int,
+    evaluation_memoization: evaluate.MemoizationObject,
+  )
 }
 
 pub fn init() -> Robot {
-  let subject = process.new_subject()
-  process.start(
-    fn() {
-      let assert Ok(initial_state) =
-        game.load_fen(
-          "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-        )
-      main_loop(initial_state, subject, None)
-    },
-    True,
-  )
-  Robot(subject:)
+  Robot(main_subject: create_robot_thread())
 }
 
 pub fn get_best_move(
@@ -41,44 +39,111 @@ pub fn get_best_move(
   fen: String,
   failed_moves: List(game.SAN),
 ) -> Result(game.SAN, Nil) {
-  let response_subject = process.new_subject()
-  process.send_after(response_subject, 4900, Timeout)
-  process.send(robot.subject, Update(fen:, failed_moves:, response_subject:))
-  do_get_best_move(response_subject)
+  // we spawn a handler thread to keep track of all the current best moves
+  // also because the wisp actor doesn't like if we spam it
+  let handler_subject = create_handler_thread()
+  process.send(
+    robot.main_subject,
+    Update(fen:, failed_moves:, handler_subject:),
+  )
+  process.sleep(4950)
+  let best_move = process.call_forever(handler_subject, GetBestMove)
+  // TODO: kill this thread properly
+  //process.send_after(handler_subject, 1000, Kill)
+  Ok(best_move)
 }
 
-fn do_get_best_move(subject: Subject(ResponseMessage)) -> Result(game.SAN, Nil) {
-  case process.receive(subject, 7500) {
-    Error(Nil) -> panic as "Never received the timeout"
-    Ok(Timeout) -> Error(Nil)
-    Ok(NewBestMove(move)) -> do_get_best_move(subject) |> result.or(Ok(move))
+fn create_robot_thread() -> Subject(UpdateMessage) {
+  let reply_subject = process.new_subject()
+  process.start(
+    fn() {
+      let assert Ok(game) =
+        game.load_fen(
+          "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        )
+      let robot = process.new_subject()
+      process.send(reply_subject, robot)
+      main_loop(
+        RobotState(
+          game:,
+          current_search_depth: 1,
+          evaluation_memoization: evaluate.new_memoization_object(),
+        ),
+        robot,
+        None,
+      )
+    },
+    True,
+  )
+  process.receive_forever(reply_subject)
+}
+
+fn create_handler_thread() -> Subject(HandlerMessage) {
+  let reply_subject = process.new_subject()
+  process.start(
+    fn() {
+      let handler_subject = process.new_subject()
+      process.send(reply_subject, handler_subject)
+      handler_loop(handler_subject, None)
+    },
+    True,
+  )
+  process.receive_forever(reply_subject)
+}
+
+fn handler_loop(
+  handler_subject: Subject(HandlerMessage),
+  best_move: Option(game.SAN),
+) -> Nil {
+  case process.receive_forever(handler_subject) {
+    UpdateBestMove(move) -> handler_loop(handler_subject, Some(move))
+    GetBestMove(response) -> {
+      case best_move {
+        Some(move) -> process.send(response, move)
+        None -> {
+          process.send_after(handler_subject, 100, GetBestMove(response))
+          handler_loop(handler_subject, best_move)
+        }
+      }
+    }
   }
 }
 
 fn main_loop(
-  state: Game,
+  state: RobotState,
   update: Subject(UpdateMessage),
-  response_subject: Option(Subject(ResponseMessage)),
+  handler_subject: Option(Subject(HandlerMessage)),
 ) {
-  let message = process.receive(update, 0)
-  let #(state, response_subject) = case message {
-    Ok(Update(_fen, _failed_moves, response_subject)) -> {
-      let new_state = state
-      // update game and state and stuff
-      #(new_state, Some(response_subject))
+  // TODO: make this 0
+  let message = process.receive(update, 1)
+  let #(state, handler_subject) = case message {
+    Ok(Update(fen, _failed_moves, handler_subject)) -> {
+      use <- bool.guard(
+        !process.is_alive(process.subject_owner(handler_subject)),
+        #(state, None),
+      )
+      let RobotState(game, search_depth, memo) = state
+      let assert Ok(game) = game.load_fen(fen)
+      #(RobotState(game, search_depth - 1, memo), Some(handler_subject))
     }
-    Error(Nil) -> #(state, response_subject)
+    Error(Nil) -> #(state, handler_subject)
   }
 
-  let assert Ok(new_best_move) =
-    game.moves(state) |> list.first |> result.map(game.move_to_san)
-  // perform another step of the calculations
+  let RobotState(game, search_depth, memo) = state
 
-  case response_subject {
-    Some(response_subject) ->
-      process.send(response_subject, NewBestMove(new_best_move))
-    None -> Nil
+  let #(evaluate.Evaluation(_score, best_move), memo) =
+    evaluate.search(game, search_depth, memo)
+
+  case best_move, handler_subject {
+    Some(best_move), Some(handler_subject) ->
+      process.send(handler_subject, UpdateBestMove(game.move_to_san(best_move)))
+    _, _ -> Nil
   }
 
-  main_loop(state, update, response_subject)
+  // TODO: adjust depth properly
+  main_loop(
+    RobotState(game, int.min(search_depth + 1, 3), memo),
+    update,
+    handler_subject,
+  )
 }

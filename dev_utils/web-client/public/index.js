@@ -66,6 +66,7 @@ function onDrop(source, target) {
       if (game.move(move) == null) {
         throw new Error("robot gave bad move");
       }
+      board.position(game.fen());
       updateStatus();
     })
     .catch((err) => console.error(err));

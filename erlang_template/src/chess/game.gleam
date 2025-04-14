@@ -3,6 +3,8 @@ import chess/player
 import chess/square
 import gleam/bool
 import gleam/dict.{type Dict}
+import gleam/dynamic/decode
+import gleam/erlang
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -30,13 +32,19 @@ pub opaque type Game {
   )
 }
 
-/// TODO: Probably move this into robot.gleam later
-pub fn move(
-  fen: String,
-  turn: player.Player,
-  failed_moves: List(String),
-) -> Result(String, String) {
-  todo
+pub fn to_hash(game: Game) -> Int {
+  // TODO: use proper zobrist hashing
+  let assert Ok(hash) =
+    [
+      dict.to_list(game.board)
+        |> list.map(erlang.phash2),
+      list.map(game.castling_availability, erlang.phash2),
+      [erlang.phash2(game.active_color)],
+      [erlang.phash2(game.en_passant_target_square)],
+    ]
+    |> list.flatten
+    |> list.reduce(int.bitwise_exclusive_or)
+  hash
 }
 
 pub fn load_fen(fen: String) -> Result(Game, Nil) {
