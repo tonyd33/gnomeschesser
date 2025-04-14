@@ -278,6 +278,10 @@ pub fn moves_queen_test() {
   ])
 }
 
+/// a2: Can double jump and can't capture own pawn
+/// b3: Can only single jump
+/// d2: Can capture on either side, single or double jump
+/// e2: Stuck because of pawn in front
 ///    +------------------------+
 ///  8 | .  .  .  .  .  .  .  k |
 ///  7 | .  .  .  .  .  .  .  . |
@@ -285,12 +289,12 @@ pub fn moves_queen_test() {
 ///  5 | .  .  .  .  .  .  .  . |
 ///  4 | .  .  .  .  .  .  .  . |
 ///  3 | .  P  p  .  p  .  .  . |
-///  2 | P  .  .  P  .  .  .  . |
+///  2 | P  .  .  P  P  .  .  . |
 ///  1 | .  .  .  .  .  .  .  K |
 ///    +------------------------+
 ///      a  b  c  d  e  f  g  h
 pub fn moves_pawn_test() {
-  let assert Ok(game) = load_fen("7k/8/8/8/8/1Pp1p3/P2P4/7K w Aa - 0 1")
+  let assert Ok(game) = load_fen("7k/8/8/8/8/1Pp1p3/P2PP3/7K w - - 0 1")
 
   game.moves(game)
   |> list.map(game.move_to_san)
@@ -562,6 +566,53 @@ pub fn moves_castle_passthrough_test() {
     "Kd1", "Kd2", "Ke2", "Kf1", "Kf2", "O-O", "Ra2", "Ra3", "Ra4", "Ra5", "Ra6",
     "Ra7", "Ra8+", "Rb1", "Rc1", "Rd1", "Rf1", "Rg1", "Rh2", "Rh3", "Rh4", "Rh5",
     "Rh6", "Rh7", "Rh8+",
+  ])
+}
+
+///   +------------------------+
+/// 8 | .  n  b  q  k  b  n  r |
+/// 7 | r  p  p  p  p  p  p  p |
+/// 6 | .  .  .  .  .  .  .  . |
+/// 5 | p  .  .  .  .  .  .  . |
+/// 4 | .  .  .  .  .  .  .  . |
+/// 3 | .  .  .  P  K  .  .  . |
+/// 2 | P  P  P  .  P  P  P  P |
+/// 1 | R  N  B  Q  .  B  N  R |
+///   +------------------------+
+///     a  b  c  d  e  f  g  h
+pub fn moves_real_world_1_test() {
+  let assert Ok(game) =
+    load_fen("1nbqkbnr/rppppppp/8/p7/8/3PK3/PPP1PPPP/RNBQ1BNR w - - 0 1")
+  game.moves(game)
+  |> list.map(game.move_to_san)
+  |> list.sort(string.compare)
+  |> should.equal([
+    "Bd2", "Kd2", "Kd4", "Ke4", "Kf3", "Kf4", "Na3", "Nc3", "Nd2", "Nf3", "Nh3",
+    "Qd2", "Qe1", "a3", "a4", "b3", "b4", "c3", "c4", "d4", "f3", "f4", "g3",
+    "g4", "h3", "h4",
+  ])
+}
+
+///    +------------------------+
+///  8 | .  n  b  q  k  b  n  r |
+///  7 | r  p  p  p  p  p  p  p |
+///  6 | .  .  .  .  .  .  .  . |
+///  5 | p  .  .  P  .  .  .  . |
+///  4 | .  .  P  .  P  .  .  . |
+///  3 | .  .  .  .  .  .  .  . |
+///  2 | P  P  .  .  .  P  P  P |
+///  1 | R  N  B  Q  K  B  N  R |
+///    +------------------------+
+///      a  b  c  d  e  f  g  h
+pub fn moves_real_world_2_test() {
+  let assert Ok(game) =
+    load_fen("1nbqkbnr/rppppppp/8/p2P4/2P1P3/8/PP3PPP/RNBQKBNR b KQk - 0 4")
+  game.moves(game)
+  |> list.map(game.move_to_san)
+  |> list.sort(string.compare)
+  |> should.equal([
+    "Na6", "Nc6", "Nf6", "Nh6", "Ra6", "Ra8", "a4", "b5", "b6", "c5", "c6", "d6",
+    "e5", "e6", "f5", "f6", "g5", "g6", "h5", "h6",
   ])
 }
 
