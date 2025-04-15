@@ -6,6 +6,7 @@ import gleam/dict.{type Dict}
 import gleam/dynamic/decode
 import gleam/erlang
 import gleam/int
+import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/pair
@@ -480,7 +481,17 @@ fn assert_move_sanity_checks(move: InternalMove, game: Game) -> Nil {
   // Capture must match actual piece
   let assert True = case captured {
     Some(captured_piece) -> {
-      let assert Ok(real_piece) = piece_at(game, to_square)
+      let assert Ok(real_piece) = case set.contains(flags, EnPassant) {
+        True -> {
+          let offset = case player {
+            player.Black -> -16
+            player.White -> 16
+          }
+          square.algebraic(square.ox88(to_square) + offset)
+          |> result.try(piece_at(game, _))
+        }
+        False -> piece_at(game, to_square)
+      }
       real_piece.symbol == captured_piece && real_piece.player == opponent
     }
     None -> True
