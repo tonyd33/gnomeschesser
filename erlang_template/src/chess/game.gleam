@@ -787,57 +787,60 @@ fn pawn_moves(game: Game, square: square.Square) {
   let offsets: List(Int) = pawn_offsets(us)
   let assert [single, double, x1, x2] = offsets
 
-  let single_jump_moves = {
+  let single_jump_move = {
     let to = from + single
-    let single_jump =
-      square.algebraic(to)
-      |> result.map(empty_at(game, _))
-      // Only create move if square is empty
-      |> result.try(fn(empty) {
-        case empty {
-          True ->
-            Ok(InternalMove(
-              player: us,
-              from: from,
-              to: to,
-              piece: piece.Pawn,
-              captured: None,
-              promotion: None,
-              flags: set.new(),
-            ))
-          False -> Error(Nil)
-        }
-      })
-    [single_jump]
+    square.algebraic(to)
+    |> result.map(empty_at(game, _))
+    // Only create move if square is empty
+    |> result.try(fn(empty) {
+      case empty {
+        True ->
+          Ok(InternalMove(
+            player: us,
+            from: from,
+            to: to,
+            piece: piece.Pawn,
+            captured: None,
+            promotion: None,
+            flags: set.new(),
+          ))
+        False -> Error(Nil)
+      }
+    })
   }
 
-  let double_jump_moves = {
+  let double_jump_move = {
     let to = from + double
-    let double_jump_moves =
-      square.algebraic(to)
-      // Ensure this square our second rank
-      |> result_addons.expect_or(
-        fn(_) { { 8 - square.rank(from) } == second_rank(us) },
-        fn(_) { Nil },
-      )
-      |> result.map(empty_at(game, _))
-      // Only create move if square is empty
-      |> result.try(fn(empty) {
-        case empty {
-          True ->
-            Ok(InternalMove(
-              player: us,
-              from: from,
-              to: to,
-              piece: piece.Pawn,
-              captured: None,
-              promotion: None,
-              flags: set.from_list([BigPawn]),
-            ))
-          False -> Error(Nil)
-        }
-      })
-    [double_jump_moves]
+    // When double jumping, the square directly ahead must be empty.
+    use square_ahead_empty <- result.try(
+      square.algebraic(from + single)
+      |> result.map(empty_at(game, _)),
+    )
+    use <- bool.guard(!square_ahead_empty, Error(Nil))
+
+    square.algebraic(to)
+    // Ensure this square our second rank
+    |> result_addons.expect_or(
+      fn(_) { { 8 - square.rank(from) } == second_rank(us) },
+      fn(_) { Nil },
+    )
+    |> result.map(empty_at(game, _))
+    // Only create move if square is empty
+    |> result.try(fn(empty) {
+      case empty {
+        True ->
+          Ok(InternalMove(
+            player: us,
+            from: from,
+            to: to,
+            piece: piece.Pawn,
+            captured: None,
+            promotion: None,
+            flags: set.from_list([BigPawn]),
+          ))
+        False -> Error(Nil)
+      }
+    })
   }
 
   let make_x_moves = fn(jump) {
@@ -919,7 +922,7 @@ fn pawn_moves(game: Game, square: square.Square) {
   let x2_moves = make_x_moves(x2)
 
   let pawn_moves =
-    list.flatten([single_jump_moves, double_jump_moves, x1_moves, x2_moves])
+    list.flatten([[single_jump_move], [double_jump_move], x1_moves, x2_moves])
     |> list.filter_map(fn(x) { x })
     |> list.flat_map(fan_promotion_moves)
 
