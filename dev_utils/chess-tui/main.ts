@@ -3,8 +3,10 @@ import * as process from "node:process";
 import { Chess } from "chess.js";
 import {
   centerInTerminal,
+  chessSymbols,
   chessUnicode,
   Context,
+  defaultSettings,
   resolveCommand,
 } from "./lib/index.ts";
 
@@ -12,6 +14,7 @@ async function main() {
   let ctx: Context = {
     chess: new Chess(),
     stop: false,
+    settings: defaultSettings,
   };
   const iface = rl.createInterface({
     input: process.stdin,
@@ -19,7 +22,7 @@ async function main() {
   });
 
   console.log(
-    `%c${centerInTerminal("chess-cli")}`,
+    `%c${centerInTerminal("chess-tui")}`,
     "color: green; font-weight: bold",
   );
   console.log(centerInTerminal(chessUnicode(ctx.chess)));
@@ -44,7 +47,7 @@ async function main() {
       }
 
       // deno-lint-ignore no-explicit-any
-      const [handlerStatus, handlerVal] = handler(ctx, parseVal as any);
+      const [handlerStatus, handlerVal] = await handler(ctx, parseVal as any);
 
       if (handlerStatus != "ok") {
         console.error(`%c${handlerVal}`, "color: red");
@@ -56,8 +59,11 @@ async function main() {
       } else {
         ctx = handlerVal;
         if (print) {
+          // white/black don't translate well in a terminal window where the
+          // background is often black and the foreground is white...
+          // so just refer to white/black by their visuals
           console.log(
-            " ".repeat(9) + (ctx.chess.turn() === "w" ? "White" : "Black") +
+            " ".repeat(11) + (chessSymbols[ctx.chess.turn()]["k"]) +
               " to move",
           );
           console.log(chessUnicode(ctx.chess));

@@ -1,6 +1,6 @@
 import { Chess, Color, PieceSymbol } from "chess.js";
 
-const chessSymbols: Record<Color, Record<PieceSymbol, string>> = {
+export const chessSymbols: Record<Color, Record<PieceSymbol, string>> = {
   // the actual color of this depends on terminal color though
   b: {
     p: "♟",
