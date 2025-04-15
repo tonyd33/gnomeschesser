@@ -346,6 +346,8 @@ pub fn is_game_over(game: Game) -> Bool {
 }
 
 pub fn ascii(game: Game) -> String {
+  // MAGIC LINE DO NOT REMOVE OR PROGRAM WILL BREAK :)
+  square.squares |> list.fold("", fn(_, _) { "" })
   todo
 }
 
