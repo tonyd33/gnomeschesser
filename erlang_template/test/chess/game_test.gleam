@@ -667,4 +667,99 @@ pub fn apply_basic_test() {
   )
   game.turn(game) |> should.equal(player.Black)
 }
+
+/// White should revoke its castling availability after moving king
+///    +------------------------+
+///  8 | r  .  .  .  k  .  .  r |
+///  7 | p  p  p  p  p  p  p  p |
+///  6 | .  .  .  .  .  .  .  . |
+///  5 | .  .  .  .  .  .  .  . |
+///  4 | .  .  .  .  .  .  .  . |
+///  3 | .  .  .  .  .  .  .  . |
+///  2 | P  P  P  P  P  P  P  P |
+///  1 | R  .  .  .  K  .  .  R |
+///    +------------------------+
+///      a  b  c  d  e  f  g  h
+pub fn apply_castling_availability_move_king_test() {
+  // Regular move
+  let assert Ok(game) =
+    load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQ - 0 1")
+  let assert Ok(move) = game.move_from_san("Kd1", game)
+  let assert Ok(game) = game.apply(game, move)
+  game.castling_availability(game) |> should.equal([])
+
+  // Long castle
+  let assert Ok(game) =
+    load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQ - 0 1")
+  let assert Ok(move) = game.move_from_san("O-O-O", game)
+  let assert Ok(game) = game.apply(game, move)
+  game.castling_availability(game) |> should.equal([])
+
+  // Short castle
+  let assert Ok(game) =
+    load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQ - 0 1")
+  let assert Ok(move) = game.move_from_san("O-O", game)
+  let assert Ok(game) = game.apply(game, move)
+  game.castling_availability(game) |> should.equal([])
+}
+
+/// White should revoke its castling availability after moving rook on each
+/// side
+///    +------------------------+
+///  8 | r  .  .  .  k  .  .  r |
+///  7 | p  p  p  p  p  p  p  p |
+///  6 | .  .  .  .  .  .  .  . |
+///  5 | .  .  .  .  .  .  .  . |
+///  4 | .  .  .  .  .  .  .  . |
+///  3 | .  .  .  .  .  .  .  . |
+///  2 | P  P  P  P  P  P  P  P |
+///  1 | R  .  .  .  K  .  .  R |
+///    +------------------------+
+///      a  b  c  d  e  f  g  h
+pub fn apply_castling_availability_move_rook_test() {
+  let assert Ok(game) =
+    load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQ - 0 1")
+
+  let assert Ok(move) = game.move_from_san("Rb1", game)
+  let assert Ok(game) = game.apply(game, move)
+  game.castling_availability(game)
+  |> should.equal([#(player.White, game.KingSide)])
+
+  let assert Ok(game) =
+    load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQ - 0 1")
+  let assert Ok(move) = game.move_from_san("Rg1", game)
+  let assert Ok(game) = game.apply(game, move)
+  game.castling_availability(game)
+  |> should.equal([#(player.White, game.QueenSide)])
+}
+
+/// Black should revoke its castling availability after having its rook
+/// captured on each side
+///    +------------------------+
+///  8 | r  .  .  .  k  .  .  r |
+///  7 | .  p  p  p  .  p  p  . |
+///  6 | .  .  .  .  .  .  .  . |
+///  5 | .  .  .  .  .  .  .  . |
+///  4 | .  .  .  .  .  .  .  . |
+///  3 | .  .  .  .  .  .  .  . |
+///  2 | .  P  P  P  P  P  P  . |
+///  1 | R  .  .  .  K  .  .  R |
+///    +------------------------+
+///      a  b  c  d  e  f  g  h
+pub fn apply_castling_availability_move_rook_capture_test() {
+  let assert Ok(game) =
+    load_fen("r3k2r/1ppp1pp1/8/8/8/8/1PPPPPP1/R3K2R w kq - 0 1")
+
+  let assert Ok(move) = game.move_from_san("Rxa8+", game)
+  let assert Ok(game) = game.apply(game, move)
+  game.castling_availability(game)
+  |> should.equal([#(player.Black, game.KingSide)])
+
+  let assert Ok(game) =
+    load_fen("r3k2r/1pppppp1/8/8/8/8/1PPPPPP1/R3K2R w KQ - 0 1")
+  let assert Ok(move) = game.move_from_san("Rg1", game)
+  let assert Ok(game) = game.apply(game, move)
+  game.castling_availability(game)
+  |> should.equal([#(player.White, game.QueenSide)])
+}
 // END: move.apply tests

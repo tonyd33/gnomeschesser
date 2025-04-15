@@ -3,10 +3,8 @@ import chess/player
 import chess/square
 import gleam/bool
 import gleam/dict.{type Dict}
-import gleam/dynamic/decode
 import gleam/erlang
 import gleam/int
-import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/pair
@@ -346,8 +344,6 @@ pub fn is_game_over(game: Game) -> Bool {
 }
 
 pub fn ascii(game: Game) -> String {
-  // MAGIC LINE DO NOT REMOVE OR PROGRAM WILL BREAK :)
-  square.squares |> list.fold("", fn(_, _) { "" })
   todo
 }
 
@@ -514,7 +510,8 @@ fn assert_move_sanity_checks(move: InternalMove, game: Game) -> Nil {
 }
 
 fn apply_internal_move(game: Game, move: InternalMove) -> Result(Game, Nil) {
-  let InternalMove(player, from, to, piece, _, promotion, flags) = move
+  let InternalMove(us, from, to, piece, captured, promotion, flags) = move
+  let them = player.opponent(us)
 
   let fullmove_number = fullmove_number(game)
   let halfmove_clock = halfmove_clock(game)
@@ -539,7 +536,7 @@ fn apply_internal_move(game: Game, move: InternalMove) -> Result(Game, Nil) {
 
   let next_en_passant_target_square = case is_big_pawn {
     True -> {
-      let offset = case player {
+      let offset = case us {
         player.White -> 16
         player.Black -> -16
       }
@@ -548,7 +545,7 @@ fn apply_internal_move(game: Game, move: InternalMove) -> Result(Game, Nil) {
     }
     False -> None
   }
-  let next_player = player.opponent(player)
+  let next_player = them
   let next_fullmove_number = case next_player {
     player.White -> fullmove_number + 1
     player.Black -> fullmove_number
@@ -559,28 +556,47 @@ fn apply_internal_move(game: Game, move: InternalMove) -> Result(Game, Nil) {
     False -> halfmove_clock + 1
   }
   let next_history = history |> list.append([game])
-  let next_castling_availability = case
-    is_kingside_castle || is_queenside_castle
-  {
-    True ->
-      castling_availability
-      |> list.filter(fn(x) { x.0 != player })
-    False -> {
-      use <- bool.guard(piece != piece.Rook, castling_availability)
+  let next_castling_availability = {
+    let castling_availability = case piece {
+      // If king moved, disable castling for us entirely
+      piece.King ->
+        castling_availability
+        |> list.filter(fn(x) { x.0 != us })
       // If we're moving a rook from its starting position, we disable castling
       // depending which side it was on. The correctness of this depends on the
       // correctness of the previous `castling_availability`.
-      let position_flags =
-        rook_positions_flags(player)
-        |> list.find(fn(x) { x.0 == from_square })
-      case position_flags {
-        Error(_) -> castling_availability
-        Ok(#(_, side)) ->
-          castling_availability
-          // This is a bit hard to read, but we're just removing all castling
-          // rights for us on this side
-          |> list.filter(fn(x) { !{ x.0 == player || x.1 == side } })
+      piece.Rook -> {
+        let position_flags =
+          rook_positions_flags(us)
+          |> list.find(fn(x) { x.0 == from_square })
+        case position_flags {
+          Error(_) -> castling_availability
+          Ok(#(_, side)) ->
+            castling_availability
+            // This is a bit hard to read, but we're just removing all
+            // castling rights for us on this side
+            |> list.filter(fn(x) { !{ x.0 == us && x.1 == side } })
+        }
       }
+      _ -> castling_availability
+    }
+
+    // Also disable castling for opponent if we captured their rook
+    case captured {
+      Some(piece.Rook) -> {
+        let position_flags =
+          rook_positions_flags(them)
+          |> list.find(fn(x) { x.0 == to_square })
+        case position_flags {
+          Error(_) -> castling_availability
+          Ok(#(_, side)) ->
+            castling_availability
+            // This is a bit hard to read, but we're just removing all
+            // castling rights for them on this side
+            |> list.filter(fn(x) { !{ x.0 == them && x.1 == side } })
+        }
+      }
+      _ -> castling_availability
     }
   }
 
@@ -588,8 +604,8 @@ fn apply_internal_move(game: Game, move: InternalMove) -> Result(Game, Nil) {
   let next_board = {
     // If pawn promotion, replace with new piece
     let become_piece = case promotion {
-      Some(promotion_piece) -> piece.Piece(player, promotion_piece)
-      None -> piece.Piece(player, piece)
+      Some(promotion_piece) -> piece.Piece(us, promotion_piece)
+      None -> piece.Piece(us, piece)
     }
     board(game)
     |> dict.delete(from_square)
@@ -598,7 +614,7 @@ fn apply_internal_move(game: Game, move: InternalMove) -> Result(Game, Nil) {
   // If it's en passant, we have to kill a different square too
   use next_board <- result.try(case is_en_passant {
     True -> {
-      let offset = case player {
+      let offset = case us {
         player.Black -> -16
         player.White -> 16
       }
