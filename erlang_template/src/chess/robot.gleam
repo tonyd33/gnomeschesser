@@ -1,8 +1,7 @@
-import chess/evaluate
 import chess/game
-import gleam/bool
+import chess/search
 import gleam/erlang/process.{type Subject}
-import gleam/int
+import gleam/function
 import gleam/option.{type Option, None, Some}
 
 pub opaque type Robot {
@@ -10,23 +9,17 @@ pub opaque type Robot {
 }
 
 type UpdateMessage {
-  Update(
-    fen: String,
-    failed_moves: List(game.SAN),
-    handler_subject: Subject(HandlerMessage),
-  )
-}
-
-type HandlerMessage {
+  UpdateFen(fen: String, failed_moves: List(game.SAN))
+  UpdateBestMove(move: game.SAN, memo: search.TranspositionTable)
   GetBestMove(response: Subject(game.SAN))
-  UpdateBestMove(move: game.SAN)
 }
 
 type RobotState {
   RobotState(
     game: game.Game,
-    current_search_depth: Int,
-    evaluation_memoization: evaluate.MemoizationObject,
+    best_move: Option(game.SAN),
+    searcher: #(process.Pid, Subject(search.SearchMessage)),
+    memo: search.TranspositionTable,
   )
 }
 
@@ -34,43 +27,54 @@ pub fn init() -> Robot {
   Robot(main_subject: create_robot_thread())
 }
 
+// This requests the best move given a certain FEN
+// It will update the robot with the FEN, wait 4.95 seconds
+// Then send a request for the best move
 pub fn get_best_move(
   robot: Robot,
   fen: String,
   failed_moves: List(game.SAN),
 ) -> Result(game.SAN, Nil) {
-  // we spawn a handler thread to keep track of all the current best moves
-  // also because the wisp actor doesn't like if we spam it
-  let handler_subject = create_handler_thread()
-  process.send(
-    robot.main_subject,
-    Update(fen:, failed_moves:, handler_subject:),
-  )
+  process.send(robot.main_subject, UpdateFen(fen:, failed_moves:))
   process.sleep(4950)
-  let best_move = process.call_forever(handler_subject, GetBestMove)
-  // TODO: kill this thread properly
-  //process.send_after(handler_subject, 1000, Kill)
+  let best_move = process.call_forever(robot.main_subject, GetBestMove)
   Ok(best_move)
 }
 
+// Spawn a robot thread with the default initial game and also a searcher
 fn create_robot_thread() -> Subject(UpdateMessage) {
+  // The reply_subject is only to receive the robot's subject and return it
   let reply_subject = process.new_subject()
   process.start(
     fn() {
-      let assert Ok(game) =
+      let robot_subject: Subject(UpdateMessage) = process.new_subject()
+      process.send(reply_subject, robot_subject)
+
+      let assert Ok(game): Result(game.Game, Nil) =
         game.load_fen(
           "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
         )
-      let robot = process.new_subject()
-      process.send(reply_subject, robot)
+      let memo = search.memoization_new()
+      // The search_subject will be used by searchers to update new best moves found
+      let search_subject: Subject(search.SearchMessage) = process.new_subject()
+
+      let searcher_pid = search.new(game, memo, search_subject)
       main_loop(
         RobotState(
           game:,
-          current_search_depth: 1,
-          evaluation_memoization: evaluate.new_memoization_object(),
+          best_move: None,
+          searcher: #(searcher_pid, search_subject),
+          memo: memo,
         ),
-        robot,
-        None,
+        // This selector allows is to merge the different subjects (like from the searcher) into one selector
+        process.new_selector()
+          |> process.selecting(robot_subject, function.identity)
+          |> process.selecting(search_subject, fn(search) {
+            UpdateBestMove(
+              game.move_to_san(search.best_move),
+              search.transposition,
+            )
+          }),
       )
     },
     True,
@@ -78,72 +82,36 @@ fn create_robot_thread() -> Subject(UpdateMessage) {
   process.receive_forever(reply_subject)
 }
 
-fn create_handler_thread() -> Subject(HandlerMessage) {
-  let reply_subject = process.new_subject()
-  process.start(
-    fn() {
-      let handler_subject = process.new_subject()
-      process.send(reply_subject, handler_subject)
-      handler_loop(handler_subject, None)
-    },
-    True,
-  )
-  process.receive_forever(reply_subject)
-}
+// The main robot loop that checks for messages and updates the state
+fn main_loop(state: RobotState, update: process.Selector(UpdateMessage)) {
+  let message = process.select(update, 0)
+  let state = case message {
+    // If we receive a new FEN, respawn the searcher with the new game
+    Ok(UpdateFen(fen, _failed_moves)) -> {
+      let RobotState(_game, _best_move, #(search_pid, search_subject), memo) =
+        state
 
-fn handler_loop(
-  handler_subject: Subject(HandlerMessage),
-  best_move: Option(game.SAN),
-) -> Nil {
-  case process.receive_forever(handler_subject) {
-    UpdateBestMove(move) -> handler_loop(handler_subject, Some(move))
-    GetBestMove(response) -> {
-      case best_move {
-        Some(move) -> process.send(response, move)
-        None -> {
-          process.send_after(handler_subject, 100, GetBestMove(response))
-          handler_loop(handler_subject, best_move)
-        }
-      }
-    }
-  }
-}
+      process.kill(search_pid)
 
-fn main_loop(
-  state: RobotState,
-  update: Subject(UpdateMessage),
-  handler_subject: Option(Subject(HandlerMessage)),
-) {
-  // TODO: make this 0
-  let message = process.receive(update, 1)
-  let #(state, handler_subject) = case message {
-    Ok(Update(fen, _failed_moves, handler_subject)) -> {
-      use <- bool.guard(
-        !process.is_alive(process.subject_owner(handler_subject)),
-        #(state, None),
-      )
-      let RobotState(game, search_depth, memo) = state
       let assert Ok(game) = game.load_fen(fen)
-      #(RobotState(game, search_depth - 1, memo), Some(handler_subject))
+      let searcher_pid = search.new(game, memo, search_subject)
+      RobotState(game, None, #(searcher_pid, search_subject), memo)
     }
-    Error(Nil) -> #(state, handler_subject)
+    // If we receive a request for the best move, respond with the current best move we're tracking
+    Ok(GetBestMove(response)) -> {
+      case state.best_move {
+        Some(best_move) -> process.send(response, best_move)
+        _ -> Nil
+        //panic as "No best move was calculated in time"
+      }
+      state
+    }
+    // If we receive an update for the best move, just update the state
+    Ok(UpdateBestMove(best_move, memo)) ->
+      RobotState(..state, best_move: Some(best_move), memo:)
+    // If there's no message, just maintain the same state
+    Error(Nil) -> state
   }
 
-  let RobotState(game, search_depth, memo) = state
-
-  let #(evaluate.Evaluation(_score, best_move), memo) =
-    evaluate.search(game, search_depth, memo)
-
-  case best_move, handler_subject {
-    Some(best_move), Some(handler_subject) ->
-      process.send(handler_subject, UpdateBestMove(game.move_to_san(best_move)))
-    _, _ -> Nil
-  }
-
-  // TODO: adjust depth properly
-  main_loop(
-    RobotState(game, int.min(search_depth + 1, 3), memo),
-    update,
-    handler_subject,
-  )
+  main_loop(state, update)
 }
