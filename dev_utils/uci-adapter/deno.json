@@ -1,0 +1,10 @@
+{
+  "imports": {
+    "commander": "npm:commander@^13.1.0",
+    "fp-ts": "npm:fp-ts@^2.16.10",
+    "fp-ts-contrib": "npm:fp-ts-contrib@^0.1.29"
+  },
+  "tasks": {
+    "uci": "deno run --allow-net --allow-env --allow-read app/main.ts"
+  }
+}
