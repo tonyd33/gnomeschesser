@@ -1,14 +1,10 @@
 {
   "version": "4",
   "specifiers": {
-    "npm:commander@^13.1.0": "13.1.0",
     "npm:fp-ts-contrib@~0.1.29": "0.1.29_fp-ts@2.16.10",
     "npm:fp-ts@^2.16.10": "2.16.10"
   },
   "npm": {
-    "commander@13.1.0": {
-      "integrity": "sha512-/rFeCpNJQbhSZjGVwO9RFV3xPqbnERS8MmIQzCtD/zl6gpJuV/bMLuN92oG3F7d8oDEHHRrujSXNUr8fpjntKw=="
-    },
     "fp-ts-contrib@0.1.29_fp-ts@2.16.10": {
       "integrity": "sha512-y+f+xlZqYgj2t+Alu/oat10UC491PByvH7XrT0ITc/DbDJK7LDJLShZJy2orjE7PlcJkO5niDenc1A/woyeB/Q==",
       "dependencies": [
@@ -21,7 +17,6 @@
   },
   "workspace": {
     "dependencies": [
-      "npm:commander@^13.1.0",
       "npm:fp-ts-contrib@~0.1.29",
       "npm:fp-ts@^2.16.10"
     ]

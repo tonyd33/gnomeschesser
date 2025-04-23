@@ -84,7 +84,15 @@ const uciSetOptionId: P.Parser<string> = Do(P.Monad)
     "id",
     pipe(
       P.noneOf("\n"),
-      P.manyTill(P.lookahead(P.choice(P.str("value"), P.newline, P.eof))),
+      P.manyTill(
+        P.lookahead(
+          P.choice(
+            pipe(P.whitespaces, P.chain(always(P.str("value")))),
+            P.newline,
+            P.eof,
+          ),
+        ),
+      ),
       P.flat,
     ),
   )
