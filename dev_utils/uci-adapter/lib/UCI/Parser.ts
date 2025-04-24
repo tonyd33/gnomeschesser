@@ -25,6 +25,7 @@ const words: P.Parser<string[]> = P.sepBy(word, P.whitespaces);
 
 const natural: P.Parser<number> = pipe(
   P.many1(P.digit),
+  P.flat,
   P.map((x) => +x),
   P.expected("natural number"),
 );
@@ -169,19 +170,19 @@ const uciGoWTimeParameter: P.Parser<UCIGoParameter> = Do(P.Monad)
   .return(({ time }) => ({ tag: "WTime", time }));
 
 const uciGoBTimeParameter: P.Parser<UCIGoParameter> = Do(P.Monad)
-  .do(P.str("wtime"))
+  .do(P.str("btime"))
   .do(P.whitespaces)
   .bind("time", numeric)
   .return(({ time }) => ({ tag: "BTime", time }));
 
 const uciGoWIncParameter: P.Parser<UCIGoParameter> = Do(P.Monad)
-  .do(P.str("wtime"))
+  .do(P.str("winc"))
   .do(P.whitespaces)
   .bind("time", numeric)
-  .return(({ time }) => ({ tag: "BInc", time }));
+  .return(({ time }) => ({ tag: "WInc", time }));
 
 const uciGoBIncParameter: P.Parser<UCIGoParameter> = Do(P.Monad)
-  .do(P.str("wtime"))
+  .do(P.str("binc"))
   .do(P.whitespaces)
   .bind("time", numeric)
   .return(({ time }) => ({ tag: "BInc", time }));
@@ -306,8 +307,8 @@ const uciGoCmd: P.Parser<UCIEngineCommand> = pipe(
   Do(P.Monad)
     .do(P.str("go"))
     .do(P.whitespaces)
-    .bind("parameters", P.sepBy(uciGoParameter, P.whitespaces))
-    .return(({ parameters }) => ({ tag: "Go" as const, parameters })),
+    .bind("params", P.sepBy(uciGoParameter, P.whitespaces))
+    .return(({ params }) => ({ tag: "Go" as const, params })),
   P.expected("go [parameters]"),
 );
 

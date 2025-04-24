@@ -110,3 +110,4 @@ export const ap = enablePipeableAp(Applicative);
 export const chain = enablePipeableChain(Monad);
 export const alt = enablePipeableAlt(Alternative);
 export const of = _of;
+export const zero = _zero

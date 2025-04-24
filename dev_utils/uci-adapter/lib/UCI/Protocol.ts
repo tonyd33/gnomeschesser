@@ -15,6 +15,7 @@ import * as E from "fp-ts/lib/Either.js";
 import * as TE from "fp-ts/lib/TaskEither.js";
 import * as T from "fp-ts/lib/Task.js";
 import { absurd, flow, pipe } from "fp-ts/lib/function.js";
+import * as A from "fp-ts/lib/Array.js";
 
 /**
  * We only use this type internally. We expose a higher-level interface for
@@ -57,8 +58,7 @@ const wrapStrErr = <A, B>(f: (a: A) => Promise<B>) => (a: A) =>
   );
 
 const withLine = (s: string) => {
-  if (s.length === 0) return s;
-  else if (s[s.length - 1] === "\n") return s;
+  if (s.length === 0 || s[s.length - 1] === "\n") return s;
   else return s + "\n";
 };
 
@@ -170,7 +170,6 @@ const tokenizeGUICmd = (guiCmd: UCIGUICommand): Tokens => {
 };
 
 const serializeTokens = (tokens: Tokens): string => tokens.join(" ");
-const serializeInfo = flow(tokenizeInfo, serializeTokens);
 const serializeGUICmd = flow(tokenizeGUICmd, serializeTokens);
 
 // TODO: Implement copyprotection and registration
@@ -225,7 +224,7 @@ const protocolHandler = (
 };
 
 export const configure = (
-  { input, output, error }: {
+  { input, output, error, debug }: {
     input: NodeJS.ReadableStream;
     output: NodeJS.WritableStream;
     /**
@@ -233,40 +232,52 @@ export const configure = (
      * prevent polluting the main stream.
      */
     error?: NodeJS.WritableStream;
+    debug?: NodeJS.WritableStream;
   },
 ) => {
-  const iface = readline.createInterface({ input, output });
-
-  const read = pipe("", wrapStrErr(iface.question.bind(iface)));
-
   const writeP = (s: string) =>
     new Promise<void>((resolve) => output.write(withLine(s), () => resolve()));
   const writeErrorP = (s: string) =>
     new Promise<void>((resolve) =>
       error ? error.write(withLine(s), () => resolve()) : resolve
     );
+  const writeDebugP = (s: string) =>
+    new Promise<void>((resolve) =>
+      debug ? debug.write(withLine(s), () => resolve()) : resolve
+    );
   const writeT = flow(writeP, always);
   const writeErrorT = flow(writeErrorP, always);
   const informResult = (x: E.Either<string, string>) =>
     pipe(x, E.map(writeT), E.getOrElse(writeErrorT));
 
-  const sendInfo = flow(serializeInfo, writeP);
+  const sendInfo = flow(
+    (info: UCIInfo) => guiCmd.info([info]),
+    serializeGUICmd,
+    writeP,
+  );
   const sendBestMove = flow(guiCmd.bestMove, serializeGUICmd, writeP);
 
   return {
-    listen: async (handler: UCIHandler): Promise<never> => {
+    listen: (handler: UCIHandler) => {
+      const iface = readline.createInterface({
+        input,
+        output,
+        terminal: false,
+      });
       const lowLevelHandler = pipe(protocolHandler(handler), wrapStrErr);
-      const consume = pipe(
-        read,
-        TE.chain(flow(parseUCIEngineCmd, TE.fromEither)),
-        TE.chain(lowLevelHandler),
-        TE.map((cmds) => cmds.map(serializeGUICmd).join("\n")),
-        T.chain(informResult),
-      );
+      const handleLine = async (line: string) => {
+        const processLine = pipe(
+          line,
+          TE.of,
+          TE.chain(flow(parseUCIEngineCmd, TE.fromEither)),
+          TE.chain(lowLevelHandler),
+          TE.map((cmds) => cmds.map(serializeGUICmd).join("\n")),
+          T.tap(informResult),
+        );
+        await processLine();
+      };
 
-      while (1) await consume();
-      // deno-lint-ignore no-unreachable
-      throw new Error("Shouldn't get here");
+      iface.on("line", handleLine);
     },
     sendInfo,
     sendBestMove,

@@ -1,10 +1,14 @@
 {
   "version": "4",
   "specifiers": {
+    "npm:chess.js@^1.2.0": "1.2.0",
     "npm:fp-ts-contrib@~0.1.29": "0.1.29_fp-ts@2.16.10",
     "npm:fp-ts@^2.16.10": "2.16.10"
   },
   "npm": {
+    "chess.js@1.2.0": {
+      "integrity": "sha512-QWdfpAkMslQ48hDDoEzEko6GbYTAKKx4UdXAPEF8nFnAuqp+woyL8LHSbziRP8u1aMAbnlOF0YkXF4ui0Nsubg=="
+    },
     "fp-ts-contrib@0.1.29_fp-ts@2.16.10": {
       "integrity": "sha512-y+f+xlZqYgj2t+Alu/oat10UC491PByvH7XrT0ITc/DbDJK7LDJLShZJy2orjE7PlcJkO5niDenc1A/woyeB/Q==",
       "dependencies": [
@@ -17,6 +21,7 @@
   },
   "workspace": {
     "dependencies": [
+      "npm:chess.js@^1.2.0",
       "npm:fp-ts-contrib@~0.1.29",
       "npm:fp-ts@^2.16.10"
     ]

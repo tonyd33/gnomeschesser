@@ -3,6 +3,7 @@ import chess/player
 import chess/robot
 import gleam/dynamic/decode
 import gleam/erlang/process
+import gleam/io
 import gleam/json
 import mist
 import wisp.{type Request, type Response}
@@ -25,7 +26,7 @@ pub fn main() {
 
 fn handle_request(request: Request, robot: robot.Robot) -> Response {
   case wisp.path_segments(request) {
-    ["move"] -> handle_move(request, robot)
+    ["move"] -> handle_move(request, robot) |> io.debug
     _ -> wisp.ok()
   }
 }
