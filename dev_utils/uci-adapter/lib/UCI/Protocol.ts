@@ -3,6 +3,7 @@ import {
   guiCmd,
   id,
   UCIEngineCommand,
+  UCIGoParameter,
   UCIGUICommand,
   UCIId,
   UCIInfo,
@@ -15,7 +16,6 @@ import * as E from "fp-ts/lib/Either.js";
 import * as TE from "fp-ts/lib/TaskEither.js";
 import * as T from "fp-ts/lib/Task.js";
 import { absurd, flow, pipe } from "fp-ts/lib/function.js";
-import * as A from "fp-ts/lib/Array.js";
 
 /**
  * We only use this type internally. We expose a higher-level interface for
@@ -31,14 +31,23 @@ export interface UCIHandler {
   onInit: () => Promise<
     { name: string; author: string; options: UCIOption[] }
   >;
-  /** */
-  onDebug: () => Promise<void>;
-  /** The client has set an option. */
+  /**
+   * Clients may send this to probe whether the engine is ready to receive
+   * another command. This promise should resolve as soon as the engine is
+   * ready.
+   */
+  onReadyProbe: () => Promise<void>;
+  onDebug: (on?: boolean) => Promise<void>;
+  /**
+   * The client has set an option.
+   */
   onSetOption: (name: string, value?: string) => Promise<void>;
-  /** The client intends to start a new game. */
+  /**
+   * The client intends to start a new game.
+   */
   onNewGame: () => Promise<void>;
   onLoadPosition: (position: UCIPosition, moves: string[]) => Promise<void>;
-  onGo: () => Promise<void>;
+  onGo: (params: UCIGoParameter[]) => Promise<void>;
   onStop: () => Promise<void>;
   onPonderHit: () => Promise<void>;
   onQuit: () => Promise<void>;
@@ -57,6 +66,11 @@ const wrapStrErr = <A, B>(f: (a: A) => Promise<B>) => (a: A) =>
     },
   );
 
+/**
+ * Adds a new line to a non-empty string if there wasn't already one.
+ * This is useful for writable streams which are flushed only upon receiving
+ * a newline, as seems to be the case for Node/Deno's process.stdout/stderr.
+ */
 const withLine = (s: string) => {
   if (s.length === 0 || s[s.length - 1] === "\n") return s;
   else return s + "\n";
@@ -176,7 +190,9 @@ const serializeGUICmd = flow(tokenizeGUICmd, serializeTokens);
 const protocolHandler = (
   {
     onInit,
+    onReadyProbe,
     onSetOption,
+    onDebug,
     onNewGame,
     onLoadPosition,
     onGo,
@@ -197,10 +213,10 @@ const protocolHandler = (
           guiCmd.uciOk,
         ]);
       case "Debug":
-        return [];
+        return onDebug(engineCmd.on).then(() => []);
       // Respond to the ping command immediately.
       case "IsReady":
-        return [guiCmd.readyOk];
+        return onReadyProbe().then(() => [guiCmd.readyOk]);
       case "SetOption":
         return onSetOption(engineCmd.name, engineCmd.value).then(() => []);
       case "Register":
@@ -212,7 +228,7 @@ const protocolHandler = (
           () => [],
         );
       case "Go":
-        return onGo().then(() => []);
+        return onGo(engineCmd.params).then(() => []);
       case "Stop":
         return onStop().then(() => []);
       case "Ponderhit":
@@ -224,7 +240,7 @@ const protocolHandler = (
 };
 
 export const configure = (
-  { input, output, error, debug }: {
+  { input, output, error }: {
     input: NodeJS.ReadableStream;
     output: NodeJS.WritableStream;
     /**
@@ -232,7 +248,6 @@ export const configure = (
      * prevent polluting the main stream.
      */
     error?: NodeJS.WritableStream;
-    debug?: NodeJS.WritableStream;
   },
 ) => {
   const writeP = (s: string) =>
@@ -241,20 +256,9 @@ export const configure = (
     new Promise<void>((resolve) =>
       error ? error.write(withLine(s), () => resolve()) : resolve
     );
-  const writeDebugP = (s: string) =>
-    new Promise<void>((resolve) =>
-      debug ? debug.write(withLine(s), () => resolve()) : resolve
-    );
-  const writeT = flow(writeP, always);
-  const writeErrorT = flow(writeErrorP, always);
-  const informResult = (x: E.Either<string, string>) =>
-    pipe(x, E.map(writeT), E.getOrElse(writeErrorT));
 
-  const sendInfo = flow(
-    (info: UCIInfo) => guiCmd.info([info]),
-    serializeGUICmd,
-    writeP,
-  );
+  const sendInfo = (info: UCIInfo) =>
+    pipe(guiCmd.info([info]), serializeGUICmd, writeP);
   const sendBestMove = flow(guiCmd.bestMove, serializeGUICmd, writeP);
 
   return {
@@ -265,7 +269,14 @@ export const configure = (
         terminal: false,
       });
       const lowLevelHandler = pipe(protocolHandler(handler), wrapStrErr);
-      const handleLine = async (line: string) => {
+      const informResult = (ex: E.Either<string, string>): T.Task<void> =>
+        pipe(
+          ex,
+          E.map(flow(writeP, always)),
+          E.getOrElse(flow(writeErrorP, always)),
+        );
+
+      const handleLine = (line: string) => {
         const processLine = pipe(
           line,
           TE.of,
@@ -274,7 +285,7 @@ export const configure = (
           TE.map((cmds) => cmds.map(serializeGUICmd).join("\n")),
           T.tap(informResult),
         );
-        await processLine();
+        return processLine();
       };
 
       iface.on("line", handleLine);

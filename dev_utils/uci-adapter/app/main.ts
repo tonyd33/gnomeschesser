@@ -10,9 +10,10 @@ import {
   UCIPosition,
 } from "../lib/UCI/index.ts";
 import { absurd } from "fp-ts/lib/function.js";
-import { PassThrough, Transform, Writable } from "node:stream";
+import { Transform, Writable } from "node:stream";
 import fs from "node:fs";
-import { Chess, Move } from "chess.js";
+import { Chess } from "chess.js";
+import { UCIGoParameter } from "../lib/UCI/Types.ts";
 
 const startFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -21,18 +22,33 @@ class UCIProxyHandler implements UCIHandler {
   private author: string;
   private advertiseOptions: UCIOption[];
   private robotUrl: string;
+  /**
+   * We may be provided the timeout for moves through UCI, but in case we
+   * don't, fall back to timing out the robot after this many ms.
+   */
+  private defaultMoveTimeoutMs: number;
 
   private fen: string = startFen;
   private moves: string[] = [];
 
-  private initialized = false;
+  private initialized: boolean;
 
   private sendInfo: (info: UCIInfo) => Promise<void>;
   private sendBestMove: (move: string, ponder?: undefined) => Promise<void>;
 
   private chess: Chess;
 
-  private debugLog: (s: string) => void;
+  private logDebug: (s: string) => void;
+
+  /**
+   * Controls aborting the robot request in case we receive the "stop" command.
+   */
+  private abortController: AbortController;
+  /**
+   * If this is defined, we're currently waiting for the response of the
+   * robot.
+   */
+  private robotRequest?: Promise<string>;
 
   constructor(
     {
@@ -43,6 +59,7 @@ class UCIProxyHandler implements UCIHandler {
       sendInfo,
       sendBestMove,
       debugLog,
+      defaultMoveTimeoutMs = 5000,
     }: {
       name: string;
       author: string;
@@ -51,18 +68,25 @@ class UCIProxyHandler implements UCIHandler {
       sendInfo: (info: UCIInfo) => Promise<void>;
       sendBestMove: (move: string, ponder?: undefined) => Promise<void>;
       debugLog?: (s: string) => void;
+      defaultMoveTimeoutMs?: number;
     },
   ) {
     this.name = name;
     this.author = author;
     this.advertiseOptions = advertiseOptions;
     this.robotUrl = robotUrl;
+
+    this.initialized = false;
+    this.defaultMoveTimeoutMs = defaultMoveTimeoutMs;
+
     this.sendInfo = sendInfo;
     this.sendBestMove = sendBestMove;
     this.chess = new Chess();
-    this.debugLog = debugLog ?? (() => {});
+    this.logDebug = debugLog ?? (() => {});
+    this.abortController = new AbortController();
 
     this.onInit = this.onInit.bind(this);
+    this.onReadyProbe = this.onReadyProbe.bind(this);
     this.onDebug = this.onDebug.bind(this);
     this.onSetOption = this.onSetOption.bind(this);
     this.onNewGame = this.onNewGame.bind(this);
@@ -81,6 +105,13 @@ class UCIProxyHandler implements UCIHandler {
       author: this.author,
       options: this.advertiseOptions,
     };
+  }
+
+  /** Simply wait for the robot request to finish, if there was any. */
+  async onReadyProbe() {
+    if (!this.robotRequest) return;
+
+    await this.robotRequest.catch(() => {});
   }
 
   async onDebug() {}
@@ -117,13 +148,13 @@ class UCIProxyHandler implements UCIHandler {
       }
     } catch (err) {
       if (err instanceof Error) {
-        this.debugLog(
+        this.logDebug(
           `Error applying moves: ${err.message}. All moves: ${
             JSON.stringify(this.moves)
           }. Available moves: ${this.chess.moves()}`,
         );
       } else {
-        this.debugLog("Unknown error");
+        this.logDebug("Unknown error");
       }
     }
   }
@@ -144,33 +175,85 @@ class UCIProxyHandler implements UCIHandler {
     return lan;
   }
 
-  async onGo() {
+  async onGo(params: UCIGoParameter[]) {
+    if (this.robotRequest) {
+      this.logDebug("Received a go request while another go request active!");
+      this.logDebug("If client was respecting UCI, then we have a severe bug.");
+      this.logDebug("I don't know what to do, so I guess I'll die.");
+      process.exit(1);
+    } else if (!this.initialized) {
+      this.logDebug("Received a go request before initialization.");
+      this.logDebug("This is non-fatal, but may indicate a bug.");
+      this.logDebug("Execution will continue.");
+    }
+
     this.loadBoard();
 
-    this.debugLog("recv go. current chess board is:");
-    this.debugLog(this.chess.ascii());
-    this.debugLog(`fen: ${this.chess.fen()}`);
+    this.logDebug("Received go.");
+    this.logDebug("Current chess board is:");
+    this.logDebug(this.chess.ascii());
+    this.logDebug(`FEN: ${this.chess.fen()}`);
+
+    /* Goal:
+     * Upon receiving a go command, we request the robot for its move.
+     *
+     * While we wait on the robot, any isready commands from the client should
+     * block until either we receive a command from the robot, or we time out,
+     * or the robot request is cancelled with a stop command.
+     *
+     * If the request takes longer than the timeout, we should cancel the
+     * request, in which case we have nothing to send to the client.
+     *
+     * If we receive a stop command (usually after we've timed out), we should
+     * abort any pending requests. Properly aborting pending requests is
+     * important so we don't accidentally send stale responses from a slow
+     * robot move.
+     */
 
     const turn = this.fen.split(" ")[1] === "w" ? "white" : "black";
-    this.debugLog("asking robot");
-    const response = await fetch(this.robotUrl, {
+    const realRobotRequest = fetch(this.robotUrl, {
       method: "POST",
       body: JSON.stringify({ fen: this.chess.fen(), failed_moves: [], turn }),
       headers: { "Content-Type": "application/json" },
+      signal: this.abortController.signal,
     })
       .then((res) => res.text());
-    this.debugLog(`robot said ${response}`);
+    // Create a promise that always times out. We race this robot request
+    // against this
+    const timeoutMs = params.find((param) => param.tag === "MoveTime")?.time ??
+      this.defaultMoveTimeoutMs;
+    const timeoutPromise: Promise<string> = new Promise(
+      (_, reject) =>
+        setTimeout(
+          () => reject(new Error(`Timeout of ${timeoutMs}ms reached`)),
+          timeoutMs,
+        ),
+    );
+    this.robotRequest = Promise.race([realRobotRequest, timeoutPromise]);
 
-    // uci only accepts long notation wtf!!!
-    // So we have to convert it here using chess.js
-    const lan = this.sanToLan(response);
-
-    // TODO: Send real score
-    this.sendInfo(info.score([score.centipawns(1)]));
-    this.sendBestMove(lan);
+    try {
+      this.logDebug("Asking robot");
+      const response = await this.robotRequest;
+      this.logDebug(`Robot says: ${response}`);
+      const lan = this.sanToLan(response);
+      // TODO: Send real score
+      await this.sendInfo(info.score([score.centipawns(1)]));
+      await this.sendBestMove(lan);
+    } catch (err) {
+      if (err instanceof Error) {
+        this.logDebug(`Caught error while asking robot: ${err.message}`);
+      } else {
+        this.logDebug(`Caught unknown error while asking robot.`);
+      }
+    } finally {
+      this.robotRequest = undefined;
+    }
   }
 
-  async onStop() {}
+  async onStop() {
+    this.logDebug("Received a stop command, aborting robot...");
+    this.abortController.abort();
+  }
   async onPonderHit() {}
   async onQuit() {
     process.exit(0);
