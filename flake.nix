@@ -26,6 +26,9 @@
             # docker
             podman
             podman-compose
+
+            # C
+            clang-tools
           ];
         };
       });
