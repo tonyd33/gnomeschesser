@@ -188,7 +188,90 @@ pub fn update_fen(game: Game, fen: String) -> Result(Game, Nil) {
 }
 
 pub fn to_fen(game: Game) -> String {
-  todo
+  // todo: board positions
+
+  let ranks = [8, 7, 6, 5, 4, 3, 2, 1]
+  let files = ["a", "b", "c", "d", "e", "f", "g", "h"]
+
+  let piece_placement =
+    ranks
+    |> list.map(fn(rank) {
+      list.map(files, fn(file) {
+        let actual_square =
+          square.from_string(file <> int.to_string(rank))
+          |> result.lazy_unwrap(fn() { panic })
+
+        let piece_string = case dict.has_key(game.board, actual_square) {
+          True -> {
+            dict.get(game.board, actual_square)
+            |> result.lazy_unwrap(fn() { panic })
+            |> piece.to_string()
+          }
+          False -> ""
+        }
+      })
+      |> list.fold(#("", 0), fn(acc, val) {
+        let #(curr_string, num_empty) = acc
+        case val {
+          "" -> #(curr_string, num_empty + 1)
+          _ -> {
+            case num_empty {
+              0 -> #(curr_string <> val, 0)
+              _ -> #(curr_string <> int.to_string(num_empty) <> val, 0)
+            }
+          }
+        }
+      })
+      |> fn(x) {
+        case x.1 {
+          0 -> x.0
+          _ -> x.0 <> int.to_string(x.1)
+        }
+      }
+    })
+    |> string.join("/")
+
+  let halfmove_clock_string = int.to_string(game.halfmove_clock)
+  let fullmove_number_string = int.to_string(game.fullmove_number)
+  let castling_rights_string =
+    game.castling_availability
+    |> list.filter_map(fn(val) {
+      case val {
+        #(player.White, KingSide) -> Ok("K")
+        #(player.White, QueenSide) -> Ok("Q")
+        #(player.Black, KingSide) -> Ok("k")
+        #(player.Black, QueenSide) -> Ok("q")
+      }
+    })
+    |> fn(rights) {
+      case rights {
+        [] -> "-"
+        _ -> list.fold(rights, "", fn(str, val) { str <> val })
+      }
+    }
+  let active_color_string = case game.active_color {
+    player.Black -> "b"
+    player.White -> "w"
+  }
+
+  let en_passant_target_string =
+    case game.en_passant_target_square {
+      option.Some(target_square) -> square.to_string(target_square)
+      option.None -> Ok("-")
+    }
+    |> result.unwrap("-")
+
+  string.join(
+    [
+      piece_placement,
+      active_color_string,
+      castling_rights_string,
+      en_passant_target_string,
+      halfmove_clock_string,
+      fullmove_number_string,
+    ],
+    " ",
+  )
 }
 
 /// Returns whether the games are equal, where equality is determined by the
