@@ -536,6 +536,5 @@ pub fn to_string(square: Square) -> Result(String, Nil) {
     F1 -> Ok("f1")
     G1 -> Ok("g1")
     H1 -> Ok("h1")
-    _ -> Error(Nil)
   }
 }

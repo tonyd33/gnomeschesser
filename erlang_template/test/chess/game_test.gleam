@@ -205,16 +205,16 @@ pub fn moves_basic_test() {
   ])
 }
 
-///    +------------------------+
-///  8 | .  .  .  .  .  .  .  k |
-///  7 | .  .  .  .  .  .  .  . |
-///  6 | .  .  P  .  p  .  .  . |
-///  5 | .  .  .  .  .  .  .  . |
-///  4 | .  .  .  N  .  .  .  . |
-///  3 | .  .  .  .  .  .  .  . |
-///  2 | .  .  .  .  .  .  .  . |
-///  1 | .  .  .  .  .  .  .  K |
-///    +------------------------+
+// /    +------------------------+
+// /  8 | .  .  .  .  .  .  .  k |
+// /  7 | .  .  .  .  .  .  .  . |
+// /  6 | .  .  P  .  p  .  .  . |
+// /  5 | .  .  .  .  .  .  .  . |
+// /  4 | .  .  .  N  .  .  .  . |
+// /  3 | .  .  .  .  .  .  .  . |
+// /  2 | .  .  .  .  .  .  .  . |
+// /  1 | .  .  .  .  .  .  .  K |
+// /    +------------------------+
 ///      a  b  c  d  e  f  g  h
 pub fn moves_knight_test() {
   let assert Ok(game) = load_fen("7k/8/2P1p3/8/3N4/8/8/7K w - - 0 1")
@@ -762,6 +762,27 @@ pub fn apply_castling_availability_move_rook_capture_test() {
   game.castling_availability(game)
   |> should.equal([#(player.White, game.QueenSide)])
 }
+
+pub fn ascii_test() {
+  let board_ascii =
+    ""
+    <> "   +------------------------+\n"
+    <> " 8 | R  .  .  .  .  .  r  k |\n"
+    <> " 7 | .  .  B  .  .  .  p  p |\n"
+    <> " 6 | .  .  .  .  .  .  .  . |\n"
+    <> " 5 | .  .  .  Q  .  .  .  . |\n"
+    <> " 4 | .  .  .  .  .  .  .  . |\n"
+    <> " 3 | .  N  .  .  .  .  .  . |\n"
+    <> " 2 | .  .  .  .  .  .  .  . |\n"
+    <> " 1 | R  .  .  .  .  .  .  K |\n"
+    <> "   +------------------------+\n"
+    <> "     a  b  c  d  e  f  g  h"
+
+  let assert Ok(game) = load_fen("R5rk/2B3pp/8/3Q4/8/1N6/8/R6K w - - 0 1")
+  game.ascii(game)
+  |> should.equal(board_ascii)
+}
+
 // END: move.apply tests
 
 pub fn to_fen_starting_position_test() {
