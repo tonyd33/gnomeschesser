@@ -1,4 +1,4 @@
-import chess/game.{load_fen}
+import chess/game.{load_fen, to_fen}
 import chess/piece
 import chess/player
 import chess/square
@@ -763,3 +763,16 @@ pub fn apply_castling_availability_move_rook_capture_test() {
   |> should.equal([#(player.White, game.QueenSide)])
 }
 // END: move.apply tests
+
+pub fn to_fen_starting_position_test() {
+  let assert Ok(game) =
+    load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+  to_fen(game)
+  |> should.equal("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+
+  let four_knights_scotch_fen =
+    "r1bqkb1r/pppp1ppp/2n2n2/4p3/3PP3/2N2N2/PPP2PPP/R1BQKB1R b KQkq - 0 1"
+  let assert Ok(game) = load_fen(four_knights_scotch_fen)
+  to_fen(game)
+  |> should.equal(four_knights_scotch_fen)
+}
