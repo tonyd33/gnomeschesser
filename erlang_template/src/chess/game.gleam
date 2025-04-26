@@ -199,12 +199,16 @@ pub fn to_fen(game: Game) -> String {
       list.map(files, fn(file) {
         let actual_square =
           square.from_string(file <> int.to_string(rank))
-          |> result.lazy_unwrap(fn() { panic })
+          |> result.lazy_unwrap(fn() {
+            panic as "This isn't supposed to happen"
+          })
 
         let piece_string = case dict.has_key(game.board, actual_square) {
           True -> {
             dict.get(game.board, actual_square)
-            |> result.lazy_unwrap(fn() { panic })
+            |> result.lazy_unwrap(fn() {
+              panic as "This isn't supposed to happen"
+            })
             |> piece.to_string()
           }
           False -> ""
@@ -279,7 +283,10 @@ pub fn to_fen(game: Game) -> String {
 /// https://en.wikipedia.org/wiki/Threefold_repetition
 ///
 pub fn equal(g1: Game, g2: Game) -> Bool {
-  todo
+  let g1_fen = to_fen(g1)
+  let g2_fen = to_fen(g2)
+  list.take(string.split(g1_fen, " "), 4)
+  == list.take(string.split(g2_fen, " "), 4)
 }
 
 /// Returns the number of times this game state has repeated in the game's
@@ -287,7 +294,9 @@ pub fn equal(g1: Game, g2: Game) -> Bool {
 /// repetition: https://en.wikipedia.org/wiki/Threefold_repetition
 ///
 pub fn repetition_count(game: Game) -> Int {
-  todo
+  list.filter(game.history, fn(old_game) { equal(old_game, game) })
+  |> list.length()
+  |> int.add(1)
 }
 
 pub fn piece_at(game: Game, square: square.Square) -> Result(piece.Piece, Nil) {
@@ -302,7 +311,8 @@ pub fn empty_at(game: Game, square: square.Square) -> Bool {
 }
 
 pub fn find_piece(game: Game, piece: piece.Piece) -> List(square.Square) {
-  todo
+  dict.filter(game.board, fn(_, p) { p == piece })
+  |> dict.keys()
 }
 
 pub fn is_attacked(game: Game, square: square.Square, by: player.Player) -> Bool {
@@ -409,11 +419,11 @@ pub fn is_checkmate(game: Game) -> Bool {
 }
 
 pub fn is_stalemate(game: Game) -> Bool {
-  todo
+  !is_check(game) && { moves(game) |> list.length == 0 }
 }
 
 pub fn is_threefold_repetition(game: Game) -> Bool {
-  todo
+  repetition_count(game) >= 3
 }
 
 /// There are certain board configurations in which it is impossible for either
@@ -425,12 +435,33 @@ pub fn is_insufficient_material(game: Game) -> Bool {
   todo
 }
 
+pub fn is_draw(game: Game) -> Bool {
+  False
+}
+
 pub fn is_game_over(game: Game) -> Bool {
-  todo
+  is_checkmate(game) || is_stalemate(game) || is_draw(game)
 }
 
 pub fn ascii(game: Game) -> String {
-  todo
+  "   +------------------------+\n"
+  <> list.fold(square.squares, "", fn(acc, val) {
+    let start_string = case square.file(square.ox88(val)) {
+      0 -> " " <> int.to_string(8 - square.rank(square.ox88(val))) <> " |"
+      _ -> ""
+    }
+    let middle_string = case dict.get(game.board, val) {
+      Error(_) -> " . "
+      Ok(other) -> " " <> piece.to_string(other) <> " "
+    }
+    let end_string = case square.file(square.ox88(val)) {
+      7 -> "|\n"
+      _ -> ""
+    }
+    acc <> start_string <> middle_string <> end_string
+  })
+  <> "   +------------------------+\n"
+  <> "     a  b  c  d  e  f  g  h"
 }
 
 pub fn pieces(game: Game) -> List(#(square.Square, piece.Piece)) {
