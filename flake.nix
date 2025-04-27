@@ -27,8 +27,9 @@
             podman
             podman-compose
 
-            # C
+            # Other dev utils
             clang-tools
+            go
           ];
         };
       });

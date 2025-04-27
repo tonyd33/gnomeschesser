@@ -57,4 +57,4 @@ done
 cat "$tables_dir"/*.tbl | sort | uniq > "$combined_table"
 
 # Create the grouped file
-./group < "$combined_table" > "$grouped_file"
+./grouper < "$combined_table" > "$grouped_file"

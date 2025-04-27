@@ -3,7 +3,7 @@ import process from "node:process";
 import readline from "node:readline";
 import { Chess, Move } from "chess.js";
 
-const serializeMove = (move: Move): string => `${move.before},${move.san}`;
+const serializeMove = (move: Move): string => `${move.before},${move.from},${move.to}`;
 
 /**
  * Reads PGNs from stdin and prints the corresponding move table entries to
