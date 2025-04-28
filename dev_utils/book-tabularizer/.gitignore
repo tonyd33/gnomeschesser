@@ -1,4 +1,4 @@
-cases.txt
 books
-tables*
-grouper
+polyglot-bins
+build
+*.bin

@@ -1,3 +1,6 @@
 [submodule "dev_utils/uci-adapter"]
 	path = dev_utils/uci-adapter
 	url = git@github.com:tonyd33/node-uci-protocol.git
+[submodule "dev_utils/book-tabularizer/PolyglotBook"]
+	path = dev_utils/book-tabularizer/polyglot
+	url = https://github.com/tonyd33/PolyglotBook.git

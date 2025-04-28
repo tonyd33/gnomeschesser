@@ -1,5 +1,17 @@
-grouper: src/main.c src/splitmix64.c src/zobrist.c src/chess.c
-	cc -Wall src/main.c src/splitmix64.c src/zobrist.c src/chess.c -o grouper
+CC = cc
+CFLAGS = -Wall
+
+BUILD_DIR = build
+
+SUBPROJECTS = polyglot polyglot-operator
+
+all: $(addprefix $(BUILD_DIR)/, $(SUBPROJECTS))
+
+$(BUILD_DIR)/%: %
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) $</*.c -o $@
 
 clean:
-	rm grouper
+	rm -rf $(BUILD_DIR)
+
+.PHONY: all clean $(SUBPROJECTS)
