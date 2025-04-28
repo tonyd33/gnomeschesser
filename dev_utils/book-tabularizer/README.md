@@ -15,27 +15,25 @@ gleam program. Turns a file of PGNs like this:
 1. Nf3 d5 2. g3 c6 3. Bg2 Nf6 4. d3 Bg4 5. h3 Bh5 6. b3 e6 7. Bb2 Qa5+ 8.
 Qd2 Qxd2+ 1/2-1/2
 ```
-...into a set of intermediate files like this:
-```
-rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1,Nf3
-rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R b KQkq - 1 1,d5
-rnbqkbnr/ppp1pppp/8/3p4/8/5N2/PPPPPPPP/RNBQKB1R w KQkq - 0 2,g3
-...
-```
-...and then into a file like this:
-```
-"1k1r1bnr/pppqp1pp/2n2p2/3p4/1P1P2b1/2P2NP1/P2NPPBP/R1BQ1RK1 b - - 2 8" -> ["Bh3","e5","h5"]
-"1k1r1bnr/pppqp1pp/2n2p2/3p4/1P1P2b1/2P2NP1/P2NPPBP/R1BQK2R w KQ - 0 8" -> ["Nb3"]
-"1k1r1bnr/pppqp1pp/2n2p2/3p4/1P1P2b1/2P2NP1/P3PPBP/RNBQ1RK1 w - - 1 8" -> ["Nbd2","a4"]
-"1k1r1bnr/pppqp1pp/2n2p2/3p4/3P1Bb1/2P1PN2/PP1NBPPP/R2QK2R w KQ - 1 8" -> ["b4"]
+...into a set of intermediate binary files in the [Polyglot format](http://hgm.nubati.net/book_format.html#key).
+We can then use the Polyglot files to generate Gleam code like this:
+```gleam
+pub fn lookup_move(x) {
+  case x of {
+    0xDEADBEEF->[0x765,0x173]
+    0xBAADF00D->[0x765]
+    0xB0BABABE->[0x135,0x876]
+    _->[]
+  }
+}
 ```
 
 # Quick start
 
 ## Prerequisites
 
-* Ensure you have a C compiler that can be run with `cc`
-* Ensure you have deno and GNU make installed
+* C++ compiler
+* Meson and Ninja
 
 ## Get books
 

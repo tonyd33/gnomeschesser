@@ -2,3 +2,4 @@ books
 polyglot-bins
 build
 *.bin
+.cache

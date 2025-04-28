@@ -27,10 +27,12 @@ done
 
 if [ ! -d "$books_dir" ]; then
   echo "books dir '$books_dir' does not exist"
+  exit 1
 fi
 
 if [ ! -d "$polyglot_dir" ]; then
   echo "tables dir '$polyglot_dir' does not exist"
+  exit 1
 fi
 
 # Ensure we can create these files
@@ -39,7 +41,8 @@ touch "$code_file"
 
 cd "$(dirname "$0")"
 
-make all
+meson setup build || true
+meson compile -C build
 
 polyglot_files=()
 
@@ -49,9 +52,9 @@ for book in "$books_dir"/*.pgn; do
   polyglot_files+=("$polyglot_file")
 
   echo "Processing $book into $polyglot_file"
-  build/polyglot MakeBook -pgn "$book" -bin "$polyglot_file"
+  build/polyglot-operator -v build --pgn "$book" --bin "$polyglot_file"
 done
 
 
-build/polyglot-operator merge "${polyglot_files[@]}" --output "$merged_file"
-build/polyglot-operator codegen "$merged_file" > "$code_file"
+build/polyglot-operator merge --bins "${polyglot_files[@]}" --output "$merged_file"
+build/polyglot-operator codegen --bin "$merged_file" --output "$code_file"

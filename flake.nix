@@ -29,7 +29,8 @@
 
             # Other dev utils
             clang-tools
-            go
+            meson
+            ninja
           ];
         };
       });
