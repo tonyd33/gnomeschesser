@@ -31,7 +31,10 @@ pub opaque type Game {
   )
 }
 
-pub fn to_hash(game: Game) -> Int {
+pub type GameHash =
+  Int
+
+pub fn to_hash(game: Game) -> GameHash {
   // TODO: use proper zobrist hashing
   let assert Ok(hash) =
     [
@@ -891,26 +894,29 @@ fn pawn_moves(game: Game, square: square.Square) {
       })
 
     let ep_move =
-      square.algebraic(to)
-      |> result_addons.expect_or(
-        fn(to_alg) {
+      {
+        use to_alg <- result.try(square.algebraic(to))
+        use ep_square <- result.try(
           en_passant_target_square(game)
-          |> option.map(fn(ep_square) { ep_square == to_alg })
-          |> option.unwrap(False)
-        },
-        fn(_) { Nil },
-      )
-      |> result.map(fn(_) {
-        InternalMove(
-          player: us,
-          from: from,
-          to: to,
-          piece: piece.Pawn,
-          captured: Some(piece.Pawn),
-          promotion: None,
-          flags: set.from_list([EnPassant, Capture]),
+          |> option.to_result(Nil),
         )
-      })
+        use <- bool.guard(ep_square != to_alg, Error(Nil))
+        let ep_rank = square.rank(ep_square |> square.ox88)
+        case us {
+          player.White if ep_rank == 6 -> Ok(ep_square)
+          player.Black if ep_rank == 3 -> Ok(ep_square)
+          _ -> Error(Nil)
+        }
+      }
+      |> result.replace(InternalMove(
+        player: us,
+        from: from,
+        to: to,
+        piece: piece.Pawn,
+        captured: Some(piece.Pawn),
+        promotion: None,
+        flags: set.from_list([EnPassant, Capture]),
+      ))
 
     [standard_x_move, ep_move]
   }
