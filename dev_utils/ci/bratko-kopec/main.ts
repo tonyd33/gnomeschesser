@@ -169,16 +169,21 @@ function generateReport(results: TestResult[]): string {
   const failureDetails = `
 ## 📚 Detailed failure report
 
+For more information on each test id, see the [Bratko-Kopec test wiki](https://www.chessprogramming.org/Bratko-Kopec_Test#EPD-Record)
+and see the tests at dev_utils/ci/bratko-kopec/main.ts
+
 | id | expected | got |
 | -- |    --    | --  |
 ${failedTableRows}
 `;
   let output = `# 📝 Bratko-Kopec Report
 
-## 📋 Summary
+## 📍 Summary
 
-* ${numFailed} failed, ${numPassed} passed, ${results.length} total
-* Success rate: ${numPassed * 100 / results.length}%
+* ✅ ${numPassed} passed
+* ❌ ${numFailed} failed
+* 💡 ${results.length} total
+* 🧮 ${(numPassed * 100 / results.length).toFixed(2)}% success
 `;
 
   if (numFailed > 0) {
