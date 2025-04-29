@@ -11,8 +11,8 @@ import gleam/pair
 import gleam/result
 import gleam/set.{type Set}
 import gleam/string
-import util/recursive_iterator
 import util/result_addons
+import util/yielder
 
 pub type Castle {
   KingSide
@@ -316,86 +316,70 @@ pub fn find_piece(game: Game, piece: piece.Piece) -> List(square.Square) {
 }
 
 pub fn is_attacked(game: Game, square: square.Square, by: player.Player) -> Bool {
-  let atkrs = attackers(game, square)
-
-  case list.length(atkrs) {
-    // Special case: list.any([]) == True, yet there are no attackers, so we
-    // return False
-    0 -> False
-    _ -> atkrs |> list.any(fn(x) { { x.1 }.player == by })
-  }
+  let attackers = attackers(game, square, by)
+  !list.is_empty(attackers)
 }
 
 /// Returns the position and pieces that are attacking a square.
+/// `by` is the color that is *attacking*.
 ///
 pub fn attackers(
-  game: Game,
-  square_alg: square.Square,
-) -> List(#(square.Square, piece.Piece)) {
-  let square = square.ox88(square_alg)
-
-  list.range(from: square.ox88(square.A8), to: square.ox88(square.H1))
-  |> list.filter_map(fn(i) {
-    let difference = i - square
-    // skip if to/from square are the same
-    use <- bool.guard(difference == 0, Error(Nil))
-
-    use piece_square_alg <- result.try(square.algebraic(i))
-    use piece <- result.try(piece_at(game, piece_square_alg))
-
-    // This is effectively a guard. I don't know what it means, but it's from
-    // chess.js.
-    let index = difference + 119
-    use _ <- result.try(
-      attacks(index)
-      |> result.map(int.bitwise_and(_, piece_masks(piece.symbol)))
-      |> result_addons.expect_or(fn(x) { x != 0 }, fn(_) { Nil }),
-    )
-
-    use offset <- result.try(rays(index))
-
-    use <- bool.guard(
-      case piece.symbol {
-        piece.Pawn ->
-          { difference > 0 && piece.player == player.White }
-          || { difference <= 0 && piece.player == player.Black }
-        piece.Knight | piece.King -> False
-        _ -> {
-          recursive_iterator.from_generator(i + offset, fn(j: Int) {
-            case j != square {
-              True -> recursive_iterator.Next(j + offset)
-              False -> recursive_iterator.End
-            }
-          })
-          |> recursive_iterator.fold_until(False, fn(blocked, j) {
-            let empty =
-              square.algebraic(j)
-              |> result.map(empty_at(game, _))
-              |> result.unwrap(True)
-
-            case blocked || !empty {
-              True -> list.Stop(True)
-              False -> list.Continue(False)
-            }
-          })
-        }
-      },
-      Error(Nil),
-    )
-
-    Ok(#(piece_square_alg, piece))
-  })
-}
-
-/// Returns the position and pieces that are attacking a square of a certain
-/// color. `by` is the color that is *attacking*.
-///
-pub fn attackers_by_player(
   game: Game,
   square: square.Square,
   by: player.Player,
 ) -> List(#(square.Square, piece.Piece)) {
-  todo
+  let square = square.ox88(square)
+
+  let pieces =
+    game.board
+    |> dict.to_list
+
+  let occupied_squares = list.map(pieces, fn(x) { square.ox88(pair.first(x)) })
+
+  pieces
+  |> list.filter(fn(piece) {
+    let #(from, piece) = piece
+    use <- bool.guard(piece.player != by, False)
+
+    let from = square.ox88(from)
+    let difference = from - square
+
+    // skip if to/from square are the same
+    use <- bool.guard(difference == 0, False)
+
+    // This index is used for `attacks` and `rays`, where a difference of 0 corresponds to the centre
+    let index = difference + 119
+
+    // `attacks` lets us index which type of piece can attack from that square
+    // if it's not the piece we currently have, we just return
+    use <- bool.guard(
+      {
+        let assert Ok(pieces_masks) = attacks(index)
+        0 == int.bitwise_and(pieces_masks, piece_masks(piece.symbol))
+      },
+      False,
+    )
+
+    case piece.symbol {
+      // Knights and Kings can't be blocked
+      piece.Knight | piece.King -> True
+      // Pawns can only attack forwards
+      piece.Pawn ->
+        case piece.player {
+          player.Black -> difference < 0
+          player.White -> difference > 0
+        }
+      // These slide, so we check if their path is empty
+      piece.Bishop | piece.Queen | piece.Rook -> {
+        let assert Ok(offset) = rays(index)
+
+        yielder.iterate(from + offset, int.add(_, offset))
+        |> yielder.take_while(fn(x) { x != square })
+        |> yielder.any(list.contains(occupied_squares, _))
+        |> bool.negate
+      }
+    }
+  })
 }
 
 pub fn is_check(game: Game) -> Bool {

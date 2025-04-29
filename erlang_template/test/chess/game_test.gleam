@@ -144,20 +144,20 @@ pub fn load_fen_fail_test() {
 /// 7 | .  .  B  .  .  .  p  p |
 /// 6 | .  .  .  .  .  .  .  . |
 /// 5 | .  .  .  Q  .  .  .  . |
-/// 4 | .  .  .  .  .  .  .  . |
+/// 4 | .  P  .  .  .  .  .  . |
 /// 3 | .  N  .  .  .  .  .  . |
 /// 2 | .  .  .  .  .  .  .  . |
-/// 1 | R  .  .  .  .  .  .  K |
+/// 1 | R  .  .  .  B  .  .  K |
 ///   +------------------------+
 ///     a  b  c  d  e  f  g  h
 pub fn attackers_basic_test() {
-  let assert Ok(game) = load_fen("R5rk/2B3pp/8/3Q4/8/1N6/8/R6K w - - 0 1")
+  let assert Ok(game) = load_fen("R5rk/2B3pp/8/3Q4/1P6/1N6/8/R3B2K w - - 0 1")
 
   game
-  |> game.attackers(square.A5)
+  |> game.attackers(square.A5, player.White)
   |> list.map(fn(x) { square.string(x.0) })
   |> list.sort(string.compare)
-  |> should.equal(["a1", "a8", "b3", "c7", "d5"])
+  |> should.equal(["a1", "a8", "b3", "b4", "c7", "d5"])
 }
 
 // All of these test boards include kings on both sides because
