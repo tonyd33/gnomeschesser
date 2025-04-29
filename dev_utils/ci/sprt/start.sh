@@ -56,7 +56,7 @@ mkdir -p "$repo_root_path/results"
     -engine cmd="$uci_adapter_path/start.sh" name=gnomes st=8 \
     -engine cmd="$run_stockfish" name=stockfish st=5 'option.Skill Level=1' \
     -rounds 1 -repeat -concurrency 1 \
-    -pgnout file=results/sprt.pgn \
-    -log file=results/fastchess.log
+    -pgnout file="$repo_root_path/results/sprt.pgn" \
+    -log file="$repo_root_path/results/fastchess.log"
 
 exit_gracefully
