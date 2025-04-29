@@ -204,15 +204,6 @@ async function main() {
   // Make sure this typechecks as a number for later
   const robotPid = robot.pid;
 
-  robot.stdout.on(
-    "data",
-    (data) => process.stderr.write(`[ROBOT STDOUT]: ${data.toString()}`),
-  );
-  robot.stderr.on(
-    "data",
-    (data) => process.stderr.write(`[ROBOT STDERR]: ${data.toString()}`),
-  );
-
   const errorIfClosedEarly = () => {
     process.stdout.write("Robot failed to start\n");
     process.exit(1);
