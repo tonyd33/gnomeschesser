@@ -70,7 +70,6 @@ fn search(
   // Use a yielder to iterate through depths indefinitely
   yielder.iterate(0, int.add(_, 1))
   |> yielder.fold(transposition, fn(transposition, depth) {
-    echo depth
     // TODO: implement transposition tables and sort moves based on the scores from there
     //let move_game_list = sort_moves(move_game_list, transposition)
 

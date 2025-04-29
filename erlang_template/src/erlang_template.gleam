@@ -46,7 +46,9 @@ fn handle_move(request: Request, robot: robot.Robot) -> Response {
   case json.parse(body, move_decoder()) {
     Error(_) -> wisp.bad_request()
     Ok(MoveRequest(fen:, turn: _, failed_moves:)) -> {
+      echo fen
       let result = robot.get_best_move(robot, fen, failed_moves)
+      echo result
       case result {
         Ok(move) -> wisp.ok() |> wisp.string_body(move)
         Error(Nil) ->
