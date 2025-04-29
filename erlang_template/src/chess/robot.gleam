@@ -84,10 +84,10 @@ fn create_robot_thread() -> Subject(UpdateMessage) {
 
 // The main robot loop that checks for messages and updates the state
 fn main_loop(state: RobotState, update: process.Selector(UpdateMessage)) {
-  let message = process.select(update, 0)
+  let message = process.select_forever(update)
   let state = case message {
     // If we receive a new FEN, respawn the searcher with the new game
-    Ok(UpdateFen(fen, _failed_moves)) -> {
+    UpdateFen(fen, _failed_moves) -> {
       let RobotState(_game, _best_move, #(search_pid, search_subject), memo) =
         state
 
@@ -98,19 +98,17 @@ fn main_loop(state: RobotState, update: process.Selector(UpdateMessage)) {
       RobotState(game, None, #(searcher_pid, search_subject), memo)
     }
     // If we receive a request for the best move, respond with the current best move we're tracking
-    Ok(GetBestMove(response)) -> {
+    GetBestMove(response) -> {
+      echo "requested best move"
       case state.best_move {
         Some(best_move) -> process.send(response, best_move)
-        _ -> Nil
-        //panic as "No best move was calculated in time"
+        _ -> panic as "No best move was calculated in time"
       }
       state
     }
     // If we receive an update for the best move, just update the state
-    Ok(UpdateBestMove(best_move, memo)) ->
+    UpdateBestMove(best_move, memo) ->
       RobotState(..state, best_move: Some(best_move), memo:)
-    // If there's no message, just maintain the same state
-    Error(Nil) -> state
   }
 
   main_loop(state, update)
