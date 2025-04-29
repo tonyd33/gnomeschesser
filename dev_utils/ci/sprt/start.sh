@@ -34,43 +34,12 @@ download_fastchess "$repo_root_path/fastchess"
 run_stockfish="$repo_root_path/stockfish/stockfish-ubuntu-x86-64-avx2"
 run_fastchess="$repo_root_path/fastchess/fastchess-ubuntu-22.04"
 
-# Run Gleam bot
-# cd "$robot_path"
-# gleam run &
-# ROBOT_PID="$!"
-#
-# exit_gracefully() {
-#   echo "killing robot"
-#   kill -s KILL "$ROBOT_PID"
-#   echo "robot reaped"
-#   exit 0
-# }
-
-# trap exit_gracefully INT
-# trap exit_gracefully TERM
-
-# Make sure the robot is running
-# for _ in $(seq 1 10); do
-#   if curl -X POST \
-#     -H 'content-type: application/json' \
-#     -d '{"fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "failed_moves": [], "turn": "white"}' \
-#     http://localhost:8000/move; then
-#     echo "Robot alive"
-#     break
-#   else
-#     echo "Robot starting up, wait"
-#     sleep 1
-#   fi
-# done
-
 # Run fastchess
 # TODO: Tune stockfish options
 mkdir -p "$repo_root_path/results"
 "$run_fastchess" \
     -engine cmd="$uci_adapter_path/start.sh" args="--debug" name=gnomes st=8 \
-    -engine cmd="$run_stockfish" name=stockfish st=5 'option.Skill Level=1' \
-    -rounds 10 -repeat -concurrency 1 \
+    -engine cmd="$run_stockfish" name=stockfish st=8 'option.Skill Level=1' \
+    -rounds 5 -repeat -concurrency 1 \
     -pgnout file="$repo_root_path/results/sprt.pgn" \
     -log file="$repo_root_path/results/fastchess.log"
-
-# exit_gracefully
