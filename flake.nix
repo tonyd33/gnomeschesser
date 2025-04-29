@@ -26,6 +26,11 @@
             # docker
             podman
             podman-compose
+
+            # Other dev utils
+            clang-tools
+            meson
+            ninja
           ];
         };
       });
