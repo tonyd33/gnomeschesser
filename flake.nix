@@ -31,6 +31,7 @@
             clang-tools
             meson
             ninja
+            act
           ];
         };
       });
