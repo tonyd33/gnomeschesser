@@ -75,3 +75,35 @@ jobs:
           issue-number: ${{ github.event.pull_request.number }}
           body-file: results/bratko-kopec.md
           comment-id: ${{ steps.find-comment.outputs.comment-id }}
+
+  sprt:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.1.2"
+          gleam-version: "1.9.1"
+          rebar3-version: "3"
+
+      - run: gleam deps download
+        working-directory: erlang_template
+
+      - run: gleam build
+        working-directory: erlang_template
+
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Run SPRT
+        run: dev_utils/ci/sprt/start.sh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: results
+          path: results/
+
