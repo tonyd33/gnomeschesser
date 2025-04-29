@@ -36,7 +36,7 @@ run_fastchess="$repo_root_path/fastchess/fastchess-ubuntu-22.04"
 
 # Run Gleam bot
 cd "$robot_path"
-gleam run > /dev/null 2>&1 &
+gleam run &
 ROBOT_PID="$!"
 
 exit_gracefully() {
