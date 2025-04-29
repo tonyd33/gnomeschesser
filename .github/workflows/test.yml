@@ -23,3 +23,25 @@ jobs:
         working-directory: erlang_template
       - run: gleam format --check src test
         working-directory: erlang_template
+
+  evaluation_test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.1.2"
+          gleam-version: "1.9.1"
+          rebar3-version: "3"
+      - run: gleam deps download
+        working-directory: erlang_template
+      - run: gleam build
+        working-directory: erlang_template
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Bratko-Kopec
+        run: deno task test
+        working-directory: dev_utils/ci/bratko-kopec
