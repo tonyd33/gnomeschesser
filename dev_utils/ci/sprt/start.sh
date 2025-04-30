@@ -38,8 +38,9 @@ run_fastchess="$repo_root_path/fastchess/fastchess-ubuntu-22.04"
 # TODO: Tune stockfish options
 mkdir -p "$repo_root_path/results"
 "$run_fastchess" \
-    -engine cmd="$uci_adapter_path/start.sh" args="--debug" name=gnomes st=8 \
-    -engine cmd="$run_stockfish" name=stockfish st=8 'option.Skill Level=1' \
+    -engine cmd="$uci_adapter_path/start.sh" args="--debug" name=gnomes \
+    -engine cmd="$run_stockfish" name=stockfish 'option.Skill Level=1' \
+    -each tc=60+60 \
     -rounds 5 -repeat -concurrency 1 \
     -pgnout file="$repo_root_path/results/sprt.pgn" \
     -log file="$repo_root_path/results/fastchess.log"
