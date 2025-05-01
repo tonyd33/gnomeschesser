@@ -5,6 +5,7 @@ import gleam/dict
 import gleam/erlang/process
 import gleam/float
 import gleam/int
+import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/order
@@ -12,31 +13,42 @@ import gleam/pair
 import gleam/result
 import util/yielder
 
-pub type Evaluation {
-  Evaluation(score: Float, move: Option(game.Move))
+pub type SearchMessage {
+  SearchUpdate(best_move: game.Move, transposition: TranspositionTable)
 }
 
-pub opaque type TranspositionTable {
-  TranspositionTable(dict: dict.Dict(game.GameHash, #(Depth, Float)))
+pub type TranspositionTable {
+  TranspositionTable(dict: dict.Dict(game.GameHash, #(Depth, Evaluation)))
 }
 
-pub fn memoization_new() {
+pub fn transposition_table_new() {
   TranspositionTable(dict.new())
 }
 
-type Depth =
+pub type Depth =
   Int
 
-fn memoization_insert(
-  transposition: TranspositionTable,
-  index: game.GameHash,
-  value: #(Depth, Float),
-) {
-  TranspositionTable(dict.insert(transposition.dict, index, value))
+pub type Evaluation {
+  Evaluation(score: Float, node_type: NodeType, best_move: Option(game.Move))
 }
 
-pub type SearchMessage {
-  SearchUpdate(best_move: game.Move, transposition: TranspositionTable)
+// https://www.chessprogramming.org/Node_Types
+pub type NodeType {
+  // Exact Score
+  PV
+  // Lower Bound
+  Cut
+  // Upper Bound
+  All
+}
+
+fn evaluation_negate(evaluation: Evaluation) -> Evaluation {
+  let node_type = case evaluation.node_type {
+    Cut -> All
+    All -> Cut
+    PV -> PV
+  }
+  Evaluation(..evaluation, score: float.negate(evaluation.score), node_type:)
 }
 
 pub fn new(
@@ -45,67 +57,28 @@ pub fn new(
   search_subject: process.Subject(SearchMessage),
 ) -> process.Pid {
   // Spawns a searcher thread, NOT linked so we can kill it whenever
-  process.start(fn() { search(game, transposition, search_subject) }, False)
+  process.start(fn() { search(search_subject, game, 1, transposition) }, False)
 }
 
 fn search(
-  game: game.Game,
-  transposition: TranspositionTable,
   search_subject: process.Subject(SearchMessage),
+  game: game.Game,
+  current_depth: Depth,
+  transposition: TranspositionTable,
 ) -> Nil {
-  // Pre-compute all of the associated games after the move is made
-  let move_game_list =
-    game.moves(game)
-    |> list.map(fn(move) {
-      let assert Ok(new_game) = game.apply(game, move)
-      #(move, new_game)
-    })
+  echo current_depth
+  // perform the search at each depth, the negamax function will handle sorting and caching
+  let #(best_evaluation, transposition) =
+    negamax_alphabeta_failsoft(game, current_depth, -1.0, 1.0, transposition)
+  let Evaluation(_score, _node_type, best_move) = best_evaluation
 
-  use <- bool.guard(list.is_empty(move_game_list), Nil)
-
-  // shuffle the list to not have deterministic results
-  // can remove if the evaluation becomes more interesting
-  let move_game_list = list.shuffle(move_game_list)
-
-  // Use a yielder to iterate through depths indefinitely
-  yielder.iterate(0, int.add(_, 1))
-  |> yielder.fold(transposition, fn(transposition, depth) {
-    echo depth
-    // TODO: implement transposition tables and sort moves based on the scores from there
-    //let move_game_list = sort_moves(move_game_list, transposition)
-
-    // We iterate through every move and perform minimax to evaluate said move
-    // accumulator keeps track of best score and best move
-    let assert #(_best_score, Some(best_move), transposition) =
-      list.fold(
-        move_game_list,
-        #(-1.0, None, transposition),
-        fn(acc, move_game) {
-          let #(best_score, best_move, transposition) = acc
-          let #(move, new_game) = move_game
-          let #(new_score, transposition) =
-            negamax_alphabeta_failsoft(
-              new_game,
-              depth,
-              -1.0,
-              float.negate(best_score),
-              transposition,
-            )
-          let new_score = float.negate(new_score)
-
-          let #(best_score, best_move) = case best_score >=. new_score {
-            True -> #(best_score, best_move)
-            False -> #(new_score, Some(move))
-          }
-
-          #(best_score, best_move, transposition)
-        },
-      )
-    process.send(search_subject, SearchUpdate(best_move, transposition))
-
-    transposition
-  })
-  Nil
+  echo best_evaluation
+  case best_move {
+    Some(best_move) ->
+      process.send(search_subject, SearchUpdate(best_move, transposition))
+    None -> Nil
+  }
+  search(search_subject, game, current_depth + 1, transposition)
 }
 
 // https://www.chessprogramming.org/Alpha-Beta#Negamax_Framework
@@ -116,51 +89,78 @@ fn search(
 // If black's turn, +1 is black's advantage
 // alpha is the "best" score for active player
 // beta is the "best" score for non-active player
+
 fn negamax_alphabeta_failsoft(
   game: game.Game,
   depth: Depth,
   alpha: Float,
   beta: Float,
   transposition: TranspositionTable,
-) -> #(Float, TranspositionTable) {
+) -> #(Evaluation, TranspositionTable) {
+  let game_hash = game.to_hash(game)
+
+  // TODO: check for cache collision here
+  let cached_evaluation =
+    dict.get(transposition.dict, game_hash)
+    |> result.then(fn(x) {
+      let #(cached_depth, evaluation) = x
+      use <- bool.guard(cached_depth < depth, Error(Nil))
+      case evaluation {
+        Evaluation(_, PV, _) -> Ok(evaluation)
+        Evaluation(score, Cut, _) if score >=. beta -> Ok(evaluation)
+        Evaluation(score, All, _) if score <=. alpha -> Ok(evaluation)
+        _ -> Error(Nil)
+      }
+    })
+
+  use <- result.lazy_unwrap(
+    result.map(cached_evaluation, pair.new(_, transposition)),
+  )
+
+  let #(evaluation, transposition) =
+    do_negamax_alphabeta_failsoft(game, depth, alpha, beta, transposition)
+
+  let transposition =
+    TranspositionTable(
+      dict: dict.insert(transposition.dict, game_hash, #(depth, evaluation)),
+    )
+
+  #(evaluation, transposition)
+}
+
+fn do_negamax_alphabeta_failsoft(
+  game: game.Game,
+  depth: Depth,
+  alpha: Float,
+  beta: Float,
+  transposition: TranspositionTable,
+) -> #(Evaluation, TranspositionTable) {
   use <- bool.lazy_guard(depth <= 0, fn() {
     let score = quiesce(game, alpha, beta)
-    #(score, transposition)
+    #(Evaluation(score:, node_type: PV, best_move: None), transposition)
   })
 
-  let moves = game.moves(game)
+  let move_game_list = sorted_moves(game, transposition)
 
-  use <- bool.lazy_guard(list.is_empty(moves), fn() {
+  use <- bool.lazy_guard(list.is_empty(move_game_list), fn() {
     // if checkmate/stalemate
     let score = case game.is_check(game) {
       True -> -1.0
       False -> 0.0
     }
-    #(score, transposition)
+    #(Evaluation(score:, node_type: PV, best_move: None), transposition)
   })
 
-  // recalculate the new game state of each move applied
-  let move_game_list =
-    game.moves(game)
-    |> list.map(fn(move) {
-      let assert Ok(new_game) = game.apply(game, move)
-      #(move, new_game)
-    })
-
-  // TODO: implement transposition tables and sort moves based on the scores from there
-  // sort moves from previously calculated scores for better pruning
-  //let move_game_list = sort_moves(move_game_list, transposition)
-
   // We iterate through every move and perform minimax to evaluate said move
-  // accumulator keeps track of best score and best move
-  let #(best_score, _alpha, transposition) =
+  // accumulator keeps track of best evaluation while updating the node type
+  let #(best_evaluation, _alpha, transposition) =
     list.fold_until(
       move_game_list,
-      #(-1.0, alpha, transposition),
+      #(Evaluation(-1.0, PV, None), alpha, transposition),
       fn(acc, move_game) {
-        let #(best_value, alpha, transposition) = acc
-        let #(_move, game) = move_game
-        let #(score, transposition) =
+        let #(best_evaluation, alpha, transposition) = acc
+        let #(move, game) = move_game
+        let #(evaluation, transposition) =
           negamax_alphabeta_failsoft(
             game,
             depth - 1,
@@ -168,27 +168,30 @@ fn negamax_alphabeta_failsoft(
             float.negate(alpha),
             transposition,
           )
-        let score = float.negate(score)
-        let acc = case best_value <. score {
-          True -> #(
-            float.max(best_value, score),
-            float.max(alpha, score),
-            transposition,
-          )
-          False -> acc
+        let evaluation =
+          Evaluation(..evaluation_negate(evaluation), best_move: Some(move))
+        let best_evaluation = case best_evaluation.score <. evaluation.score {
+          True -> evaluation
+          False -> best_evaluation
         }
-        case score >=. beta {
-          True -> list.Stop(acc)
-          False -> list.Continue(acc)
+        let alpha = float.max(alpha, evaluation.score)
+
+        // beta-cutoff
+        case evaluation.score >=. beta {
+          True -> {
+            let best_evaluation = Evaluation(..best_evaluation, node_type: Cut)
+            list.Stop(#(best_evaluation, alpha, transposition))
+          }
+          False -> list.Continue(#(best_evaluation, alpha, transposition))
         }
       },
     )
 
-  #(best_score, transposition)
+  #(best_evaluation, transposition)
 }
 
 // returns the score of the current game while checking
-// every capture 
+// every capture and check
 // scores are from the perspective of the active player
 // If white's turn, +1 is white's advantage
 // If black's turn, +1 is black's advantage
@@ -198,15 +201,24 @@ fn quiesce(game: game.Game, alpha: Float, beta: Float) -> Float {
   let score = evaluate.game(game) *. evaluate.player(game.turn(game))
   use <- bool.guard(score >=. beta, score)
   let alpha = float.max(alpha, score)
-  let moves = game.moves(game)
+
+  let move_game_list =
+    game.moves(game)
+    |> list.map(fn(move) {
+      let assert Ok(new_game) = game.apply(game, move)
+      #(move, new_game)
+    })
   let #(best_score, _) =
-    moves
-    |> list.filter(game.move_is_capture)
-    |> list.fold_until(#(score, alpha), fn(acc, move) {
+    move_game_list
+    |> list.filter(fn(move_game) {
+      let #(move, _new_game) = move_game
+      game.move_is_capture(move)
+    })
+    |> list.fold_until(#(score, alpha), fn(acc, move_game) {
+      let #(_move, new_game) = move_game
       let #(best_score, alpha) = acc
-      let assert Ok(game) = game.apply(game, move)
       let score =
-        float.negate(quiesce(game, float.negate(beta), float.negate(alpha)))
+        float.negate(quiesce(new_game, float.negate(beta), float.negate(alpha)))
 
       use <- bool.guard(score >=. beta, list.Stop(#(score, alpha)))
       list.Continue(#(float.max(best_score, score), float.max(alpha, score)))
@@ -215,25 +227,37 @@ fn quiesce(game: game.Game, alpha: Float, beta: Float) -> Float {
 }
 
 // sort moves from best to worse, which improves alphabeta pruning
-fn sort_moves(
-  move_games: List(#(game.Move, game.Game)),
+fn sorted_moves(
+  game: game.Game,
   transposition: TranspositionTable,
 ) -> List(#(game.Move, game.Game)) {
-  move_games
-  |> list.map(fn(move_game) {
-    let #(_move, new_game) = move_game
-    let score = case dict.get(transposition.dict, game.to_hash(new_game)) {
+  game.moves(game)
+  |> list.map(fn(move) {
+    // retrieve the cached transposition table data
+    // negate the evaluation so that it's relative to our current game
+    let assert Ok(new_game) = game.apply(game, move)
+    let evaluation = case dict.get(transposition.dict, game.to_hash(new_game)) {
+      Ok(#(_, evaluation)) -> Some(evaluation_negate(evaluation))
       Error(Nil) -> None
-      Ok(#(_, score)) -> Some(score)
     }
-    #(move_game, score)
+    #(#(move, new_game), evaluation)
   })
+  // "smallest" elements get sorted first
   |> list.sort(fn(a, b) {
-    case a.1, b.1 {
-      Some(a), Some(b) -> float.compare(b, a)
+    let #(_a_move, a) = a
+    let #(_b_move, b) = b
+    case a, b {
       None, None -> order.Eq
       _, None -> order.Lt
       None, _ -> order.Gt
+      Some(a), Some(b) -> {
+        case a, b {
+          Evaluation(_, Cut, _), _ -> order.Gt
+          _, Evaluation(_, Cut, _) -> order.Lt
+          Evaluation(a_score, _, _), Evaluation(b_score, _, _) ->
+            float.compare(b_score, a_score)
+        }
+      }
     }
   })
   |> list.map(pair.first)
