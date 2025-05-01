@@ -1,5 +1,6 @@
 import chess/game
 import chess/search
+import gleam/dict
 import gleam/erlang/process.{type Subject}
 import gleam/function
 import gleam/option.{type Option, None, Some}
@@ -54,7 +55,7 @@ fn create_robot_thread() -> Subject(UpdateMessage) {
         game.load_fen(
           "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
         )
-      let memo = search.memoization_new()
+      let memo = search.transposition_table_new()
       // The search_subject will be used by searchers to update new best moves found
       let search_subject: Subject(search.SearchMessage) = process.new_subject()
 
@@ -64,7 +65,7 @@ fn create_robot_thread() -> Subject(UpdateMessage) {
           game:,
           best_move: None,
           searcher: #(searcher_pid, search_subject),
-          memo: memo,
+          memo:,
         ),
         // This selector allows is to merge the different subjects (like from the searcher) into one selector
         process.new_selector()
@@ -88,23 +89,25 @@ fn main_loop(state: RobotState, update: process.Selector(UpdateMessage)) {
   let state = case message {
     // If we receive a new FEN, respawn the searcher with the new game
     UpdateFen(fen, _failed_moves) -> {
-      let RobotState(_game, _best_move, #(search_pid, search_subject), memo) =
-        state
-
-      process.kill(search_pid)
-
       let assert Ok(game) = game.load_fen(fen)
-      let searcher_pid = search.new(game, memo, search_subject)
-      RobotState(game, None, #(searcher_pid, search_subject), memo)
+      update_game(state, game)
     }
     // If we receive a request for the best move, respond with the current best move we're tracking
     GetBestMove(response) -> {
       echo "requested best move"
+      echo state.best_move
       case state.best_move {
-        Some(best_move) -> process.send(response, best_move)
-        _ -> panic as "No best move was calculated in time"
+        Some(best_move) -> {
+          process.send(response, best_move)
+
+          // TODO: generate the new game in a much better way
+          let assert Ok(move) = game.move_from_san(best_move, state.game)
+          let assert Ok(new_game) = game.apply(state.game, move)
+
+          update_game(state, new_game)
+        }
+        _ -> panic as "No best move was calculated in time!"
       }
-      state
     }
     // If we receive an update for the best move, just update the state
     UpdateBestMove(best_move, memo) ->
@@ -112,4 +115,20 @@ fn main_loop(state: RobotState, update: process.Selector(UpdateMessage)) {
   }
 
   main_loop(state, update)
+}
+
+fn update_game(state: RobotState, game: game.Game) -> RobotState {
+  let RobotState(_game, _best_move, #(search_pid, search_subject), memo) = state
+
+  process.kill(search_pid)
+
+  let searcher_pid = search.new(game, memo, search_subject)
+
+  let best_move =
+    case dict.get(memo.dict, game.to_hash(game)) {
+      Ok(#(_, search.Evaluation(_, _, best_move))) -> best_move
+      Error(Nil) -> None
+    }
+    |> option.map(game.move_to_san)
+  RobotState(game, best_move, #(searcher_pid, search_subject), memo)
 }

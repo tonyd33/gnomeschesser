@@ -18,14 +18,22 @@ pub fn game(game: game.Game) -> Float {
     |> list.map(fn(square_piece) { piece(square_piece.1) })
     |> list.fold(0.0, float.add)
 
-  let assert Ok(pqst_score) =
-    game.pieces(game)
+  let assert Ok(pqst_score) = {
+    let pieces = game.pieces(game)
+    let game_stage = case
+      list.filter(pieces, fn(x) { { x.1 }.symbol == piece.Queen })
+    {
+      [] -> psqt.EndGame
+      _ -> psqt.MidGame
+    }
+    pieces
     |> list.map(fn(square_pieces) {
-      psqt.get_psq_score(square_pieces.1, square_pieces.0, psqt.MidGame)
+      psqt.get_psq_score(square_pieces.1, square_pieces.0, game_stage)
     })
     |> list.fold(0, int.add)
     |> int.to_float
     |> float.divide(1000.0)
+  }
   // combine scores with weight
   { material_score *. 0.95 +. pqst_score *. 0.05 }
   // scale from -1.0 to 1.0
