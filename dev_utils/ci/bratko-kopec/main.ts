@@ -169,8 +169,7 @@ function generateReport(results: TestResult[]): string {
   const failureDetails = `
 ## 📚 Detailed failure report
 
-For more information on each test id, see the [Bratko-Kopec test wiki](https://www.chessprogramming.org/Bratko-Kopec_Test#EPD-Record)
-and see the tests at dev_utils/ci/bratko-kopec/main.ts
+For more information on each test id, see the [Bratko-Kopec test wiki](https://www.chessprogramming.org/Bratko-Kopec_Test#EPD-Record) and see the tests at \`dev_utils/ci/bratko-kopec/main.ts\`
 
 | id | expected | got |
 | -- |    --    | --  |
