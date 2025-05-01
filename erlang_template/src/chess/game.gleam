@@ -399,11 +399,11 @@ pub fn is_check(game: Game) -> Bool {
 }
 
 pub fn is_checkmate(game: Game) -> Bool {
-  is_check(game) && { moves(game) |> list.length == 0 }
+  is_check(game) && { internal_moves(game) |> list.length == 0 }
 }
 
 pub fn is_stalemate(game: Game) -> Bool {
-  !is_check(game) && { moves(game) |> list.length == 0 }
+  !is_check(game) && { internal_moves(game) |> list.length == 0 }
 }
 
 pub fn is_threefold_repetition(game: Game) -> Bool {
@@ -469,7 +469,7 @@ pub opaque type Move {
     captured: Option(piece.PieceSymbol),
     promotion: Option(piece.PieceSymbol),
     flags: Set(InternalMoveFlags),
-    san: String,
+    san: Lazy(SAN),
   )
 }
 
@@ -502,7 +502,7 @@ pub fn move_piece_to_move(move: Move) -> piece.Piece {
 }
 
 pub fn move_to_san(move: Move) -> SAN {
-  move.san
+  move.san()
 }
 
 /// Create a move from a SAN. The SAN must be strictly valid, including
@@ -1150,6 +1150,9 @@ type InternalMoveFlags {
   BigPawn
 }
 
+type Lazy(a) =
+  fn() -> a
+
 type InternalMove {
   InternalMove(
     player: player.Player,
@@ -1206,7 +1209,7 @@ fn internal_move_to_san(
   move: InternalMove,
   all_moves: List(InternalMove),
   game: Game,
-) -> String {
+) -> SAN {
   let is_kingside_castle = set.contains(move.flags, KingsideCastle)
   let is_queenside_castle = set.contains(move.flags, QueensideCastle)
 
@@ -1301,7 +1304,7 @@ fn internal_move_to_move(
   all_moves: List(InternalMove),
   game: Game,
 ) -> Move {
-  let san = internal_move_to_san(move, all_moves, game)
+  let san = fn() { internal_move_to_san(move, all_moves, game) }
   let InternalMove(player, to, from, piece, captured, promotion, flags) = move
   Move(player, to, from, piece, captured, promotion, flags, san)
 }
