@@ -208,6 +208,31 @@ async function main() {
   // Make sure this typechecks as a number for later
   const robotPid = robot.pid;
 
+  robot.stdout.on(
+    "data",
+    (data) =>
+      process.stderr.write(
+        data
+          .toString()
+          .split("\n")
+          .filter((line: string) => line.length > 0)
+          .map((line: string) => `[ROBOT STDOUT]: ${line}`)
+          .join("\n") + "\n",
+      ),
+  );
+  robot.stderr.on(
+    "data",
+    (data) =>
+      process.stderr.write(
+        data
+          .toString()
+          .split("\n")
+          .filter((line: string) => line.length > 0)
+          .map((line: string) => `[ROBOT STDERR]: ${line}`)
+          .join("\n") + "\n",
+      ),
+  );
+
   const errorIfClosedEarly = () => {
     process.stdout.write("Robot failed to start\n");
     process.exit(1);
