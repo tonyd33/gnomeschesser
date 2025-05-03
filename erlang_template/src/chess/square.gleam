@@ -32,7 +32,6 @@ pub fn get_squares() -> List(Square) {
     |> list.map(int.bitwise_or(_, rank))
   })
   |> list.map(Square)
-  |> echo
 }
 
 /// Extracts the file of a square from 0 to 7
