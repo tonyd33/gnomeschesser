@@ -12,7 +12,7 @@ pub opaque type Robot {
 type UpdateMessage {
   UpdateFen(fen: String, failed_moves: List(game.SAN))
   UpdateBestMove(move: game.SAN, memo: search.TranspositionTable)
-  GetBestMove(response: Subject(game.SAN))
+  GetBestMove(response: Subject(Result(game.SAN, Nil)))
 }
 
 type RobotState {
@@ -28,18 +28,19 @@ pub fn init() -> Robot {
   Robot(main_subject: create_robot_thread())
 }
 
-// This requests the best move given a certain FEN
-// It will update the robot with the FEN, wait 4.95 seconds
-// Then send a request for the best move
-pub fn get_best_move(
+// This updates the robot with a new FEN (which will start a search)
+pub fn update_fen(
   robot: Robot,
   fen: String,
   failed_moves: List(game.SAN),
-) -> Result(game.SAN, Nil) {
+) -> Nil {
   process.send(robot.main_subject, UpdateFen(fen:, failed_moves:))
-  process.sleep(4950)
-  let best_move = process.call_forever(robot.main_subject, GetBestMove)
-  Ok(best_move)
+}
+
+// Then requests the best move after a delay (in millisecond)
+pub fn get_best_move_after(robot: Robot, delay: Int) -> Result(game.SAN, Nil) {
+  process.sleep(delay)
+  process.call_forever(robot.main_subject, GetBestMove)
 }
 
 // Spawn a robot thread with the default initial game and also a searcher
@@ -52,9 +53,8 @@ fn create_robot_thread() -> Subject(UpdateMessage) {
       process.send(reply_subject, robot_subject)
 
       let assert Ok(game): Result(game.Game, Nil) =
-        game.load_fen(
-          "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-        )
+        game.load_fen(game.start_fen)
+
       let memo = search.transposition_table_new()
       // The search_subject will be used by searchers to update new best moves found
       let search_subject: Subject(search.SearchMessage) = process.new_subject()
@@ -98,7 +98,7 @@ fn main_loop(state: RobotState, update: process.Selector(UpdateMessage)) {
       echo state.best_move
       case state.best_move {
         Some(best_move) -> {
-          process.send(response, best_move)
+          process.send(response, Ok(best_move))
 
           // TODO: generate the new game in a much better way
           let assert Ok(move) = game.move_from_san(best_move, state.game)
@@ -106,7 +106,10 @@ fn main_loop(state: RobotState, update: process.Selector(UpdateMessage)) {
 
           update_game(state, new_game)
         }
-        _ -> panic as "No best move was calculated in time!"
+        _ -> {
+          process.send(response, Error(Nil))
+          state
+        }
       }
     }
     // If we receive an update for the best move, just update the state
@@ -120,6 +123,7 @@ fn main_loop(state: RobotState, update: process.Selector(UpdateMessage)) {
 fn update_game(state: RobotState, game: game.Game) -> RobotState {
   let RobotState(_game, _best_move, #(search_pid, search_subject), memo) = state
 
+  // TODO: don't restart searcher if it's the same game
   process.kill(search_pid)
 
   let searcher_pid = search.new(game, memo, search_subject)
