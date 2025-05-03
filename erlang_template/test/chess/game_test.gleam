@@ -17,39 +17,43 @@ pub fn load_fen_starting_position_test() {
   |> dict.from_list
   |> should.equal(
     [
-      #(square.A1, piece.Piece(player.White, piece.Rook)),
-      #(square.B1, piece.Piece(player.White, piece.Knight)),
-      #(square.C1, piece.Piece(player.White, piece.Bishop)),
-      #(square.D1, piece.Piece(player.White, piece.Queen)),
-      #(square.E1, piece.Piece(player.White, piece.King)),
-      #(square.F1, piece.Piece(player.White, piece.Bishop)),
-      #(square.G1, piece.Piece(player.White, piece.Knight)),
-      #(square.H1, piece.Piece(player.White, piece.Rook)),
-      #(square.A2, piece.Piece(player.White, piece.Pawn)),
-      #(square.B2, piece.Piece(player.White, piece.Pawn)),
-      #(square.C2, piece.Piece(player.White, piece.Pawn)),
-      #(square.D2, piece.Piece(player.White, piece.Pawn)),
-      #(square.E2, piece.Piece(player.White, piece.Pawn)),
-      #(square.F2, piece.Piece(player.White, piece.Pawn)),
-      #(square.G2, piece.Piece(player.White, piece.Pawn)),
-      #(square.H2, piece.Piece(player.White, piece.Pawn)),
-      #(square.A8, piece.Piece(player.Black, piece.Rook)),
-      #(square.B8, piece.Piece(player.Black, piece.Knight)),
-      #(square.C8, piece.Piece(player.Black, piece.Bishop)),
-      #(square.D8, piece.Piece(player.Black, piece.Queen)),
-      #(square.E8, piece.Piece(player.Black, piece.King)),
-      #(square.F8, piece.Piece(player.Black, piece.Bishop)),
-      #(square.G8, piece.Piece(player.Black, piece.Knight)),
-      #(square.H8, piece.Piece(player.Black, piece.Rook)),
-      #(square.A7, piece.Piece(player.Black, piece.Pawn)),
-      #(square.B7, piece.Piece(player.Black, piece.Pawn)),
-      #(square.C7, piece.Piece(player.Black, piece.Pawn)),
-      #(square.D7, piece.Piece(player.Black, piece.Pawn)),
-      #(square.E7, piece.Piece(player.Black, piece.Pawn)),
-      #(square.F7, piece.Piece(player.Black, piece.Pawn)),
-      #(square.G7, piece.Piece(player.Black, piece.Pawn)),
-      #(square.H7, piece.Piece(player.Black, piece.Pawn)),
+      #(square.from_string("a1"), piece.Piece(player.White, piece.Rook)),
+      #(square.from_string("b1"), piece.Piece(player.White, piece.Knight)),
+      #(square.from_string("c1"), piece.Piece(player.White, piece.Bishop)),
+      #(square.from_string("d1"), piece.Piece(player.White, piece.Queen)),
+      #(square.from_string("e1"), piece.Piece(player.White, piece.King)),
+      #(square.from_string("f1"), piece.Piece(player.White, piece.Bishop)),
+      #(square.from_string("g1"), piece.Piece(player.White, piece.Knight)),
+      #(square.from_string("h1"), piece.Piece(player.White, piece.Rook)),
+      #(square.from_string("a2"), piece.Piece(player.White, piece.Pawn)),
+      #(square.from_string("b2"), piece.Piece(player.White, piece.Pawn)),
+      #(square.from_string("c2"), piece.Piece(player.White, piece.Pawn)),
+      #(square.from_string("d2"), piece.Piece(player.White, piece.Pawn)),
+      #(square.from_string("e2"), piece.Piece(player.White, piece.Pawn)),
+      #(square.from_string("f2"), piece.Piece(player.White, piece.Pawn)),
+      #(square.from_string("g2"), piece.Piece(player.White, piece.Pawn)),
+      #(square.from_string("h2"), piece.Piece(player.White, piece.Pawn)),
+      #(square.from_string("a8"), piece.Piece(player.Black, piece.Rook)),
+      #(square.from_string("b8"), piece.Piece(player.Black, piece.Knight)),
+      #(square.from_string("c8"), piece.Piece(player.Black, piece.Bishop)),
+      #(square.from_string("d8"), piece.Piece(player.Black, piece.Queen)),
+      #(square.from_string("e8"), piece.Piece(player.Black, piece.King)),
+      #(square.from_string("f8"), piece.Piece(player.Black, piece.Bishop)),
+      #(square.from_string("g8"), piece.Piece(player.Black, piece.Knight)),
+      #(square.from_string("h8"), piece.Piece(player.Black, piece.Rook)),
+      #(square.from_string("a7"), piece.Piece(player.Black, piece.Pawn)),
+      #(square.from_string("b7"), piece.Piece(player.Black, piece.Pawn)),
+      #(square.from_string("c7"), piece.Piece(player.Black, piece.Pawn)),
+      #(square.from_string("d7"), piece.Piece(player.Black, piece.Pawn)),
+      #(square.from_string("e7"), piece.Piece(player.Black, piece.Pawn)),
+      #(square.from_string("f7"), piece.Piece(player.Black, piece.Pawn)),
+      #(square.from_string("g7"), piece.Piece(player.Black, piece.Pawn)),
+      #(square.from_string("h7"), piece.Piece(player.Black, piece.Pawn)),
     ]
+    |> list.map(fn(x) {
+      let assert #(Ok(square), piece) = x
+      #(square, piece)
+    })
     |> dict.from_list,
   )
 
@@ -77,39 +81,43 @@ pub fn load_fen_e4_test() {
   |> dict.from_list
   |> should.equal(
     [
-      #(square.A1, piece.Piece(player.White, piece.Rook)),
-      #(square.B1, piece.Piece(player.White, piece.Knight)),
-      #(square.C1, piece.Piece(player.White, piece.Bishop)),
-      #(square.D1, piece.Piece(player.White, piece.Queen)),
-      #(square.E1, piece.Piece(player.White, piece.King)),
-      #(square.F1, piece.Piece(player.White, piece.Bishop)),
-      #(square.G1, piece.Piece(player.White, piece.Knight)),
-      #(square.H1, piece.Piece(player.White, piece.Rook)),
-      #(square.A2, piece.Piece(player.White, piece.Pawn)),
-      #(square.B2, piece.Piece(player.White, piece.Pawn)),
-      #(square.C2, piece.Piece(player.White, piece.Pawn)),
-      #(square.D2, piece.Piece(player.White, piece.Pawn)),
-      #(square.E4, piece.Piece(player.White, piece.Pawn)),
-      #(square.F2, piece.Piece(player.White, piece.Pawn)),
-      #(square.G2, piece.Piece(player.White, piece.Pawn)),
-      #(square.H2, piece.Piece(player.White, piece.Pawn)),
-      #(square.A8, piece.Piece(player.Black, piece.Rook)),
-      #(square.B8, piece.Piece(player.Black, piece.Knight)),
-      #(square.C8, piece.Piece(player.Black, piece.Bishop)),
-      #(square.D8, piece.Piece(player.Black, piece.Queen)),
-      #(square.E8, piece.Piece(player.Black, piece.King)),
-      #(square.F8, piece.Piece(player.Black, piece.Bishop)),
-      #(square.G8, piece.Piece(player.Black, piece.Knight)),
-      #(square.H8, piece.Piece(player.Black, piece.Rook)),
-      #(square.A7, piece.Piece(player.Black, piece.Pawn)),
-      #(square.B7, piece.Piece(player.Black, piece.Pawn)),
-      #(square.C7, piece.Piece(player.Black, piece.Pawn)),
-      #(square.D7, piece.Piece(player.Black, piece.Pawn)),
-      #(square.E7, piece.Piece(player.Black, piece.Pawn)),
-      #(square.F7, piece.Piece(player.Black, piece.Pawn)),
-      #(square.G7, piece.Piece(player.Black, piece.Pawn)),
-      #(square.H7, piece.Piece(player.Black, piece.Pawn)),
+      #(square.from_string("a1"), piece.Piece(player.White, piece.Rook)),
+      #(square.from_string("b1"), piece.Piece(player.White, piece.Knight)),
+      #(square.from_string("c1"), piece.Piece(player.White, piece.Bishop)),
+      #(square.from_string("d1"), piece.Piece(player.White, piece.Queen)),
+      #(square.from_string("e1"), piece.Piece(player.White, piece.King)),
+      #(square.from_string("f1"), piece.Piece(player.White, piece.Bishop)),
+      #(square.from_string("g1"), piece.Piece(player.White, piece.Knight)),
+      #(square.from_string("h1"), piece.Piece(player.White, piece.Rook)),
+      #(square.from_string("a2"), piece.Piece(player.White, piece.Pawn)),
+      #(square.from_string("b2"), piece.Piece(player.White, piece.Pawn)),
+      #(square.from_string("c2"), piece.Piece(player.White, piece.Pawn)),
+      #(square.from_string("d2"), piece.Piece(player.White, piece.Pawn)),
+      #(square.from_string("e4"), piece.Piece(player.White, piece.Pawn)),
+      #(square.from_string("f2"), piece.Piece(player.White, piece.Pawn)),
+      #(square.from_string("g2"), piece.Piece(player.White, piece.Pawn)),
+      #(square.from_string("h2"), piece.Piece(player.White, piece.Pawn)),
+      #(square.from_string("a8"), piece.Piece(player.Black, piece.Rook)),
+      #(square.from_string("b8"), piece.Piece(player.Black, piece.Knight)),
+      #(square.from_string("c8"), piece.Piece(player.Black, piece.Bishop)),
+      #(square.from_string("d8"), piece.Piece(player.Black, piece.Queen)),
+      #(square.from_string("e8"), piece.Piece(player.Black, piece.King)),
+      #(square.from_string("f8"), piece.Piece(player.Black, piece.Bishop)),
+      #(square.from_string("g8"), piece.Piece(player.Black, piece.Knight)),
+      #(square.from_string("h8"), piece.Piece(player.Black, piece.Rook)),
+      #(square.from_string("a7"), piece.Piece(player.Black, piece.Pawn)),
+      #(square.from_string("b7"), piece.Piece(player.Black, piece.Pawn)),
+      #(square.from_string("c7"), piece.Piece(player.Black, piece.Pawn)),
+      #(square.from_string("d7"), piece.Piece(player.Black, piece.Pawn)),
+      #(square.from_string("e7"), piece.Piece(player.Black, piece.Pawn)),
+      #(square.from_string("f7"), piece.Piece(player.Black, piece.Pawn)),
+      #(square.from_string("g7"), piece.Piece(player.Black, piece.Pawn)),
+      #(square.from_string("h7"), piece.Piece(player.Black, piece.Pawn)),
     ]
+    |> list.map(fn(x) {
+      let assert #(Ok(square), piece) = x
+      #(square, piece)
+    })
     |> dict.from_list,
   )
 
@@ -154,8 +162,14 @@ pub fn attackers_basic_test() {
   let assert Ok(game) = load_fen("R5rk/2B3pp/8/3Q4/1P6/1N6/8/R3B2K w - - 0 1")
 
   game
-  |> game.attackers(square.A5, player.White)
-  |> list.map(fn(x) { square.string(x.0) })
+  |> game.attackers(
+    {
+      let assert Ok(square) = square.from_string("a5")
+      square
+    },
+    player.White,
+  )
+  |> list.map(fn(x) { square.to_string(x.0) })
   |> list.sort(string.compare)
   |> should.equal(["a1", "a8", "b3", "b4", "c7", "d5"])
 }
@@ -630,41 +644,47 @@ pub fn apply_basic_test() {
   // TODO: Ideally, use game.to_fen for a more compact format
   game.board(game)
   |> should.equal(
-    dict.from_list([
-      #(square.H1, piece.Piece(player.White, piece.Rook)),
-      #(square.H2, piece.Piece(player.White, piece.Pawn)),
-      #(square.A1, piece.Piece(player.White, piece.Rook)),
-      #(square.B1, piece.Piece(player.White, piece.Knight)),
-      #(square.C1, piece.Piece(player.White, piece.Bishop)),
-      #(square.D1, piece.Piece(player.White, piece.Queen)),
-      #(square.E1, piece.Piece(player.White, piece.King)),
-      #(square.F1, piece.Piece(player.White, piece.Bishop)),
-      #(square.G1, piece.Piece(player.White, piece.Knight)),
-      #(square.A2, piece.Piece(player.White, piece.Pawn)),
-      #(square.B2, piece.Piece(player.White, piece.Pawn)),
-      #(square.C2, piece.Piece(player.White, piece.Pawn)),
-      #(square.D2, piece.Piece(player.White, piece.Pawn)),
-      #(square.F2, piece.Piece(player.White, piece.Pawn)),
-      #(square.G2, piece.Piece(player.White, piece.Pawn)),
-      #(square.A8, piece.Piece(player.Black, piece.Rook)),
-      #(square.B8, piece.Piece(player.Black, piece.Knight)),
-      #(square.C8, piece.Piece(player.Black, piece.Bishop)),
-      #(square.D8, piece.Piece(player.Black, piece.Queen)),
-      #(square.E8, piece.Piece(player.Black, piece.King)),
-      #(square.F8, piece.Piece(player.Black, piece.Bishop)),
-      #(square.G8, piece.Piece(player.Black, piece.Knight)),
-      #(square.H8, piece.Piece(player.Black, piece.Rook)),
-      #(square.A7, piece.Piece(player.Black, piece.Pawn)),
-      #(square.B7, piece.Piece(player.Black, piece.Pawn)),
-      #(square.C7, piece.Piece(player.Black, piece.Pawn)),
-      #(square.D7, piece.Piece(player.Black, piece.Pawn)),
-      #(square.E7, piece.Piece(player.Black, piece.Pawn)),
-      #(square.F7, piece.Piece(player.Black, piece.Pawn)),
-      #(square.G7, piece.Piece(player.Black, piece.Pawn)),
-      #(square.H7, piece.Piece(player.Black, piece.Pawn)),
-      #(square.E4, piece.Piece(player.White, piece.Pawn)),
-    ]),
+    [
+      #(square.from_string("h1"), piece.Piece(player.White, piece.Rook)),
+      #(square.from_string("h2"), piece.Piece(player.White, piece.Pawn)),
+      #(square.from_string("a1"), piece.Piece(player.White, piece.Rook)),
+      #(square.from_string("b1"), piece.Piece(player.White, piece.Knight)),
+      #(square.from_string("c1"), piece.Piece(player.White, piece.Bishop)),
+      #(square.from_string("d1"), piece.Piece(player.White, piece.Queen)),
+      #(square.from_string("e1"), piece.Piece(player.White, piece.King)),
+      #(square.from_string("f1"), piece.Piece(player.White, piece.Bishop)),
+      #(square.from_string("g1"), piece.Piece(player.White, piece.Knight)),
+      #(square.from_string("a2"), piece.Piece(player.White, piece.Pawn)),
+      #(square.from_string("b2"), piece.Piece(player.White, piece.Pawn)),
+      #(square.from_string("c2"), piece.Piece(player.White, piece.Pawn)),
+      #(square.from_string("d2"), piece.Piece(player.White, piece.Pawn)),
+      #(square.from_string("f2"), piece.Piece(player.White, piece.Pawn)),
+      #(square.from_string("g2"), piece.Piece(player.White, piece.Pawn)),
+      #(square.from_string("a8"), piece.Piece(player.Black, piece.Rook)),
+      #(square.from_string("b8"), piece.Piece(player.Black, piece.Knight)),
+      #(square.from_string("c8"), piece.Piece(player.Black, piece.Bishop)),
+      #(square.from_string("d8"), piece.Piece(player.Black, piece.Queen)),
+      #(square.from_string("e8"), piece.Piece(player.Black, piece.King)),
+      #(square.from_string("f8"), piece.Piece(player.Black, piece.Bishop)),
+      #(square.from_string("g8"), piece.Piece(player.Black, piece.Knight)),
+      #(square.from_string("h8"), piece.Piece(player.Black, piece.Rook)),
+      #(square.from_string("a7"), piece.Piece(player.Black, piece.Pawn)),
+      #(square.from_string("b7"), piece.Piece(player.Black, piece.Pawn)),
+      #(square.from_string("c7"), piece.Piece(player.Black, piece.Pawn)),
+      #(square.from_string("d7"), piece.Piece(player.Black, piece.Pawn)),
+      #(square.from_string("e7"), piece.Piece(player.Black, piece.Pawn)),
+      #(square.from_string("f7"), piece.Piece(player.Black, piece.Pawn)),
+      #(square.from_string("g7"), piece.Piece(player.Black, piece.Pawn)),
+      #(square.from_string("h7"), piece.Piece(player.Black, piece.Pawn)),
+      #(square.from_string("e4"), piece.Piece(player.White, piece.Pawn)),
+    ]
+    |> list.map(fn(x) {
+      let assert #(Ok(square), piece) = x
+      #(square, piece)
+    })
+    |> dict.from_list,
   )
+
   game.turn(game) |> should.equal(player.Black)
 }
 

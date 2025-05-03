@@ -13,1553 +13,176 @@ pub fn get_psq_score(
   phase: PSQTPhase,
 ) {
   case phase {
-    MidGame -> get_psq_score_mg(piece, square)
-    EndGame -> get_psq_score_eg(piece, square)
+    MidGame -> get_psq_score_midgame(piece, square)
+    EndGame -> get_psq_score_endgame(piece, square)
   }
 }
 
-fn get_psq_score_eg(piece: piece.Piece, square: square.Square) {
-  case piece, square {
-    piece.Piece(player.White, piece.Pawn), square.A1 -> 208
-    piece.Piece(player.Black, piece.Pawn), square.A8 -> -208
-    piece.Piece(player.White, piece.Pawn), square.B1 -> 208
-    piece.Piece(player.Black, piece.Pawn), square.B8 -> -208
-    piece.Piece(player.White, piece.Pawn), square.C1 -> 208
-    piece.Piece(player.Black, piece.Pawn), square.C8 -> -208
-    piece.Piece(player.White, piece.Pawn), square.D1 -> 208
-    piece.Piece(player.Black, piece.Pawn), square.D8 -> -208
-    piece.Piece(player.White, piece.Pawn), square.E1 -> 208
-    piece.Piece(player.Black, piece.Pawn), square.E8 -> -208
-    piece.Piece(player.White, piece.Pawn), square.F1 -> 208
-    piece.Piece(player.Black, piece.Pawn), square.F8 -> -208
-    piece.Piece(player.White, piece.Pawn), square.G1 -> 208
-    piece.Piece(player.Black, piece.Pawn), square.G8 -> -208
-    piece.Piece(player.White, piece.Pawn), square.H1 -> 208
-    piece.Piece(player.Black, piece.Pawn), square.H8 -> -208
-    piece.Piece(player.White, piece.Pawn), square.A2 -> 200
-    piece.Piece(player.Black, piece.Pawn), square.A7 -> -200
-    piece.Piece(player.White, piece.Pawn), square.B2 -> 202
-    piece.Piece(player.Black, piece.Pawn), square.B7 -> -202
-    piece.Piece(player.White, piece.Pawn), square.C2 -> 217
-    piece.Piece(player.Black, piece.Pawn), square.C7 -> -217
-    piece.Piece(player.White, piece.Pawn), square.D2 -> 213
-    piece.Piece(player.Black, piece.Pawn), square.D7 -> -213
-    piece.Piece(player.White, piece.Pawn), square.E2 -> 224
-    piece.Piece(player.Black, piece.Pawn), square.E7 -> -224
-    piece.Piece(player.White, piece.Pawn), square.F2 -> 214
-    piece.Piece(player.Black, piece.Pawn), square.F7 -> -214
-    piece.Piece(player.White, piece.Pawn), square.G2 -> 202
-    piece.Piece(player.Black, piece.Pawn), square.G7 -> -202
-    piece.Piece(player.White, piece.Pawn), square.H2 -> 190
-    piece.Piece(player.Black, piece.Pawn), square.H7 -> -190
-    piece.Piece(player.White, piece.Pawn), square.A3 -> 199
-    piece.Piece(player.Black, piece.Pawn), square.A6 -> -199
-    piece.Piece(player.White, piece.Pawn), square.B3 -> 201
-    piece.Piece(player.Black, piece.Pawn), square.B6 -> -201
-    piece.Piece(player.White, piece.Pawn), square.C3 -> 198
-    piece.Piece(player.Black, piece.Pawn), square.C6 -> -198
-    piece.Piece(player.White, piece.Pawn), square.D3 -> 213
-    piece.Piece(player.Black, piece.Pawn), square.D6 -> -213
-    piece.Piece(player.White, piece.Pawn), square.E3 -> 210
-    piece.Piece(player.Black, piece.Pawn), square.E6 -> -210
-    piece.Piece(player.White, piece.Pawn), square.F3 -> 211
-    piece.Piece(player.Black, piece.Pawn), square.F6 -> -211
-    piece.Piece(player.White, piece.Pawn), square.G3 -> 200
-    piece.Piece(player.Black, piece.Pawn), square.G6 -> -200
-    piece.Piece(player.White, piece.Pawn), square.H3 -> 203
-    piece.Piece(player.Black, piece.Pawn), square.H6 -> -203
-    piece.Piece(player.White, piece.Pawn), square.A4 -> 215
-    piece.Piece(player.Black, piece.Pawn), square.A5 -> -215
-    piece.Piece(player.White, piece.Pawn), square.B4 -> 209
-    piece.Piece(player.Black, piece.Pawn), square.B5 -> -209
-    piece.Piece(player.White, piece.Pawn), square.C4 -> 200
-    piece.Piece(player.Black, piece.Pawn), square.C5 -> -200
-    piece.Piece(player.White, piece.Pawn), square.D4 -> 206
-    piece.Piece(player.Black, piece.Pawn), square.D5 -> -206
-    piece.Piece(player.White, piece.Pawn), square.E4 -> 194
-    piece.Piece(player.Black, piece.Pawn), square.E5 -> -194
-    piece.Piece(player.White, piece.Pawn), square.F4 -> 195
-    piece.Piece(player.Black, piece.Pawn), square.F5 -> -195
-    piece.Piece(player.White, piece.Pawn), square.G4 -> 197
-    piece.Piece(player.Black, piece.Pawn), square.G5 -> -197
-    piece.Piece(player.White, piece.Pawn), square.H4 -> 202
-    piece.Piece(player.Black, piece.Pawn), square.H5 -> -202
-    piece.Piece(player.White, piece.Pawn), square.A5 -> 220
-    piece.Piece(player.Black, piece.Pawn), square.A4 -> -220
-    piece.Piece(player.White, piece.Pawn), square.B5 -> 214
-    piece.Piece(player.Black, piece.Pawn), square.B4 -> -214
-    piece.Piece(player.White, piece.Pawn), square.C5 -> 210
-    piece.Piece(player.Black, piece.Pawn), square.C4 -> -210
-    piece.Piece(player.White, piece.Pawn), square.D5 -> 202
-    piece.Piece(player.Black, piece.Pawn), square.D4 -> -202
-    piece.Piece(player.White, piece.Pawn), square.E5 -> 203
-    piece.Piece(player.Black, piece.Pawn), square.E4 -> -203
-    piece.Piece(player.White, piece.Pawn), square.F5 -> 204
-    piece.Piece(player.Black, piece.Pawn), square.F4 -> -204
-    piece.Piece(player.White, piece.Pawn), square.G5 -> 222
-    piece.Piece(player.Black, piece.Pawn), square.G4 -> -222
-    piece.Piece(player.White, piece.Pawn), square.H5 -> 217
-    piece.Piece(player.Black, piece.Pawn), square.H4 -> -217
-    piece.Piece(player.White, piece.Pawn), square.A6 -> 235
-    piece.Piece(player.Black, piece.Pawn), square.A3 -> -235
-    piece.Piece(player.White, piece.Pawn), square.B6 -> 226
-    piece.Piece(player.Black, piece.Pawn), square.B3 -> -226
-    piece.Piece(player.White, piece.Pawn), square.C6 -> 227
-    piece.Piece(player.Black, piece.Pawn), square.C3 -> -227
-    piece.Piece(player.White, piece.Pawn), square.D6 -> 237
-    piece.Piece(player.Black, piece.Pawn), square.D3 -> -237
-    piece.Piece(player.White, piece.Pawn), square.E6 -> 238
-    piece.Piece(player.Black, piece.Pawn), square.E3 -> -238
-    piece.Piece(player.White, piece.Pawn), square.F6 -> 217
-    piece.Piece(player.Black, piece.Pawn), square.F3 -> -217
-    piece.Piece(player.White, piece.Pawn), square.G6 -> 216
-    piece.Piece(player.Black, piece.Pawn), square.G3 -> -216
-    piece.Piece(player.White, piece.Pawn), square.H6 -> 222
-    piece.Piece(player.Black, piece.Pawn), square.H3 -> -222
-    piece.Piece(player.White, piece.Pawn), square.A7 -> 207
-    piece.Piece(player.Black, piece.Pawn), square.A2 -> -207
-    piece.Piece(player.White, piece.Pawn), square.B7 -> 194
-    piece.Piece(player.Black, piece.Pawn), square.B2 -> -194
-    piece.Piece(player.White, piece.Pawn), square.C7 -> 221
-    piece.Piece(player.Black, piece.Pawn), square.C2 -> -221
-    piece.Piece(player.White, piece.Pawn), square.D7 -> 230
-    piece.Piece(player.Black, piece.Pawn), square.D2 -> -230
-    piece.Piece(player.White, piece.Pawn), square.E7 -> 232
-    piece.Piece(player.Black, piece.Pawn), square.E2 -> -232
-    piece.Piece(player.White, piece.Pawn), square.F7 -> 225
-    piece.Piece(player.Black, piece.Pawn), square.F2 -> -225
-    piece.Piece(player.White, piece.Pawn), square.G7 -> 215
-    piece.Piece(player.Black, piece.Pawn), square.G2 -> -215
-    piece.Piece(player.White, piece.Pawn), square.H7 -> 215
-    piece.Piece(player.Black, piece.Pawn), square.H2 -> -215
-    piece.Piece(player.White, piece.Pawn), square.A8 -> 208
-    piece.Piece(player.Black, piece.Pawn), square.A1 -> -208
-    piece.Piece(player.White, piece.Pawn), square.B8 -> 208
-    piece.Piece(player.Black, piece.Pawn), square.B1 -> -208
-    piece.Piece(player.White, piece.Pawn), square.C8 -> 208
-    piece.Piece(player.Black, piece.Pawn), square.C1 -> -208
-    piece.Piece(player.White, piece.Pawn), square.D8 -> 208
-    piece.Piece(player.Black, piece.Pawn), square.D1 -> -208
-    piece.Piece(player.White, piece.Pawn), square.E8 -> 208
-    piece.Piece(player.Black, piece.Pawn), square.E1 -> -208
-    piece.Piece(player.White, piece.Pawn), square.F8 -> 208
-    piece.Piece(player.Black, piece.Pawn), square.F1 -> -208
-    piece.Piece(player.White, piece.Pawn), square.G8 -> 208
-    piece.Piece(player.Black, piece.Pawn), square.G1 -> -208
-    piece.Piece(player.White, piece.Pawn), square.H8 -> 208
-    piece.Piece(player.Black, piece.Pawn), square.H1 -> -208
-    piece.Piece(player.White, piece.Knight), square.A1 -> 758
-    piece.Piece(player.Black, piece.Knight), square.A8 -> -758
-    piece.Piece(player.White, piece.Knight), square.B1 -> 789
-    piece.Piece(player.Black, piece.Knight), square.B8 -> -789
-    piece.Piece(player.White, piece.Knight), square.C1 -> 805
-    piece.Piece(player.Black, piece.Knight), square.C8 -> -805
-    piece.Piece(player.White, piece.Knight), square.D1 -> 833
-    piece.Piece(player.Black, piece.Knight), square.D8 -> -833
-    piece.Piece(player.White, piece.Knight), square.E1 -> 833
-    piece.Piece(player.Black, piece.Knight), square.E8 -> -833
-    piece.Piece(player.White, piece.Knight), square.F1 -> 805
-    piece.Piece(player.Black, piece.Knight), square.F8 -> -805
-    piece.Piece(player.White, piece.Knight), square.G1 -> 789
-    piece.Piece(player.Black, piece.Knight), square.G8 -> -789
-    piece.Piece(player.White, piece.Knight), square.H1 -> 758
-    piece.Piece(player.Black, piece.Knight), square.H8 -> -758
-    piece.Piece(player.White, piece.Knight), square.A2 -> 787
-    piece.Piece(player.Black, piece.Knight), square.A7 -> -787
-    piece.Piece(player.White, piece.Knight), square.B2 -> 800
-    piece.Piece(player.Black, piece.Knight), square.B7 -> -800
-    piece.Piece(player.White, piece.Knight), square.C2 -> 836
-    piece.Piece(player.Black, piece.Knight), square.C7 -> -836
-    piece.Piece(player.White, piece.Knight), square.D2 -> 862
-    piece.Piece(player.Black, piece.Knight), square.D7 -> -862
-    piece.Piece(player.White, piece.Knight), square.E2 -> 862
-    piece.Piece(player.Black, piece.Knight), square.E7 -> -862
-    piece.Piece(player.White, piece.Knight), square.F2 -> 836
-    piece.Piece(player.Black, piece.Knight), square.F7 -> -836
-    piece.Piece(player.White, piece.Knight), square.G2 -> 800
-    piece.Piece(player.Black, piece.Knight), square.G7 -> -800
-    piece.Piece(player.White, piece.Knight), square.H2 -> 787
-    piece.Piece(player.Black, piece.Knight), square.H7 -> -787
-    piece.Piece(player.White, piece.Knight), square.A3 -> 814
-    piece.Piece(player.Black, piece.Knight), square.A6 -> -814
-    piece.Piece(player.White, piece.Knight), square.B3 -> 827
-    piece.Piece(player.Black, piece.Knight), square.B6 -> -827
-    piece.Piece(player.White, piece.Knight), square.C3 -> 846
-    piece.Piece(player.Black, piece.Knight), square.C6 -> -846
-    piece.Piece(player.White, piece.Knight), square.D3 -> 883
-    piece.Piece(player.Black, piece.Knight), square.D6 -> -883
-    piece.Piece(player.White, piece.Knight), square.E3 -> 883
-    piece.Piece(player.Black, piece.Knight), square.E6 -> -883
-    piece.Piece(player.White, piece.Knight), square.F3 -> 846
-    piece.Piece(player.Black, piece.Knight), square.F6 -> -846
-    piece.Piece(player.White, piece.Knight), square.G3 -> 827
-    piece.Piece(player.Black, piece.Knight), square.G6 -> -827
-    piece.Piece(player.White, piece.Knight), square.H3 -> 814
-    piece.Piece(player.Black, piece.Knight), square.H6 -> -814
-    piece.Piece(player.White, piece.Knight), square.A4 -> 819
-    piece.Piece(player.Black, piece.Knight), square.A5 -> -819
-    piece.Piece(player.White, piece.Knight), square.B4 -> 852
-    piece.Piece(player.Black, piece.Knight), square.B5 -> -852
-    piece.Piece(player.White, piece.Knight), square.C4 -> 867
-    piece.Piece(player.Black, piece.Knight), square.C5 -> -867
-    piece.Piece(player.White, piece.Knight), square.D4 -> 882
-    piece.Piece(player.Black, piece.Knight), square.D5 -> -882
-    piece.Piece(player.White, piece.Knight), square.E4 -> 882
-    piece.Piece(player.Black, piece.Knight), square.E5 -> -882
-    piece.Piece(player.White, piece.Knight), square.F4 -> 867
-    piece.Piece(player.Black, piece.Knight), square.F5 -> -867
-    piece.Piece(player.White, piece.Knight), square.G4 -> 852
-    piece.Piece(player.Black, piece.Knight), square.G5 -> -852
-    piece.Piece(player.White, piece.Knight), square.H4 -> 819
-    piece.Piece(player.Black, piece.Knight), square.H5 -> -819
-    piece.Piece(player.White, piece.Knight), square.A5 -> 809
-    piece.Piece(player.Black, piece.Knight), square.A4 -> -809
-    piece.Piece(player.White, piece.Knight), square.B5 -> 838
-    piece.Piece(player.Black, piece.Knight), square.B4 -> -838
-    piece.Piece(player.White, piece.Knight), square.C5 -> 863
-    piece.Piece(player.Black, piece.Knight), square.C4 -> -863
-    piece.Piece(player.White, piece.Knight), square.D5 -> 893
-    piece.Piece(player.Black, piece.Knight), square.D4 -> -893
-    piece.Piece(player.White, piece.Knight), square.E5 -> 893
-    piece.Piece(player.Black, piece.Knight), square.E4 -> -893
-    piece.Piece(player.White, piece.Knight), square.F5 -> 863
-    piece.Piece(player.Black, piece.Knight), square.F4 -> -863
-    piece.Piece(player.White, piece.Knight), square.G5 -> 838
-    piece.Piece(player.Black, piece.Knight), square.G4 -> -838
-    piece.Piece(player.White, piece.Knight), square.H5 -> 809
-    piece.Piece(player.Black, piece.Knight), square.H4 -> -809
-    piece.Piece(player.White, piece.Knight), square.A6 -> 803
-    piece.Piece(player.Black, piece.Knight), square.A3 -> -803
-    piece.Piece(player.White, piece.Knight), square.B6 -> 810
-    piece.Piece(player.Black, piece.Knight), square.B3 -> -810
-    piece.Piece(player.White, piece.Knight), square.C6 -> 838
-    piece.Piece(player.Black, piece.Knight), square.C3 -> -838
-    piece.Piece(player.White, piece.Knight), square.D6 -> 871
-    piece.Piece(player.Black, piece.Knight), square.D3 -> -871
-    piece.Piece(player.White, piece.Knight), square.E6 -> 871
-    piece.Piece(player.Black, piece.Knight), square.E3 -> -871
-    piece.Piece(player.White, piece.Knight), square.F6 -> 838
-    piece.Piece(player.Black, piece.Knight), square.F3 -> -838
-    piece.Piece(player.White, piece.Knight), square.G6 -> 810
-    piece.Piece(player.Black, piece.Knight), square.G3 -> -810
-    piece.Piece(player.White, piece.Knight), square.H6 -> 803
-    piece.Piece(player.Black, piece.Knight), square.H3 -> -803
-    piece.Piece(player.White, piece.Knight), square.A7 -> 785
-    piece.Piece(player.Black, piece.Knight), square.A2 -> -785
-    piece.Piece(player.White, piece.Knight), square.B7 -> 804
-    piece.Piece(player.Black, piece.Knight), square.B2 -> -804
-    piece.Piece(player.White, piece.Knight), square.C7 -> 803
-    piece.Piece(player.Black, piece.Knight), square.C2 -> -803
-    piece.Piece(player.White, piece.Knight), square.D7 -> 866
-    piece.Piece(player.Black, piece.Knight), square.D2 -> -866
-    piece.Piece(player.White, piece.Knight), square.E7 -> 866
-    piece.Piece(player.Black, piece.Knight), square.E2 -> -866
-    piece.Piece(player.White, piece.Knight), square.F7 -> 803
-    piece.Piece(player.Black, piece.Knight), square.F2 -> -803
-    piece.Piece(player.White, piece.Knight), square.G7 -> 804
-    piece.Piece(player.Black, piece.Knight), square.G2 -> -804
-    piece.Piece(player.White, piece.Knight), square.H7 -> 785
-    piece.Piece(player.Black, piece.Knight), square.H2 -> -785
-    piece.Piece(player.White, piece.Knight), square.A8 -> 754
-    piece.Piece(player.Black, piece.Knight), square.A1 -> -754
-    piece.Piece(player.White, piece.Knight), square.B8 -> 766
-    piece.Piece(player.Black, piece.Knight), square.B1 -> -766
-    piece.Piece(player.White, piece.Knight), square.C8 -> 798
-    piece.Piece(player.Black, piece.Knight), square.C1 -> -798
-    piece.Piece(player.White, piece.Knight), square.D8 -> 837
-    piece.Piece(player.Black, piece.Knight), square.D1 -> -837
-    piece.Piece(player.White, piece.Knight), square.E8 -> 837
-    piece.Piece(player.Black, piece.Knight), square.E1 -> -837
-    piece.Piece(player.White, piece.Knight), square.F8 -> 798
-    piece.Piece(player.Black, piece.Knight), square.F1 -> -798
-    piece.Piece(player.White, piece.Knight), square.G8 -> 766
-    piece.Piece(player.Black, piece.Knight), square.G1 -> -766
-    piece.Piece(player.White, piece.Knight), square.H8 -> 754
-    piece.Piece(player.Black, piece.Knight), square.H1 -> -754
-    piece.Piece(player.White, piece.Bishop), square.A1 -> 875
-    piece.Piece(player.Black, piece.Bishop), square.A8 -> -875
-    piece.Piece(player.White, piece.Bishop), square.B1 -> 894
-    piece.Piece(player.Black, piece.Bishop), square.B8 -> -894
-    piece.Piece(player.White, piece.Bishop), square.C1 -> 889
-    piece.Piece(player.Black, piece.Bishop), square.C8 -> -889
-    piece.Piece(player.White, piece.Bishop), square.D1 -> 907
-    piece.Piece(player.Black, piece.Bishop), square.D8 -> -907
-    piece.Piece(player.White, piece.Bishop), square.E1 -> 907
-    piece.Piece(player.Black, piece.Bishop), square.E8 -> -907
-    piece.Piece(player.White, piece.Bishop), square.F1 -> 889
-    piece.Piece(player.Black, piece.Bishop), square.F8 -> -889
-    piece.Piece(player.White, piece.Bishop), square.G1 -> 894
-    piece.Piece(player.Black, piece.Bishop), square.G8 -> -894
-    piece.Piece(player.White, piece.Bishop), square.H1 -> 875
-    piece.Piece(player.Black, piece.Bishop), square.H8 -> -875
-    piece.Piece(player.White, piece.Bishop), square.A2 -> 889
-    piece.Piece(player.Black, piece.Bishop), square.A7 -> -889
-    piece.Piece(player.White, piece.Bishop), square.B2 -> 906
-    piece.Piece(player.Black, piece.Bishop), square.B7 -> -906
-    piece.Piece(player.White, piece.Bishop), square.C2 -> 903
-    piece.Piece(player.Black, piece.Bishop), square.C7 -> -903
-    piece.Piece(player.White, piece.Bishop), square.D2 -> 916
-    piece.Piece(player.Black, piece.Bishop), square.D7 -> -916
-    piece.Piece(player.White, piece.Bishop), square.E2 -> 916
-    piece.Piece(player.Black, piece.Bishop), square.E7 -> -916
-    piece.Piece(player.White, piece.Bishop), square.F2 -> 903
-    piece.Piece(player.Black, piece.Bishop), square.F7 -> -903
-    piece.Piece(player.White, piece.Bishop), square.G2 -> 906
-    piece.Piece(player.Black, piece.Bishop), square.G7 -> -906
-    piece.Piece(player.White, piece.Bishop), square.H2 -> 889
-    piece.Piece(player.Black, piece.Bishop), square.H7 -> -889
-    piece.Piece(player.White, piece.Bishop), square.A3 -> 904
-    piece.Piece(player.Black, piece.Bishop), square.A6 -> -904
-    piece.Piece(player.White, piece.Bishop), square.B3 -> 914
-    piece.Piece(player.Black, piece.Bishop), square.B6 -> -914
-    piece.Piece(player.White, piece.Bishop), square.C3 -> 914
-    piece.Piece(player.Black, piece.Bishop), square.C6 -> -914
-    piece.Piece(player.White, piece.Bishop), square.D3 -> 922
-    piece.Piece(player.Black, piece.Bishop), square.D6 -> -922
-    piece.Piece(player.White, piece.Bishop), square.E3 -> 922
-    piece.Piece(player.Black, piece.Bishop), square.E6 -> -922
-    piece.Piece(player.White, piece.Bishop), square.F3 -> 914
-    piece.Piece(player.Black, piece.Bishop), square.F6 -> -914
-    piece.Piece(player.White, piece.Bishop), square.G3 -> 914
-    piece.Piece(player.Black, piece.Bishop), square.G6 -> -914
-    piece.Piece(player.White, piece.Bishop), square.H3 -> 904
-    piece.Piece(player.Black, piece.Bishop), square.H6 -> -904
-    piece.Piece(player.White, piece.Bishop), square.A4 -> 901
-    piece.Piece(player.Black, piece.Bishop), square.A5 -> -901
-    piece.Piece(player.White, piece.Bishop), square.B4 -> 911
-    piece.Piece(player.Black, piece.Bishop), square.B5 -> -911
-    piece.Piece(player.White, piece.Bishop), square.C4 -> 915
-    piece.Piece(player.Black, piece.Bishop), square.C5 -> -915
-    piece.Piece(player.White, piece.Bishop), square.D4 -> 927
-    piece.Piece(player.Black, piece.Bishop), square.D5 -> -927
-    piece.Piece(player.White, piece.Bishop), square.E4 -> 927
-    piece.Piece(player.Black, piece.Bishop), square.E5 -> -927
-    piece.Piece(player.White, piece.Bishop), square.F4 -> 915
-    piece.Piece(player.Black, piece.Bishop), square.F5 -> -915
-    piece.Piece(player.White, piece.Bishop), square.G4 -> 911
-    piece.Piece(player.Black, piece.Bishop), square.G5 -> -911
-    piece.Piece(player.White, piece.Bishop), square.H4 -> 901
-    piece.Piece(player.Black, piece.Bishop), square.H5 -> -901
-    piece.Piece(player.White, piece.Bishop), square.A5 -> 903
-    piece.Piece(player.Black, piece.Bishop), square.A4 -> -903
-    piece.Piece(player.White, piece.Bishop), square.B5 -> 914
-    piece.Piece(player.Black, piece.Bishop), square.B4 -> -914
-    piece.Piece(player.White, piece.Bishop), square.C5 -> 905
-    piece.Piece(player.Black, piece.Bishop), square.C4 -> -905
-    piece.Piece(player.White, piece.Bishop), square.D5 -> 926
-    piece.Piece(player.Black, piece.Bishop), square.D4 -> -926
-    piece.Piece(player.White, piece.Bishop), square.E5 -> 926
-    piece.Piece(player.Black, piece.Bishop), square.E4 -> -926
-    piece.Piece(player.White, piece.Bishop), square.F5 -> 905
-    piece.Piece(player.Black, piece.Bishop), square.F4 -> -905
-    piece.Piece(player.White, piece.Bishop), square.G5 -> 914
-    piece.Piece(player.Black, piece.Bishop), square.G4 -> -914
-    piece.Piece(player.White, piece.Bishop), square.H5 -> 903
-    piece.Piece(player.Black, piece.Bishop), square.H4 -> -903
-    piece.Piece(player.White, piece.Bishop), square.A6 -> 894
-    piece.Piece(player.Black, piece.Bishop), square.A3 -> -894
-    piece.Piece(player.White, piece.Bishop), square.B6 -> 919
-    piece.Piece(player.Black, piece.Bishop), square.B3 -> -919
-    piece.Piece(player.White, piece.Bishop), square.C6 -> 918
-    piece.Piece(player.Black, piece.Bishop), square.C3 -> -918
-    piece.Piece(player.White, piece.Bishop), square.D6 -> 919
-    piece.Piece(player.Black, piece.Bishop), square.D3 -> -919
-    piece.Piece(player.White, piece.Bishop), square.E6 -> 919
-    piece.Piece(player.Black, piece.Bishop), square.E3 -> -919
-    piece.Piece(player.White, piece.Bishop), square.F6 -> 918
-    piece.Piece(player.Black, piece.Bishop), square.F3 -> -918
-    piece.Piece(player.White, piece.Bishop), square.G6 -> 919
-    piece.Piece(player.Black, piece.Bishop), square.G3 -> -919
-    piece.Piece(player.White, piece.Bishop), square.H6 -> 894
-    piece.Piece(player.Black, piece.Bishop), square.H3 -> -894
-    piece.Piece(player.White, piece.Bishop), square.A7 -> 893
-    piece.Piece(player.Black, piece.Bishop), square.A2 -> -893
-    piece.Piece(player.White, piece.Bishop), square.B7 -> 901
-    piece.Piece(player.Black, piece.Bishop), square.B2 -> -901
-    piece.Piece(player.White, piece.Bishop), square.C7 -> 914
-    piece.Piece(player.Black, piece.Bishop), square.C2 -> -914
-    piece.Piece(player.White, piece.Bishop), square.D7 -> 916
-    piece.Piece(player.Black, piece.Bishop), square.D2 -> -916
-    piece.Piece(player.White, piece.Bishop), square.E7 -> 916
-    piece.Piece(player.Black, piece.Bishop), square.E2 -> -916
-    piece.Piece(player.White, piece.Bishop), square.F7 -> 914
-    piece.Piece(player.Black, piece.Bishop), square.F2 -> -914
-    piece.Piece(player.White, piece.Bishop), square.G7 -> 901
-    piece.Piece(player.Black, piece.Bishop), square.G2 -> -901
-    piece.Piece(player.White, piece.Bishop), square.H7 -> 893
-    piece.Piece(player.Black, piece.Bishop), square.H2 -> -893
-    piece.Piece(player.White, piece.Bishop), square.A8 -> 883
-    piece.Piece(player.Black, piece.Bishop), square.A1 -> -883
-    piece.Piece(player.White, piece.Bishop), square.B8 -> 886
-    piece.Piece(player.Black, piece.Bishop), square.B1 -> -886
-    piece.Piece(player.White, piece.Bishop), square.C8 -> 889
-    piece.Piece(player.Black, piece.Bishop), square.C1 -> -889
-    piece.Piece(player.White, piece.Bishop), square.D8 -> 898
-    piece.Piece(player.Black, piece.Bishop), square.D1 -> -898
-    piece.Piece(player.White, piece.Bishop), square.E8 -> 898
-    piece.Piece(player.Black, piece.Bishop), square.E1 -> -898
-    piece.Piece(player.White, piece.Bishop), square.F8 -> 889
-    piece.Piece(player.Black, piece.Bishop), square.F1 -> -889
-    piece.Piece(player.White, piece.Bishop), square.G8 -> 886
-    piece.Piece(player.Black, piece.Bishop), square.G1 -> -886
-    piece.Piece(player.White, piece.Bishop), square.H8 -> 883
-    piece.Piece(player.Black, piece.Bishop), square.H1 -> -883
-    piece.Piece(player.White, piece.Rook), square.A1 -> 1371
-    piece.Piece(player.Black, piece.Rook), square.A8 -> -1371
-    piece.Piece(player.White, piece.Rook), square.B1 -> 1367
-    piece.Piece(player.Black, piece.Rook), square.B8 -> -1367
-    piece.Piece(player.White, piece.Rook), square.C1 -> 1370
-    piece.Piece(player.Black, piece.Rook), square.C8 -> -1370
-    piece.Piece(player.White, piece.Rook), square.D1 -> 1371
-    piece.Piece(player.Black, piece.Rook), square.D8 -> -1371
-    piece.Piece(player.White, piece.Rook), square.E1 -> 1371
-    piece.Piece(player.Black, piece.Rook), square.E8 -> -1371
-    piece.Piece(player.White, piece.Rook), square.F1 -> 1370
-    piece.Piece(player.Black, piece.Rook), square.F8 -> -1370
-    piece.Piece(player.White, piece.Rook), square.G1 -> 1367
-    piece.Piece(player.Black, piece.Rook), square.G8 -> -1367
-    piece.Piece(player.White, piece.Rook), square.H1 -> 1371
-    piece.Piece(player.Black, piece.Rook), square.H8 -> -1371
-    piece.Piece(player.White, piece.Rook), square.A2 -> 1368
-    piece.Piece(player.Black, piece.Rook), square.A7 -> -1368
-    piece.Piece(player.White, piece.Rook), square.B2 -> 1371
-    piece.Piece(player.Black, piece.Rook), square.B7 -> -1371
-    piece.Piece(player.White, piece.Rook), square.C2 -> 1379
-    piece.Piece(player.Black, piece.Rook), square.C7 -> -1379
-    piece.Piece(player.White, piece.Rook), square.D2 -> 1378
-    piece.Piece(player.Black, piece.Rook), square.D7 -> -1378
-    piece.Piece(player.White, piece.Rook), square.E2 -> 1378
-    piece.Piece(player.Black, piece.Rook), square.E7 -> -1378
-    piece.Piece(player.White, piece.Rook), square.F2 -> 1379
-    piece.Piece(player.Black, piece.Rook), square.F7 -> -1379
-    piece.Piece(player.White, piece.Rook), square.G2 -> 1371
-    piece.Piece(player.Black, piece.Rook), square.G7 -> -1371
-    piece.Piece(player.White, piece.Rook), square.H2 -> 1368
-    piece.Piece(player.Black, piece.Rook), square.H7 -> -1368
-    piece.Piece(player.White, piece.Rook), square.A3 -> 1386
-    piece.Piece(player.Black, piece.Rook), square.A6 -> -1386
-    piece.Piece(player.White, piece.Rook), square.B3 -> 1372
-    piece.Piece(player.Black, piece.Rook), square.B6 -> -1372
-    piece.Piece(player.White, piece.Rook), square.C3 -> 1378
-    piece.Piece(player.Black, piece.Rook), square.C6 -> -1378
-    piece.Piece(player.White, piece.Rook), square.D3 -> 1374
-    piece.Piece(player.Black, piece.Rook), square.D6 -> -1374
-    piece.Piece(player.White, piece.Rook), square.E3 -> 1374
-    piece.Piece(player.Black, piece.Rook), square.E6 -> -1374
-    piece.Piece(player.White, piece.Rook), square.F3 -> 1378
-    piece.Piece(player.Black, piece.Rook), square.F6 -> -1378
-    piece.Piece(player.White, piece.Rook), square.G3 -> 1372
-    piece.Piece(player.Black, piece.Rook), square.G6 -> -1372
-    piece.Piece(player.White, piece.Rook), square.H3 -> 1386
-    piece.Piece(player.Black, piece.Rook), square.H6 -> -1386
-    piece.Piece(player.White, piece.Rook), square.A4 -> 1374
-    piece.Piece(player.Black, piece.Rook), square.A5 -> -1374
-    piece.Piece(player.White, piece.Rook), square.B4 -> 1381
-    piece.Piece(player.Black, piece.Rook), square.B5 -> -1381
-    piece.Piece(player.White, piece.Rook), square.C4 -> 1371
-    piece.Piece(player.Black, piece.Rook), square.C5 -> -1371
-    piece.Piece(player.White, piece.Rook), square.D4 -> 1387
-    piece.Piece(player.Black, piece.Rook), square.D5 -> -1387
-    piece.Piece(player.White, piece.Rook), square.E4 -> 1387
-    piece.Piece(player.Black, piece.Rook), square.E5 -> -1387
-    piece.Piece(player.White, piece.Rook), square.F4 -> 1371
-    piece.Piece(player.Black, piece.Rook), square.F5 -> -1371
-    piece.Piece(player.White, piece.Rook), square.G4 -> 1381
-    piece.Piece(player.Black, piece.Rook), square.G5 -> -1381
-    piece.Piece(player.White, piece.Rook), square.H4 -> 1374
-    piece.Piece(player.Black, piece.Rook), square.H5 -> -1374
-    piece.Piece(player.White, piece.Rook), square.A5 -> 1375
-    piece.Piece(player.Black, piece.Rook), square.A4 -> -1375
-    piece.Piece(player.White, piece.Rook), square.B5 -> 1388
-    piece.Piece(player.Black, piece.Rook), square.B4 -> -1388
-    piece.Piece(player.White, piece.Rook), square.C5 -> 1387
-    piece.Piece(player.Black, piece.Rook), square.C4 -> -1387
-    piece.Piece(player.White, piece.Rook), square.D5 -> 1374
-    piece.Piece(player.Black, piece.Rook), square.D4 -> -1374
-    piece.Piece(player.White, piece.Rook), square.E5 -> 1374
-    piece.Piece(player.Black, piece.Rook), square.E4 -> -1374
-    piece.Piece(player.White, piece.Rook), square.F5 -> 1387
-    piece.Piece(player.Black, piece.Rook), square.F4 -> -1387
-    piece.Piece(player.White, piece.Rook), square.G5 -> 1388
-    piece.Piece(player.Black, piece.Rook), square.G4 -> -1388
-    piece.Piece(player.White, piece.Rook), square.H5 -> 1375
-    piece.Piece(player.Black, piece.Rook), square.H4 -> -1375
-    piece.Piece(player.White, piece.Rook), square.A6 -> 1386
-    piece.Piece(player.Black, piece.Rook), square.A3 -> -1386
-    piece.Piece(player.White, piece.Rook), square.B6 -> 1381
-    piece.Piece(player.Black, piece.Rook), square.B3 -> -1381
-    piece.Piece(player.White, piece.Rook), square.C6 -> 1373
-    piece.Piece(player.Black, piece.Rook), square.C3 -> -1373
-    piece.Piece(player.White, piece.Rook), square.D6 -> 1390
-    piece.Piece(player.Black, piece.Rook), square.D3 -> -1390
-    piece.Piece(player.White, piece.Rook), square.E6 -> 1390
-    piece.Piece(player.Black, piece.Rook), square.E3 -> -1390
-    piece.Piece(player.White, piece.Rook), square.F6 -> 1373
-    piece.Piece(player.Black, piece.Rook), square.F3 -> -1373
-    piece.Piece(player.White, piece.Rook), square.G6 -> 1381
-    piece.Piece(player.Black, piece.Rook), square.G3 -> -1381
-    piece.Piece(player.White, piece.Rook), square.H6 -> 1386
-    piece.Piece(player.Black, piece.Rook), square.H3 -> -1386
-    piece.Piece(player.White, piece.Rook), square.A7 -> 1384
-    piece.Piece(player.Black, piece.Rook), square.A2 -> -1384
-    piece.Piece(player.White, piece.Rook), square.B7 -> 1385
-    piece.Piece(player.Black, piece.Rook), square.B2 -> -1385
-    piece.Piece(player.White, piece.Rook), square.C7 -> 1400
-    piece.Piece(player.Black, piece.Rook), square.C2 -> -1400
-    piece.Piece(player.White, piece.Rook), square.D7 -> 1375
-    piece.Piece(player.Black, piece.Rook), square.D2 -> -1375
-    piece.Piece(player.White, piece.Rook), square.E7 -> 1375
-    piece.Piece(player.Black, piece.Rook), square.E2 -> -1375
-    piece.Piece(player.White, piece.Rook), square.F7 -> 1400
-    piece.Piece(player.Black, piece.Rook), square.F2 -> -1400
-    piece.Piece(player.White, piece.Rook), square.G7 -> 1385
-    piece.Piece(player.Black, piece.Rook), square.G2 -> -1385
-    piece.Piece(player.White, piece.Rook), square.H7 -> 1384
-    piece.Piece(player.Black, piece.Rook), square.H2 -> -1384
-    piece.Piece(player.White, piece.Rook), square.A8 -> 1398
-    piece.Piece(player.Black, piece.Rook), square.A1 -> -1398
-    piece.Piece(player.White, piece.Rook), square.B8 -> 1380
-    piece.Piece(player.Black, piece.Rook), square.B1 -> -1380
-    piece.Piece(player.White, piece.Rook), square.C8 -> 1399
-    piece.Piece(player.Black, piece.Rook), square.C1 -> -1399
-    piece.Piece(player.White, piece.Rook), square.D8 -> 1393
-    piece.Piece(player.Black, piece.Rook), square.D1 -> -1393
-    piece.Piece(player.White, piece.Rook), square.E8 -> 1393
-    piece.Piece(player.Black, piece.Rook), square.E1 -> -1393
-    piece.Piece(player.White, piece.Rook), square.F8 -> 1399
-    piece.Piece(player.Black, piece.Rook), square.F1 -> -1399
-    piece.Piece(player.White, piece.Rook), square.G8 -> 1380
-    piece.Piece(player.Black, piece.Rook), square.G1 -> -1380
-    piece.Piece(player.White, piece.Rook), square.H8 -> 1398
-    piece.Piece(player.Black, piece.Rook), square.H1 -> -1398
-    piece.Piece(player.White, piece.Queen), square.A1 -> 2613
-    piece.Piece(player.Black, piece.Queen), square.A8 -> -2613
-    piece.Piece(player.White, piece.Queen), square.B1 -> 2625
-    piece.Piece(player.Black, piece.Queen), square.B8 -> -2625
-    piece.Piece(player.White, piece.Queen), square.C1 -> 2635
-    piece.Piece(player.Black, piece.Queen), square.C8 -> -2635
-    piece.Piece(player.White, piece.Queen), square.D1 -> 2656
-    piece.Piece(player.Black, piece.Queen), square.D8 -> -2656
-    piece.Piece(player.White, piece.Queen), square.E1 -> 2656
-    piece.Piece(player.Black, piece.Queen), square.E8 -> -2656
-    piece.Piece(player.White, piece.Queen), square.F1 -> 2635
-    piece.Piece(player.Black, piece.Queen), square.F8 -> -2635
-    piece.Piece(player.White, piece.Queen), square.G1 -> 2625
-    piece.Piece(player.Black, piece.Queen), square.G8 -> -2625
-    piece.Piece(player.White, piece.Queen), square.H1 -> 2613
-    piece.Piece(player.Black, piece.Queen), square.H8 -> -2613
-    piece.Piece(player.White, piece.Queen), square.A2 -> 2628
-    piece.Piece(player.Black, piece.Queen), square.A7 -> -2628
-    piece.Piece(player.White, piece.Queen), square.B2 -> 2651
-    piece.Piece(player.Black, piece.Queen), square.B7 -> -2651
-    piece.Piece(player.White, piece.Queen), square.C2 -> 2660
-    piece.Piece(player.Black, piece.Queen), square.C7 -> -2660
-    piece.Piece(player.White, piece.Queen), square.D2 -> 2678
-    piece.Piece(player.Black, piece.Queen), square.D7 -> -2678
-    piece.Piece(player.White, piece.Queen), square.E2 -> 2678
-    piece.Piece(player.Black, piece.Queen), square.E7 -> -2678
-    piece.Piece(player.White, piece.Queen), square.F2 -> 2660
-    piece.Piece(player.Black, piece.Queen), square.F7 -> -2660
-    piece.Piece(player.White, piece.Queen), square.G2 -> 2651
-    piece.Piece(player.Black, piece.Queen), square.G7 -> -2651
-    piece.Piece(player.White, piece.Queen), square.H2 -> 2628
-    piece.Piece(player.Black, piece.Queen), square.H7 -> -2628
-    piece.Piece(player.White, piece.Queen), square.A3 -> 2643
-    piece.Piece(player.Black, piece.Queen), square.A6 -> -2643
-    piece.Piece(player.White, piece.Queen), square.B3 -> 2664
-    piece.Piece(player.Black, piece.Queen), square.B6 -> -2664
-    piece.Piece(player.White, piece.Queen), square.C3 -> 2673
-    piece.Piece(player.Black, piece.Queen), square.C6 -> -2673
-    piece.Piece(player.White, piece.Queen), square.D3 -> 2685
-    piece.Piece(player.Black, piece.Queen), square.D6 -> -2685
-    piece.Piece(player.White, piece.Queen), square.E3 -> 2685
-    piece.Piece(player.Black, piece.Queen), square.E6 -> -2685
-    piece.Piece(player.White, piece.Queen), square.F3 -> 2673
-    piece.Piece(player.Black, piece.Queen), square.F6 -> -2673
-    piece.Piece(player.White, piece.Queen), square.G3 -> 2664
-    piece.Piece(player.Black, piece.Queen), square.G6 -> -2664
-    piece.Piece(player.White, piece.Queen), square.H3 -> 2643
-    piece.Piece(player.Black, piece.Queen), square.H6 -> -2643
-    piece.Piece(player.White, piece.Queen), square.A4 -> 2659
-    piece.Piece(player.Black, piece.Queen), square.A5 -> -2659
-    piece.Piece(player.White, piece.Queen), square.B4 -> 2679
-    piece.Piece(player.Black, piece.Queen), square.B5 -> -2679
-    piece.Piece(player.White, piece.Queen), square.C4 -> 2695
-    piece.Piece(player.Black, piece.Queen), square.C5 -> -2695
-    piece.Piece(player.White, piece.Queen), square.D4 -> 2706
-    piece.Piece(player.Black, piece.Queen), square.D5 -> -2706
-    piece.Piece(player.White, piece.Queen), square.E4 -> 2706
-    piece.Piece(player.Black, piece.Queen), square.E5 -> -2706
-    piece.Piece(player.White, piece.Queen), square.F4 -> 2695
-    piece.Piece(player.Black, piece.Queen), square.F5 -> -2695
-    piece.Piece(player.White, piece.Queen), square.G4 -> 2679
-    piece.Piece(player.Black, piece.Queen), square.G5 -> -2679
-    piece.Piece(player.White, piece.Queen), square.H4 -> 2659
-    piece.Piece(player.Black, piece.Queen), square.H5 -> -2659
-    piece.Piece(player.White, piece.Queen), square.A5 -> 2653
-    piece.Piece(player.Black, piece.Queen), square.A4 -> -2653
-    piece.Piece(player.White, piece.Queen), square.B5 -> 2676
-    piece.Piece(player.Black, piece.Queen), square.B4 -> -2676
-    piece.Piece(player.White, piece.Queen), square.C5 -> 2691
-    piece.Piece(player.Black, piece.Queen), square.C4 -> -2691
-    piece.Piece(player.White, piece.Queen), square.D5 -> 2703
-    piece.Piece(player.Black, piece.Queen), square.D4 -> -2703
-    piece.Piece(player.White, piece.Queen), square.E5 -> 2703
-    piece.Piece(player.Black, piece.Queen), square.E4 -> -2703
-    piece.Piece(player.White, piece.Queen), square.F5 -> 2691
-    piece.Piece(player.Black, piece.Queen), square.F4 -> -2691
-    piece.Piece(player.White, piece.Queen), square.G5 -> 2676
-    piece.Piece(player.Black, piece.Queen), square.G4 -> -2676
-    piece.Piece(player.White, piece.Queen), square.H5 -> 2653
-    piece.Piece(player.Black, piece.Queen), square.H4 -> -2653
-    piece.Piece(player.White, piece.Queen), square.A6 -> 2644
-    piece.Piece(player.Black, piece.Queen), square.A3 -> -2644
-    piece.Piece(player.White, piece.Queen), square.B6 -> 2664
-    piece.Piece(player.Black, piece.Queen), square.B3 -> -2664
-    piece.Piece(player.White, piece.Queen), square.C6 -> 2671
-    piece.Piece(player.Black, piece.Queen), square.C3 -> -2671
-    piece.Piece(player.White, piece.Queen), square.D6 -> 2683
-    piece.Piece(player.Black, piece.Queen), square.D3 -> -2683
-    piece.Piece(player.White, piece.Queen), square.E6 -> 2683
-    piece.Piece(player.Black, piece.Queen), square.E3 -> -2683
-    piece.Piece(player.White, piece.Queen), square.F6 -> 2671
-    piece.Piece(player.Black, piece.Queen), square.F3 -> -2671
-    piece.Piece(player.White, piece.Queen), square.G6 -> 2664
-    piece.Piece(player.Black, piece.Queen), square.G3 -> -2664
-    piece.Piece(player.White, piece.Queen), square.H6 -> 2644
-    piece.Piece(player.Black, piece.Queen), square.H3 -> -2644
-    piece.Piece(player.White, piece.Queen), square.A7 -> 2632
-    piece.Piece(player.Black, piece.Queen), square.A2 -> -2632
-    piece.Piece(player.White, piece.Queen), square.B7 -> 2655
-    piece.Piece(player.Black, piece.Queen), square.B2 -> -2655
-    piece.Piece(player.White, piece.Queen), square.C7 -> 2658
-    piece.Piece(player.Black, piece.Queen), square.C2 -> -2658
-    piece.Piece(player.White, piece.Queen), square.D7 -> 2674
-    piece.Piece(player.Black, piece.Queen), square.D2 -> -2674
-    piece.Piece(player.White, piece.Queen), square.E7 -> 2674
-    piece.Piece(player.Black, piece.Queen), square.E2 -> -2674
-    piece.Piece(player.White, piece.Queen), square.F7 -> 2658
-    piece.Piece(player.Black, piece.Queen), square.F2 -> -2658
-    piece.Piece(player.White, piece.Queen), square.G7 -> 2655
-    piece.Piece(player.Black, piece.Queen), square.G2 -> -2655
-    piece.Piece(player.White, piece.Queen), square.H7 -> 2632
-    piece.Piece(player.Black, piece.Queen), square.H2 -> -2632
-    piece.Piece(player.White, piece.Queen), square.A8 -> 2608
-    piece.Piece(player.Black, piece.Queen), square.A1 -> -2608
-    piece.Piece(player.White, piece.Queen), square.B8 -> 2630
-    piece.Piece(player.Black, piece.Queen), square.B1 -> -2630
-    piece.Piece(player.White, piece.Queen), square.C8 -> 2639
-    piece.Piece(player.Black, piece.Queen), square.C1 -> -2639
-    piece.Piece(player.White, piece.Queen), square.D8 -> 2648
-    piece.Piece(player.Black, piece.Queen), square.D1 -> -2648
-    piece.Piece(player.White, piece.Queen), square.E8 -> 2648
-    piece.Piece(player.Black, piece.Queen), square.E1 -> -2648
-    piece.Piece(player.White, piece.Queen), square.F8 -> 2639
-    piece.Piece(player.Black, piece.Queen), square.F1 -> -2639
-    piece.Piece(player.White, piece.Queen), square.G8 -> 2630
-    piece.Piece(player.Black, piece.Queen), square.G1 -> -2630
-    piece.Piece(player.White, piece.Queen), square.H8 -> 2608
-    piece.Piece(player.Black, piece.Queen), square.H1 -> -2608
-    piece.Piece(player.White, piece.King), square.A1 -> 1
-    piece.Piece(player.Black, piece.King), square.A8 -> -1
-    piece.Piece(player.White, piece.King), square.B1 -> 45
-    piece.Piece(player.Black, piece.King), square.B8 -> -45
-    piece.Piece(player.White, piece.King), square.C1 -> 85
-    piece.Piece(player.Black, piece.King), square.C8 -> -85
-    piece.Piece(player.White, piece.King), square.D1 -> 76
-    piece.Piece(player.Black, piece.King), square.D8 -> -76
-    piece.Piece(player.White, piece.King), square.E1 -> 76
-    piece.Piece(player.Black, piece.King), square.E8 -> -76
-    piece.Piece(player.White, piece.King), square.F1 -> 85
-    piece.Piece(player.Black, piece.King), square.F8 -> -85
-    piece.Piece(player.White, piece.King), square.G1 -> 45
-    piece.Piece(player.Black, piece.King), square.G8 -> -45
-    piece.Piece(player.White, piece.King), square.H1 -> 1
-    piece.Piece(player.Black, piece.King), square.H8 -> -1
-    piece.Piece(player.White, piece.King), square.A2 -> 53
-    piece.Piece(player.Black, piece.King), square.A7 -> -53
-    piece.Piece(player.White, piece.King), square.B2 -> 100
-    piece.Piece(player.Black, piece.King), square.B7 -> -100
-    piece.Piece(player.White, piece.King), square.C2 -> 133
-    piece.Piece(player.Black, piece.King), square.C7 -> -133
-    piece.Piece(player.White, piece.King), square.D2 -> 135
-    piece.Piece(player.Black, piece.King), square.D7 -> -135
-    piece.Piece(player.White, piece.King), square.E2 -> 135
-    piece.Piece(player.Black, piece.King), square.E7 -> -135
-    piece.Piece(player.White, piece.King), square.F2 -> 133
-    piece.Piece(player.Black, piece.King), square.F7 -> -133
-    piece.Piece(player.White, piece.King), square.G2 -> 100
-    piece.Piece(player.Black, piece.King), square.G7 -> -100
-    piece.Piece(player.White, piece.King), square.H2 -> 53
-    piece.Piece(player.Black, piece.King), square.H7 -> -53
-    piece.Piece(player.White, piece.King), square.A3 -> 88
-    piece.Piece(player.Black, piece.King), square.A6 -> -88
-    piece.Piece(player.White, piece.King), square.B3 -> 130
-    piece.Piece(player.Black, piece.King), square.B6 -> -130
-    piece.Piece(player.White, piece.King), square.C3 -> 169
-    piece.Piece(player.Black, piece.King), square.C6 -> -169
-    piece.Piece(player.White, piece.King), square.D3 -> 175
-    piece.Piece(player.Black, piece.King), square.D6 -> -175
-    piece.Piece(player.White, piece.King), square.E3 -> 175
-    piece.Piece(player.Black, piece.King), square.E6 -> -175
-    piece.Piece(player.White, piece.King), square.F3 -> 169
-    piece.Piece(player.Black, piece.King), square.F6 -> -169
-    piece.Piece(player.White, piece.King), square.G3 -> 130
-    piece.Piece(player.Black, piece.King), square.G6 -> -130
-    piece.Piece(player.White, piece.King), square.H3 -> 88
-    piece.Piece(player.Black, piece.King), square.H6 -> -88
-    piece.Piece(player.White, piece.King), square.A4 -> 103
-    piece.Piece(player.Black, piece.King), square.A5 -> -103
-    piece.Piece(player.White, piece.King), square.B4 -> 156
-    piece.Piece(player.Black, piece.King), square.B5 -> -156
-    piece.Piece(player.White, piece.King), square.C4 -> 172
-    piece.Piece(player.Black, piece.King), square.C5 -> -172
-    piece.Piece(player.White, piece.King), square.D4 -> 172
-    piece.Piece(player.Black, piece.King), square.D5 -> -172
-    piece.Piece(player.White, piece.King), square.E4 -> 172
-    piece.Piece(player.Black, piece.King), square.E5 -> -172
-    piece.Piece(player.White, piece.King), square.F4 -> 172
-    piece.Piece(player.Black, piece.King), square.F5 -> -172
-    piece.Piece(player.White, piece.King), square.G4 -> 156
-    piece.Piece(player.Black, piece.King), square.G5 -> -156
-    piece.Piece(player.White, piece.King), square.H4 -> 103
-    piece.Piece(player.Black, piece.King), square.H5 -> -103
-    piece.Piece(player.White, piece.King), square.A5 -> 96
-    piece.Piece(player.Black, piece.King), square.A4 -> -96
-    piece.Piece(player.White, piece.King), square.B5 -> 166
-    piece.Piece(player.Black, piece.King), square.B4 -> -166
-    piece.Piece(player.White, piece.King), square.C5 -> 199
-    piece.Piece(player.Black, piece.King), square.C4 -> -199
-    piece.Piece(player.White, piece.King), square.D5 -> 199
-    piece.Piece(player.Black, piece.King), square.D4 -> -199
-    piece.Piece(player.White, piece.King), square.E5 -> 199
-    piece.Piece(player.Black, piece.King), square.E4 -> -199
-    piece.Piece(player.White, piece.King), square.F5 -> 199
-    piece.Piece(player.Black, piece.King), square.F4 -> -199
-    piece.Piece(player.White, piece.King), square.G5 -> 166
-    piece.Piece(player.Black, piece.King), square.G4 -> -166
-    piece.Piece(player.White, piece.King), square.H5 -> 96
-    piece.Piece(player.Black, piece.King), square.H4 -> -96
-    piece.Piece(player.White, piece.King), square.A6 -> 92
-    piece.Piece(player.Black, piece.King), square.A3 -> -92
-    piece.Piece(player.White, piece.King), square.B6 -> 172
-    piece.Piece(player.Black, piece.King), square.B3 -> -172
-    piece.Piece(player.White, piece.King), square.C6 -> 184
-    piece.Piece(player.Black, piece.King), square.C3 -> -184
-    piece.Piece(player.White, piece.King), square.D6 -> 191
-    piece.Piece(player.Black, piece.King), square.D3 -> -191
-    piece.Piece(player.White, piece.King), square.E6 -> 191
-    piece.Piece(player.Black, piece.King), square.E3 -> -191
-    piece.Piece(player.White, piece.King), square.F6 -> 184
-    piece.Piece(player.Black, piece.King), square.F3 -> -184
-    piece.Piece(player.White, piece.King), square.G6 -> 172
-    piece.Piece(player.Black, piece.King), square.G3 -> -172
-    piece.Piece(player.White, piece.King), square.H6 -> 92
-    piece.Piece(player.Black, piece.King), square.H3 -> -92
-    piece.Piece(player.White, piece.King), square.A7 -> 47
-    piece.Piece(player.Black, piece.King), square.A2 -> -47
-    piece.Piece(player.White, piece.King), square.B7 -> 121
-    piece.Piece(player.Black, piece.King), square.B2 -> -121
-    piece.Piece(player.White, piece.King), square.C7 -> 116
-    piece.Piece(player.Black, piece.King), square.C2 -> -116
-    piece.Piece(player.White, piece.King), square.D7 -> 131
-    piece.Piece(player.Black, piece.King), square.D2 -> -131
-    piece.Piece(player.White, piece.King), square.E7 -> 131
-    piece.Piece(player.Black, piece.King), square.E2 -> -131
-    piece.Piece(player.White, piece.King), square.F7 -> 116
-    piece.Piece(player.Black, piece.King), square.F2 -> -116
-    piece.Piece(player.White, piece.King), square.G7 -> 121
-    piece.Piece(player.Black, piece.King), square.G2 -> -121
-    piece.Piece(player.White, piece.King), square.H7 -> 47
-    piece.Piece(player.Black, piece.King), square.H2 -> -47
-    piece.Piece(player.White, piece.King), square.A8 -> 11
-    piece.Piece(player.Black, piece.King), square.A1 -> -11
-    piece.Piece(player.White, piece.King), square.B8 -> 59
-    piece.Piece(player.Black, piece.King), square.B1 -> -59
-    piece.Piece(player.White, piece.King), square.C8 -> 73
-    piece.Piece(player.Black, piece.King), square.C1 -> -73
-    piece.Piece(player.White, piece.King), square.D8 -> 78
-    piece.Piece(player.Black, piece.King), square.D1 -> -78
-    piece.Piece(player.White, piece.King), square.E8 -> 78
-    piece.Piece(player.Black, piece.King), square.E1 -> -78
-    piece.Piece(player.White, piece.King), square.F8 -> 73
-    piece.Piece(player.Black, piece.King), square.F1 -> -73
-    piece.Piece(player.White, piece.King), square.G8 -> 59
-    piece.Piece(player.Black, piece.King), square.G1 -> -59
-    piece.Piece(player.White, piece.King), square.H8 -> 11
-    piece.Piece(player.Black, piece.King), square.H1 -> -11
+fn get_psq_score_endgame(piece: piece.Piece, square: square.Square) {
+  let file = square.file(square)
+  let rank = case piece.player {
+    player.White -> square.rank(square)
+    player.Black -> 7 - square.rank(square)
+  }
+
+  let table = case piece.symbol {
+    piece.Pawn -> pawn
+    piece.Rook -> rook
+    piece.Knight -> knight
+    piece.Bishop -> bishop
+    piece.Queen -> queen
+    piece.King -> king_endgame
+  }
+  let value = index_psqt_table(table, rank, file)
+
+  case piece.player {
+    player.White -> value
+    player.Black -> -value
   }
 }
 
-fn get_psq_score_mg(piece: piece.Piece, square: square.Square) {
-  case piece, square {
-    piece.Piece(player.White, piece.Pawn), square.A1 -> 126
-    piece.Piece(player.Black, piece.Pawn), square.A8 -> -126
-    piece.Piece(player.White, piece.Pawn), square.B1 -> 126
-    piece.Piece(player.Black, piece.Pawn), square.B8 -> -126
-    piece.Piece(player.White, piece.Pawn), square.C1 -> 126
-    piece.Piece(player.Black, piece.Pawn), square.C8 -> -126
-    piece.Piece(player.White, piece.Pawn), square.D1 -> 126
-    piece.Piece(player.Black, piece.Pawn), square.D8 -> -126
-    piece.Piece(player.White, piece.Pawn), square.E1 -> 126
-    piece.Piece(player.Black, piece.Pawn), square.E8 -> -126
-    piece.Piece(player.White, piece.Pawn), square.F1 -> 126
-    piece.Piece(player.Black, piece.Pawn), square.F8 -> -126
-    piece.Piece(player.White, piece.Pawn), square.G1 -> 126
-    piece.Piece(player.Black, piece.Pawn), square.G8 -> -126
-    piece.Piece(player.White, piece.Pawn), square.H1 -> 126
-    piece.Piece(player.Black, piece.Pawn), square.H8 -> -126
-    piece.Piece(player.White, piece.Pawn), square.A2 -> 128
-    piece.Piece(player.Black, piece.Pawn), square.A7 -> -128
-    piece.Piece(player.White, piece.Pawn), square.B2 -> 130
-    piece.Piece(player.Black, piece.Pawn), square.B7 -> -130
-    piece.Piece(player.White, piece.Pawn), square.C2 -> 137
-    piece.Piece(player.Black, piece.Pawn), square.C7 -> -137
-    piece.Piece(player.White, piece.Pawn), square.D2 -> 144
-    piece.Piece(player.Black, piece.Pawn), square.D7 -> -144
-    piece.Piece(player.White, piece.Pawn), square.E2 -> 142
-    piece.Piece(player.Black, piece.Pawn), square.E7 -> -142
-    piece.Piece(player.White, piece.Pawn), square.F2 -> 147
-    piece.Piece(player.Black, piece.Pawn), square.F7 -> -147
-    piece.Piece(player.White, piece.Pawn), square.G2 -> 135
-    piece.Piece(player.Black, piece.Pawn), square.G7 -> -135
-    piece.Piece(player.White, piece.Pawn), square.H2 -> 123
-    piece.Piece(player.Black, piece.Pawn), square.H7 -> -123
-    piece.Piece(player.White, piece.Pawn), square.A3 -> 117
-    piece.Piece(player.Black, piece.Pawn), square.A6 -> -117
-    piece.Piece(player.White, piece.Pawn), square.B3 -> 111
-    piece.Piece(player.Black, piece.Pawn), square.B6 -> -111
-    piece.Piece(player.White, piece.Pawn), square.C3 -> 137
-    piece.Piece(player.Black, piece.Pawn), square.C6 -> -137
-    piece.Piece(player.White, piece.Pawn), square.D3 -> 141
-    piece.Piece(player.Black, piece.Pawn), square.D6 -> -141
-    piece.Piece(player.White, piece.Pawn), square.E3 -> 157
-    piece.Piece(player.Black, piece.Pawn), square.E6 -> -157
-    piece.Piece(player.White, piece.Pawn), square.F3 -> 149
-    piece.Piece(player.Black, piece.Pawn), square.F6 -> -149
-    piece.Piece(player.White, piece.Pawn), square.G3 -> 132
-    piece.Piece(player.Black, piece.Pawn), square.G6 -> -132
-    piece.Piece(player.White, piece.Pawn), square.H3 -> 106
-    piece.Piece(player.Black, piece.Pawn), square.H6 -> -106
-    piece.Piece(player.White, piece.Pawn), square.A4 -> 123
-    piece.Piece(player.Black, piece.Pawn), square.A5 -> -123
-    piece.Piece(player.White, piece.Pawn), square.B4 -> 106
-    piece.Piece(player.Black, piece.Pawn), square.B5 -> -106
-    piece.Piece(player.White, piece.Pawn), square.C4 -> 134
-    piece.Piece(player.Black, piece.Pawn), square.C5 -> -134
-    piece.Piece(player.White, piece.Pawn), square.D4 -> 145
-    piece.Piece(player.Black, piece.Pawn), square.D5 -> -145
-    piece.Piece(player.White, piece.Pawn), square.E4 -> 165
-    piece.Piece(player.Black, piece.Pawn), square.E5 -> -165
-    piece.Piece(player.White, piece.Pawn), square.F4 -> 143
-    piece.Piece(player.Black, piece.Pawn), square.F5 -> -143
-    piece.Piece(player.White, piece.Pawn), square.G4 -> 128
-    piece.Piece(player.Black, piece.Pawn), square.G5 -> -128
-    piece.Piece(player.White, piece.Pawn), square.H4 -> 121
-    piece.Piece(player.Black, piece.Pawn), square.H5 -> -121
-    piece.Piece(player.White, piece.Pawn), square.A5 -> 137
-    piece.Piece(player.Black, piece.Pawn), square.A4 -> -137
-    piece.Piece(player.White, piece.Pawn), square.B5 -> 122
-    piece.Piece(player.Black, piece.Pawn), square.B4 -> -122
-    piece.Piece(player.White, piece.Pawn), square.C5 -> 115
-    piece.Piece(player.Black, piece.Pawn), square.C4 -> -115
-    piece.Piece(player.White, piece.Pawn), square.D5 -> 128
-    piece.Piece(player.Black, piece.Pawn), square.D4 -> -128
-    piece.Piece(player.White, piece.Pawn), square.E5 -> 137
-    piece.Piece(player.Black, piece.Pawn), square.E4 -> -137
-    piece.Piece(player.White, piece.Pawn), square.F5 -> 126
-    piece.Piece(player.Black, piece.Pawn), square.F4 -> -126
-    piece.Piece(player.White, piece.Pawn), square.G5 -> 114
-    piece.Piece(player.Black, piece.Pawn), square.G4 -> -114
-    piece.Piece(player.White, piece.Pawn), square.H5 -> 131
-    piece.Piece(player.Black, piece.Pawn), square.H4 -> -131
-    piece.Piece(player.White, piece.Pawn), square.A6 -> 129
-    piece.Piece(player.Black, piece.Pawn), square.A3 -> -129
-    piece.Piece(player.White, piece.Pawn), square.B6 -> 115
-    piece.Piece(player.Black, piece.Pawn), square.B3 -> -115
-    piece.Piece(player.White, piece.Pawn), square.C6 -> 120
-    piece.Piece(player.Black, piece.Pawn), square.C3 -> -120
-    piece.Piece(player.White, piece.Pawn), square.D6 -> 148
-    piece.Piece(player.Black, piece.Pawn), square.D3 -> -148
-    piece.Piece(player.White, piece.Pawn), square.E6 -> 118
-    piece.Piece(player.Black, piece.Pawn), square.E3 -> -118
-    piece.Piece(player.White, piece.Pawn), square.F6 -> 121
-    piece.Piece(player.Black, piece.Pawn), square.F3 -> -121
-    piece.Piece(player.White, piece.Pawn), square.G6 -> 112
-    piece.Piece(player.Black, piece.Pawn), square.G3 -> -112
-    piece.Piece(player.White, piece.Pawn), square.H6 -> 115
-    piece.Piece(player.Black, piece.Pawn), square.H3 -> -115
-    piece.Piece(player.White, piece.Pawn), square.A7 -> 119
-    piece.Piece(player.Black, piece.Pawn), square.A2 -> -119
-    piece.Piece(player.White, piece.Pawn), square.B7 -> 132
-    piece.Piece(player.Black, piece.Pawn), square.B2 -> -132
-    piece.Piece(player.White, piece.Pawn), square.C7 -> 124
-    piece.Piece(player.Black, piece.Pawn), square.C2 -> -124
-    piece.Piece(player.White, piece.Pawn), square.D7 -> 115
-    piece.Piece(player.Black, piece.Pawn), square.D2 -> -115
-    piece.Piece(player.White, piece.Pawn), square.E7 -> 130
-    piece.Piece(player.Black, piece.Pawn), square.E2 -> -130
-    piece.Piece(player.White, piece.Pawn), square.F7 -> 112
-    piece.Piece(player.Black, piece.Pawn), square.F2 -> -112
-    piece.Piece(player.White, piece.Pawn), square.G7 -> 136
-    piece.Piece(player.Black, piece.Pawn), square.G2 -> -136
-    piece.Piece(player.White, piece.Pawn), square.H7 -> 117
-    piece.Piece(player.Black, piece.Pawn), square.H2 -> -117
-    piece.Piece(player.White, piece.Pawn), square.A8 -> 126
-    piece.Piece(player.Black, piece.Pawn), square.A1 -> -126
-    piece.Piece(player.White, piece.Pawn), square.B8 -> 126
-    piece.Piece(player.Black, piece.Pawn), square.B1 -> -126
-    piece.Piece(player.White, piece.Pawn), square.C8 -> 126
-    piece.Piece(player.Black, piece.Pawn), square.C1 -> -126
-    piece.Piece(player.White, piece.Pawn), square.D8 -> 126
-    piece.Piece(player.Black, piece.Pawn), square.D1 -> -126
-    piece.Piece(player.White, piece.Pawn), square.E8 -> 126
-    piece.Piece(player.Black, piece.Pawn), square.E1 -> -126
-    piece.Piece(player.White, piece.Pawn), square.F8 -> 126
-    piece.Piece(player.Black, piece.Pawn), square.F1 -> -126
-    piece.Piece(player.White, piece.Pawn), square.G8 -> 126
-    piece.Piece(player.Black, piece.Pawn), square.G1 -> -126
-    piece.Piece(player.White, piece.Pawn), square.H8 -> 126
-    piece.Piece(player.Black, piece.Pawn), square.H1 -> -126
-    piece.Piece(player.White, piece.Knight), square.A1 -> 606
-    piece.Piece(player.Black, piece.Knight), square.A8 -> -606
-    piece.Piece(player.White, piece.Knight), square.B1 -> 689
-    piece.Piece(player.Black, piece.Knight), square.B8 -> -689
-    piece.Piece(player.White, piece.Knight), square.C1 -> 707
-    piece.Piece(player.Black, piece.Knight), square.C8 -> -707
-    piece.Piece(player.White, piece.Knight), square.D1 -> 708
-    piece.Piece(player.Black, piece.Knight), square.D8 -> -708
-    piece.Piece(player.White, piece.Knight), square.E1 -> 708
-    piece.Piece(player.Black, piece.Knight), square.E8 -> -708
-    piece.Piece(player.White, piece.Knight), square.F1 -> 707
-    piece.Piece(player.Black, piece.Knight), square.F8 -> -707
-    piece.Piece(player.White, piece.Knight), square.G1 -> 689
-    piece.Piece(player.Black, piece.Knight), square.G8 -> -689
-    piece.Piece(player.White, piece.Knight), square.H1 -> 606
-    piece.Piece(player.Black, piece.Knight), square.H8 -> -606
-    piece.Piece(player.White, piece.Knight), square.A2 -> 704
-    piece.Piece(player.Black, piece.Knight), square.A7 -> -704
-    piece.Piece(player.White, piece.Knight), square.B2 -> 740
-    piece.Piece(player.Black, piece.Knight), square.B7 -> -740
-    piece.Piece(player.White, piece.Knight), square.C2 -> 754
-    piece.Piece(player.Black, piece.Knight), square.C7 -> -754
-    piece.Piece(player.White, piece.Knight), square.D2 -> 766
-    piece.Piece(player.Black, piece.Knight), square.D7 -> -766
-    piece.Piece(player.White, piece.Knight), square.E2 -> 766
-    piece.Piece(player.Black, piece.Knight), square.E7 -> -766
-    piece.Piece(player.White, piece.Knight), square.F2 -> 754
-    piece.Piece(player.Black, piece.Knight), square.F7 -> -754
-    piece.Piece(player.White, piece.Knight), square.G2 -> 740
-    piece.Piece(player.Black, piece.Knight), square.G7 -> -740
-    piece.Piece(player.White, piece.Knight), square.H2 -> 704
-    piece.Piece(player.Black, piece.Knight), square.H7 -> -704
-    piece.Piece(player.White, piece.Knight), square.A3 -> 720
-    piece.Piece(player.Black, piece.Knight), square.A6 -> -720
-    piece.Piece(player.White, piece.Knight), square.B3 -> 764
-    piece.Piece(player.Black, piece.Knight), square.B6 -> -764
-    piece.Piece(player.White, piece.Knight), square.C3 -> 787
-    piece.Piece(player.Black, piece.Knight), square.C6 -> -787
-    piece.Piece(player.White, piece.Knight), square.D3 -> 793
-    piece.Piece(player.Black, piece.Knight), square.D6 -> -793
-    piece.Piece(player.White, piece.Knight), square.E3 -> 793
-    piece.Piece(player.Black, piece.Knight), square.E6 -> -793
-    piece.Piece(player.White, piece.Knight), square.F3 -> 787
-    piece.Piece(player.Black, piece.Knight), square.F6 -> -787
-    piece.Piece(player.White, piece.Knight), square.G3 -> 764
-    piece.Piece(player.Black, piece.Knight), square.G6 -> -764
-    piece.Piece(player.White, piece.Knight), square.H3 -> 720
-    piece.Piece(player.Black, piece.Knight), square.H6 -> -720
-    piece.Piece(player.White, piece.Knight), square.A4 -> 746
-    piece.Piece(player.Black, piece.Knight), square.A5 -> -746
-    piece.Piece(player.White, piece.Knight), square.B4 -> 789
-    piece.Piece(player.Black, piece.Knight), square.B5 -> -789
-    piece.Piece(player.White, piece.Knight), square.C4 -> 821
-    piece.Piece(player.Black, piece.Knight), square.C5 -> -821
-    piece.Piece(player.White, piece.Knight), square.D4 -> 830
-    piece.Piece(player.Black, piece.Knight), square.D5 -> -830
-    piece.Piece(player.White, piece.Knight), square.E4 -> 830
-    piece.Piece(player.Black, piece.Knight), square.E5 -> -830
-    piece.Piece(player.White, piece.Knight), square.F4 -> 821
-    piece.Piece(player.Black, piece.Knight), square.F5 -> -821
-    piece.Piece(player.White, piece.Knight), square.G4 -> 789
-    piece.Piece(player.Black, piece.Knight), square.G5 -> -789
-    piece.Piece(player.White, piece.Knight), square.H4 -> 746
-    piece.Piece(player.Black, piece.Knight), square.H5 -> -746
-    piece.Piece(player.White, piece.Knight), square.A5 -> 747
-    piece.Piece(player.Black, piece.Knight), square.A4 -> -747
-    piece.Piece(player.White, piece.Knight), square.B5 -> 794
-    piece.Piece(player.Black, piece.Knight), square.B4 -> -794
-    piece.Piece(player.White, piece.Knight), square.C5 -> 825
-    piece.Piece(player.Black, piece.Knight), square.C4 -> -825
-    piece.Piece(player.White, piece.Knight), square.D5 -> 832
-    piece.Piece(player.Black, piece.Knight), square.D4 -> -832
-    piece.Piece(player.White, piece.Knight), square.E5 -> 832
-    piece.Piece(player.Black, piece.Knight), square.E4 -> -832
-    piece.Piece(player.White, piece.Knight), square.F5 -> 825
-    piece.Piece(player.Black, piece.Knight), square.F4 -> -825
-    piece.Piece(player.White, piece.Knight), square.G5 -> 794
-    piece.Piece(player.Black, piece.Knight), square.G4 -> -794
-    piece.Piece(player.White, piece.Knight), square.H5 -> 747
-    piece.Piece(player.Black, piece.Knight), square.H4 -> -747
-    piece.Piece(player.White, piece.Knight), square.A6 -> 772
-    piece.Piece(player.Black, piece.Knight), square.A3 -> -772
-    piece.Piece(player.White, piece.Knight), square.B6 -> 803
-    piece.Piece(player.Black, piece.Knight), square.B3 -> -803
-    piece.Piece(player.White, piece.Knight), square.C6 -> 839
-    piece.Piece(player.Black, piece.Knight), square.C3 -> -839
-    piece.Piece(player.White, piece.Knight), square.D6 -> 834
-    piece.Piece(player.Black, piece.Knight), square.D3 -> -834
-    piece.Piece(player.White, piece.Knight), square.E6 -> 834
-    piece.Piece(player.Black, piece.Knight), square.E3 -> -834
-    piece.Piece(player.White, piece.Knight), square.F6 -> 839
-    piece.Piece(player.Black, piece.Knight), square.F3 -> -839
-    piece.Piece(player.White, piece.Knight), square.G6 -> 803
-    piece.Piece(player.Black, piece.Knight), square.G3 -> -803
-    piece.Piece(player.White, piece.Knight), square.H6 -> 772
-    piece.Piece(player.Black, piece.Knight), square.H3 -> -772
-    piece.Piece(player.White, piece.Knight), square.A7 -> 714
-    piece.Piece(player.Black, piece.Knight), square.A2 -> -714
-    piece.Piece(player.White, piece.Knight), square.B7 -> 754
-    piece.Piece(player.Black, piece.Knight), square.B2 -> -754
-    piece.Piece(player.White, piece.Knight), square.C7 -> 785
-    piece.Piece(player.Black, piece.Knight), square.C2 -> -785
-    piece.Piece(player.White, piece.Knight), square.D7 -> 818
-    piece.Piece(player.Black, piece.Knight), square.D2 -> -818
-    piece.Piece(player.White, piece.Knight), square.E7 -> 818
-    piece.Piece(player.Black, piece.Knight), square.E2 -> -818
-    piece.Piece(player.White, piece.Knight), square.F7 -> 785
-    piece.Piece(player.Black, piece.Knight), square.F2 -> -785
-    piece.Piece(player.White, piece.Knight), square.G7 -> 754
-    piece.Piece(player.Black, piece.Knight), square.G2 -> -754
-    piece.Piece(player.White, piece.Knight), square.H7 -> 714
-    piece.Piece(player.Black, piece.Knight), square.H2 -> -714
-    piece.Piece(player.White, piece.Knight), square.A8 -> 580
-    piece.Piece(player.Black, piece.Knight), square.A1 -> -580
-    piece.Piece(player.White, piece.Knight), square.B8 -> 698
-    piece.Piece(player.Black, piece.Knight), square.B1 -> -698
-    piece.Piece(player.White, piece.Knight), square.C8 -> 725
-    piece.Piece(player.Black, piece.Knight), square.C1 -> -725
-    piece.Piece(player.White, piece.Knight), square.D8 -> 755
-    piece.Piece(player.Black, piece.Knight), square.D1 -> -755
-    piece.Piece(player.White, piece.Knight), square.E8 -> 755
-    piece.Piece(player.Black, piece.Knight), square.E1 -> -755
-    piece.Piece(player.White, piece.Knight), square.F8 -> 725
-    piece.Piece(player.Black, piece.Knight), square.F1 -> -725
-    piece.Piece(player.White, piece.Knight), square.G8 -> 698
-    piece.Piece(player.Black, piece.Knight), square.G1 -> -698
-    piece.Piece(player.White, piece.Knight), square.H8 -> 580
-    piece.Piece(player.Black, piece.Knight), square.H1 -> -580
-    piece.Piece(player.White, piece.Bishop), square.A1 -> 788
-    piece.Piece(player.Black, piece.Bishop), square.A8 -> -788
-    piece.Piece(player.White, piece.Bishop), square.B1 -> 821
-    piece.Piece(player.Black, piece.Bishop), square.B8 -> -821
-    piece.Piece(player.White, piece.Bishop), square.C1 -> 819
-    piece.Piece(player.Black, piece.Bishop), square.C8 -> -819
-    piece.Piece(player.White, piece.Bishop), square.D1 -> 809
-    piece.Piece(player.Black, piece.Bishop), square.D8 -> -809
-    piece.Piece(player.White, piece.Bishop), square.E1 -> 809
-    piece.Piece(player.Black, piece.Bishop), square.E8 -> -809
-    piece.Piece(player.White, piece.Bishop), square.F1 -> 819
-    piece.Piece(player.Black, piece.Bishop), square.F8 -> -819
-    piece.Piece(player.White, piece.Bishop), square.G1 -> 821
-    piece.Piece(player.Black, piece.Bishop), square.G8 -> -821
-    piece.Piece(player.White, piece.Bishop), square.H1 -> 788
-    piece.Piece(player.Black, piece.Bishop), square.H8 -> -788
-    piece.Piece(player.White, piece.Bishop), square.A2 -> 814
-    piece.Piece(player.Black, piece.Bishop), square.A7 -> -814
-    piece.Piece(player.White, piece.Bishop), square.B2 -> 831
-    piece.Piece(player.Black, piece.Bishop), square.B7 -> -831
-    piece.Piece(player.White, piece.Bishop), square.C2 -> 838
-    piece.Piece(player.Black, piece.Bishop), square.C7 -> -838
-    piece.Piece(player.White, piece.Bishop), square.D2 -> 828
-    piece.Piece(player.Black, piece.Bishop), square.D7 -> -828
-    piece.Piece(player.White, piece.Bishop), square.E2 -> 828
-    piece.Piece(player.Black, piece.Bishop), square.E7 -> -828
-    piece.Piece(player.White, piece.Bishop), square.F2 -> 838
-    piece.Piece(player.Black, piece.Bishop), square.F7 -> -838
-    piece.Piece(player.White, piece.Bishop), square.G2 -> 831
-    piece.Piece(player.Black, piece.Bishop), square.G7 -> -831
-    piece.Piece(player.White, piece.Bishop), square.H2 -> 814
-    piece.Piece(player.Black, piece.Bishop), square.H7 -> -814
-    piece.Piece(player.White, piece.Bishop), square.A3 -> 820
-    piece.Piece(player.Black, piece.Bishop), square.A6 -> -820
-    piece.Piece(player.White, piece.Bishop), square.B3 -> 840
-    piece.Piece(player.Black, piece.Bishop), square.B6 -> -840
-    piece.Piece(player.White, piece.Bishop), square.C3 -> 821
-    piece.Piece(player.Black, piece.Bishop), square.C6 -> -821
-    piece.Piece(player.White, piece.Bishop), square.D3 -> 837
-    piece.Piece(player.Black, piece.Bishop), square.D6 -> -837
-    piece.Piece(player.White, piece.Bishop), square.E3 -> 837
-    piece.Piece(player.Black, piece.Bishop), square.E6 -> -837
-    piece.Piece(player.White, piece.Bishop), square.F3 -> 821
-    piece.Piece(player.Black, piece.Bishop), square.F6 -> -821
-    piece.Piece(player.White, piece.Bishop), square.G3 -> 840
-    piece.Piece(player.Black, piece.Bishop), square.G6 -> -840
-    piece.Piece(player.White, piece.Bishop), square.H3 -> 820
-    piece.Piece(player.Black, piece.Bishop), square.H6 -> -820
-    piece.Piece(player.White, piece.Bishop), square.A4 -> 821
-    piece.Piece(player.Black, piece.Bishop), square.A5 -> -821
-    piece.Piece(player.White, piece.Bishop), square.B4 -> 833
-    piece.Piece(player.Black, piece.Bishop), square.B5 -> -833
-    piece.Piece(player.White, piece.Bishop), square.C4 -> 843
-    piece.Piece(player.Black, piece.Bishop), square.C5 -> -843
-    piece.Piece(player.White, piece.Bishop), square.D4 -> 852
-    piece.Piece(player.Black, piece.Bishop), square.D5 -> -852
-    piece.Piece(player.White, piece.Bishop), square.E4 -> 852
-    piece.Piece(player.Black, piece.Bishop), square.E5 -> -852
-    piece.Piece(player.White, piece.Bishop), square.F4 -> 843
-    piece.Piece(player.Black, piece.Bishop), square.F5 -> -843
-    piece.Piece(player.White, piece.Bishop), square.G4 -> 833
-    piece.Piece(player.Black, piece.Bishop), square.G5 -> -833
-    piece.Piece(player.White, piece.Bishop), square.H4 -> 821
-    piece.Piece(player.Black, piece.Bishop), square.H5 -> -821
-    piece.Piece(player.White, piece.Bishop), square.A5 -> 817
-    piece.Piece(player.Black, piece.Bishop), square.A4 -> -817
-    piece.Piece(player.White, piece.Bishop), square.B5 -> 845
-    piece.Piece(player.Black, piece.Bishop), square.B4 -> -845
-    piece.Piece(player.White, piece.Bishop), square.C5 -> 840
-    piece.Piece(player.Black, piece.Bishop), square.C4 -> -840
-    piece.Piece(player.White, piece.Bishop), square.D5 -> 847
-    piece.Piece(player.Black, piece.Bishop), square.D4 -> -847
-    piece.Piece(player.White, piece.Bishop), square.E5 -> 847
-    piece.Piece(player.Black, piece.Bishop), square.E4 -> -847
-    piece.Piece(player.White, piece.Bishop), square.F5 -> 840
-    piece.Piece(player.Black, piece.Bishop), square.F4 -> -840
-    piece.Piece(player.White, piece.Bishop), square.G5 -> 845
-    piece.Piece(player.Black, piece.Bishop), square.G4 -> -845
-    piece.Piece(player.White, piece.Bishop), square.H5 -> 817
-    piece.Piece(player.Black, piece.Bishop), square.H4 -> -817
-    piece.Piece(player.White, piece.Bishop), square.A6 -> 814
-    piece.Piece(player.Black, piece.Bishop), square.A3 -> -814
-    piece.Piece(player.White, piece.Bishop), square.B6 -> 829
-    piece.Piece(player.Black, piece.Bishop), square.B3 -> -829
-    piece.Piece(player.White, piece.Bishop), square.C6 -> 826
-    piece.Piece(player.Black, piece.Bishop), square.C3 -> -826
-    piece.Piece(player.White, piece.Bishop), square.D6 -> 833
-    piece.Piece(player.Black, piece.Bishop), square.D3 -> -833
-    piece.Piece(player.White, piece.Bishop), square.E6 -> 833
-    piece.Piece(player.Black, piece.Bishop), square.E3 -> -833
-    piece.Piece(player.White, piece.Bishop), square.F6 -> 826
-    piece.Piece(player.Black, piece.Bishop), square.F3 -> -826
-    piece.Piece(player.White, piece.Bishop), square.G6 -> 829
-    piece.Piece(player.Black, piece.Bishop), square.G3 -> -829
-    piece.Piece(player.White, piece.Bishop), square.H6 -> 814
-    piece.Piece(player.Black, piece.Bishop), square.H3 -> -814
-    piece.Piece(player.White, piece.Bishop), square.A7 -> 813
-    piece.Piece(player.Black, piece.Bishop), square.A2 -> -813
-    piece.Piece(player.White, piece.Bishop), square.B7 -> 815
-    piece.Piece(player.Black, piece.Bishop), square.B2 -> -815
-    piece.Piece(player.White, piece.Bishop), square.C7 -> 829
-    piece.Piece(player.Black, piece.Bishop), square.C2 -> -829
-    piece.Piece(player.White, piece.Bishop), square.D7 -> 825
-    piece.Piece(player.Black, piece.Bishop), square.D2 -> -825
-    piece.Piece(player.White, piece.Bishop), square.E7 -> 825
-    piece.Piece(player.Black, piece.Bishop), square.E2 -> -825
-    piece.Piece(player.White, piece.Bishop), square.F7 -> 829
-    piece.Piece(player.Black, piece.Bishop), square.F2 -> -829
-    piece.Piece(player.White, piece.Bishop), square.G7 -> 815
-    piece.Piece(player.Black, piece.Bishop), square.G2 -> -815
-    piece.Piece(player.White, piece.Bishop), square.H7 -> 813
-    piece.Piece(player.Black, piece.Bishop), square.H2 -> -813
-    piece.Piece(player.White, piece.Bishop), square.A8 -> 791
-    piece.Piece(player.Black, piece.Bishop), square.A1 -> -791
-    piece.Piece(player.White, piece.Bishop), square.B8 -> 826
-    piece.Piece(player.Black, piece.Bishop), square.B1 -> -826
-    piece.Piece(player.White, piece.Bishop), square.C8 -> 815
-    piece.Piece(player.Black, piece.Bishop), square.C1 -> -815
-    piece.Piece(player.White, piece.Bishop), square.D8 -> 809
-    piece.Piece(player.Black, piece.Bishop), square.D1 -> -809
-    piece.Piece(player.White, piece.Bishop), square.E8 -> 809
-    piece.Piece(player.Black, piece.Bishop), square.E1 -> -809
-    piece.Piece(player.White, piece.Bishop), square.F8 -> 815
-    piece.Piece(player.Black, piece.Bishop), square.F1 -> -815
-    piece.Piece(player.White, piece.Bishop), square.G8 -> 826
-    piece.Piece(player.Black, piece.Bishop), square.G1 -> -826
-    piece.Piece(player.White, piece.Bishop), square.H8 -> 791
-    piece.Piece(player.Black, piece.Bishop), square.H1 -> -791
-    piece.Piece(player.White, piece.Rook), square.A1 -> 1245
-    piece.Piece(player.Black, piece.Rook), square.A8 -> -1245
-    piece.Piece(player.White, piece.Rook), square.B1 -> 1256
-    piece.Piece(player.Black, piece.Rook), square.B8 -> -1256
-    piece.Piece(player.White, piece.Rook), square.C1 -> 1262
-    piece.Piece(player.Black, piece.Rook), square.C8 -> -1262
-    piece.Piece(player.White, piece.Rook), square.D1 -> 1271
-    piece.Piece(player.Black, piece.Rook), square.D8 -> -1271
-    piece.Piece(player.White, piece.Rook), square.E1 -> 1271
-    piece.Piece(player.Black, piece.Rook), square.E8 -> -1271
-    piece.Piece(player.White, piece.Rook), square.F1 -> 1262
-    piece.Piece(player.Black, piece.Rook), square.F8 -> -1262
-    piece.Piece(player.White, piece.Rook), square.G1 -> 1256
-    piece.Piece(player.Black, piece.Rook), square.G8 -> -1256
-    piece.Piece(player.White, piece.Rook), square.H1 -> 1245
-    piece.Piece(player.Black, piece.Rook), square.H8 -> -1245
-    piece.Piece(player.White, piece.Rook), square.A2 -> 1255
-    piece.Piece(player.Black, piece.Rook), square.A7 -> -1255
-    piece.Piece(player.White, piece.Rook), square.B2 -> 1263
-    piece.Piece(player.Black, piece.Rook), square.B7 -> -1263
-    piece.Piece(player.White, piece.Rook), square.C2 -> 1268
-    piece.Piece(player.Black, piece.Rook), square.C7 -> -1268
-    piece.Piece(player.White, piece.Rook), square.D2 -> 1282
-    piece.Piece(player.Black, piece.Rook), square.D7 -> -1282
-    piece.Piece(player.White, piece.Rook), square.E2 -> 1282
-    piece.Piece(player.Black, piece.Rook), square.E7 -> -1282
-    piece.Piece(player.White, piece.Rook), square.F2 -> 1268
-    piece.Piece(player.Black, piece.Rook), square.F7 -> -1268
-    piece.Piece(player.White, piece.Rook), square.G2 -> 1263
-    piece.Piece(player.Black, piece.Rook), square.G7 -> -1263
-    piece.Piece(player.White, piece.Rook), square.H2 -> 1255
-    piece.Piece(player.Black, piece.Rook), square.H7 -> -1255
-    piece.Piece(player.White, piece.Rook), square.A3 -> 1251
-    piece.Piece(player.Black, piece.Rook), square.A6 -> -1251
-    piece.Piece(player.White, piece.Rook), square.B3 -> 1265
-    piece.Piece(player.Black, piece.Rook), square.B6 -> -1265
-    piece.Piece(player.White, piece.Rook), square.C3 -> 1275
-    piece.Piece(player.Black, piece.Rook), square.C6 -> -1275
-    piece.Piece(player.White, piece.Rook), square.D3 -> 1279
-    piece.Piece(player.Black, piece.Rook), square.D6 -> -1279
-    piece.Piece(player.White, piece.Rook), square.E3 -> 1279
-    piece.Piece(player.Black, piece.Rook), square.E6 -> -1279
-    piece.Piece(player.White, piece.Rook), square.F3 -> 1275
-    piece.Piece(player.Black, piece.Rook), square.F6 -> -1275
-    piece.Piece(player.White, piece.Rook), square.G3 -> 1265
-    piece.Piece(player.Black, piece.Rook), square.G6 -> -1265
-    piece.Piece(player.White, piece.Rook), square.H3 -> 1251
-    piece.Piece(player.Black, piece.Rook), square.H6 -> -1251
-    piece.Piece(player.White, piece.Rook), square.A4 -> 1263
-    piece.Piece(player.Black, piece.Rook), square.A5 -> -1263
-    piece.Piece(player.White, piece.Rook), square.B4 -> 1271
-    piece.Piece(player.Black, piece.Rook), square.B5 -> -1271
-    piece.Piece(player.White, piece.Rook), square.C4 -> 1272
-    piece.Piece(player.Black, piece.Rook), square.C5 -> -1272
-    piece.Piece(player.White, piece.Rook), square.D4 -> 1270
-    piece.Piece(player.Black, piece.Rook), square.D5 -> -1270
-    piece.Piece(player.White, piece.Rook), square.E4 -> 1270
-    piece.Piece(player.Black, piece.Rook), square.E5 -> -1270
-    piece.Piece(player.White, piece.Rook), square.F4 -> 1272
-    piece.Piece(player.Black, piece.Rook), square.F5 -> -1272
-    piece.Piece(player.White, piece.Rook), square.G4 -> 1271
-    piece.Piece(player.Black, piece.Rook), square.G5 -> -1271
-    piece.Piece(player.White, piece.Rook), square.H4 -> 1263
-    piece.Piece(player.Black, piece.Rook), square.H5 -> -1263
-    piece.Piece(player.White, piece.Rook), square.A5 -> 1249
-    piece.Piece(player.Black, piece.Rook), square.A4 -> -1249
-    piece.Piece(player.White, piece.Rook), square.B5 -> 1261
-    piece.Piece(player.Black, piece.Rook), square.B4 -> -1261
-    piece.Piece(player.White, piece.Rook), square.C5 -> 1272
-    piece.Piece(player.Black, piece.Rook), square.C4 -> -1272
-    piece.Piece(player.White, piece.Rook), square.D5 -> 1279
-    piece.Piece(player.Black, piece.Rook), square.D4 -> -1279
-    piece.Piece(player.White, piece.Rook), square.E5 -> 1279
-    piece.Piece(player.Black, piece.Rook), square.E4 -> -1279
-    piece.Piece(player.White, piece.Rook), square.F5 -> 1272
-    piece.Piece(player.Black, piece.Rook), square.F4 -> -1272
-    piece.Piece(player.White, piece.Rook), square.G5 -> 1261
-    piece.Piece(player.Black, piece.Rook), square.G4 -> -1261
-    piece.Piece(player.White, piece.Rook), square.H5 -> 1249
-    piece.Piece(player.Black, piece.Rook), square.H4 -> -1249
-    piece.Piece(player.White, piece.Rook), square.A6 -> 1254
-    piece.Piece(player.Black, piece.Rook), square.A3 -> -1254
-    piece.Piece(player.White, piece.Rook), square.B6 -> 1274
-    piece.Piece(player.Black, piece.Rook), square.B3 -> -1274
-    piece.Piece(player.White, piece.Rook), square.C6 -> 1282
-    piece.Piece(player.Black, piece.Rook), square.C3 -> -1282
-    piece.Piece(player.White, piece.Rook), square.D6 -> 1288
-    piece.Piece(player.Black, piece.Rook), square.D3 -> -1288
-    piece.Piece(player.White, piece.Rook), square.E6 -> 1288
-    piece.Piece(player.Black, piece.Rook), square.E3 -> -1288
-    piece.Piece(player.White, piece.Rook), square.F6 -> 1282
-    piece.Piece(player.Black, piece.Rook), square.F3 -> -1282
-    piece.Piece(player.White, piece.Rook), square.G6 -> 1274
-    piece.Piece(player.Black, piece.Rook), square.G3 -> -1274
-    piece.Piece(player.White, piece.Rook), square.H6 -> 1254
-    piece.Piece(player.Black, piece.Rook), square.H3 -> -1254
-    piece.Piece(player.White, piece.Rook), square.A7 -> 1274
-    piece.Piece(player.Black, piece.Rook), square.A2 -> -1274
-    piece.Piece(player.White, piece.Rook), square.B7 -> 1288
-    piece.Piece(player.Black, piece.Rook), square.B2 -> -1288
-    piece.Piece(player.White, piece.Rook), square.C7 -> 1292
-    piece.Piece(player.Black, piece.Rook), square.C2 -> -1292
-    piece.Piece(player.White, piece.Rook), square.D7 -> 1294
-    piece.Piece(player.Black, piece.Rook), square.D2 -> -1294
-    piece.Piece(player.White, piece.Rook), square.E7 -> 1294
-    piece.Piece(player.Black, piece.Rook), square.E2 -> -1294
-    piece.Piece(player.White, piece.Rook), square.F7 -> 1292
-    piece.Piece(player.Black, piece.Rook), square.F2 -> -1292
-    piece.Piece(player.White, piece.Rook), square.G7 -> 1288
-    piece.Piece(player.Black, piece.Rook), square.G2 -> -1288
-    piece.Piece(player.White, piece.Rook), square.H7 -> 1274
-    piece.Piece(player.Black, piece.Rook), square.H2 -> -1274
-    piece.Piece(player.White, piece.Rook), square.A8 -> 1259
-    piece.Piece(player.Black, piece.Rook), square.A1 -> -1259
-    piece.Piece(player.White, piece.Rook), square.B8 -> 1257
-    piece.Piece(player.Black, piece.Rook), square.B1 -> -1257
-    piece.Piece(player.White, piece.Rook), square.C8 -> 1275
-    piece.Piece(player.Black, piece.Rook), square.C1 -> -1275
-    piece.Piece(player.White, piece.Rook), square.D8 -> 1285
-    piece.Piece(player.Black, piece.Rook), square.D1 -> -1285
-    piece.Piece(player.White, piece.Rook), square.E8 -> 1285
-    piece.Piece(player.Black, piece.Rook), square.E1 -> -1285
-    piece.Piece(player.White, piece.Rook), square.F8 -> 1275
-    piece.Piece(player.Black, piece.Rook), square.F1 -> -1275
-    piece.Piece(player.White, piece.Rook), square.G8 -> 1257
-    piece.Piece(player.Black, piece.Rook), square.G1 -> -1257
-    piece.Piece(player.White, piece.Rook), square.H8 -> 1259
-    piece.Piece(player.Black, piece.Rook), square.H1 -> -1259
-    piece.Piece(player.White, piece.Queen), square.A1 -> 2541
-    piece.Piece(player.Black, piece.Queen), square.A8 -> -2541
-    piece.Piece(player.White, piece.Queen), square.B1 -> 2533
-    piece.Piece(player.Black, piece.Queen), square.B8 -> -2533
-    piece.Piece(player.White, piece.Queen), square.C1 -> 2533
-    piece.Piece(player.Black, piece.Queen), square.C8 -> -2533
-    piece.Piece(player.White, piece.Queen), square.D1 -> 2542
-    piece.Piece(player.Black, piece.Queen), square.D8 -> -2542
-    piece.Piece(player.White, piece.Queen), square.E1 -> 2542
-    piece.Piece(player.Black, piece.Queen), square.E8 -> -2542
-    piece.Piece(player.White, piece.Queen), square.F1 -> 2533
-    piece.Piece(player.Black, piece.Queen), square.F8 -> -2533
-    piece.Piece(player.White, piece.Queen), square.G1 -> 2533
-    piece.Piece(player.Black, piece.Queen), square.G8 -> -2533
-    piece.Piece(player.White, piece.Queen), square.H1 -> 2541
-    piece.Piece(player.Black, piece.Queen), square.H8 -> -2541
-    piece.Piece(player.White, piece.Queen), square.A2 -> 2535
-    piece.Piece(player.Black, piece.Queen), square.A7 -> -2535
-    piece.Piece(player.White, piece.Queen), square.B2 -> 2543
-    piece.Piece(player.Black, piece.Queen), square.B7 -> -2543
-    piece.Piece(player.White, piece.Queen), square.C2 -> 2546
-    piece.Piece(player.Black, piece.Queen), square.C7 -> -2546
-    piece.Piece(player.White, piece.Queen), square.D2 -> 2550
-    piece.Piece(player.Black, piece.Queen), square.D7 -> -2550
-    piece.Piece(player.White, piece.Queen), square.E2 -> 2550
-    piece.Piece(player.Black, piece.Queen), square.E7 -> -2550
-    piece.Piece(player.White, piece.Queen), square.F2 -> 2546
-    piece.Piece(player.Black, piece.Queen), square.F7 -> -2546
-    piece.Piece(player.White, piece.Queen), square.G2 -> 2543
-    piece.Piece(player.Black, piece.Queen), square.G7 -> -2543
-    piece.Piece(player.White, piece.Queen), square.H2 -> 2535
-    piece.Piece(player.Black, piece.Queen), square.H7 -> -2535
-    piece.Piece(player.White, piece.Queen), square.A3 -> 2535
-    piece.Piece(player.Black, piece.Queen), square.A6 -> -2535
-    piece.Piece(player.White, piece.Queen), square.B3 -> 2544
-    piece.Piece(player.Black, piece.Queen), square.B6 -> -2544
-    piece.Piece(player.White, piece.Queen), square.C3 -> 2551
-    piece.Piece(player.Black, piece.Queen), square.C6 -> -2551
-    piece.Piece(player.White, piece.Queen), square.D3 -> 2545
-    piece.Piece(player.Black, piece.Queen), square.D6 -> -2545
-    piece.Piece(player.White, piece.Queen), square.E3 -> 2545
-    piece.Piece(player.Black, piece.Queen), square.E6 -> -2545
-    piece.Piece(player.White, piece.Queen), square.F3 -> 2551
-    piece.Piece(player.Black, piece.Queen), square.F6 -> -2551
-    piece.Piece(player.White, piece.Queen), square.G3 -> 2544
-    piece.Piece(player.Black, piece.Queen), square.G6 -> -2544
-    piece.Piece(player.White, piece.Queen), square.H3 -> 2535
-    piece.Piece(player.Black, piece.Queen), square.H6 -> -2535
-    piece.Piece(player.White, piece.Queen), square.A4 -> 2542
-    piece.Piece(player.Black, piece.Queen), square.A5 -> -2542
-    piece.Piece(player.White, piece.Queen), square.B4 -> 2543
-    piece.Piece(player.Black, piece.Queen), square.B5 -> -2543
-    piece.Piece(player.White, piece.Queen), square.C4 -> 2547
-    piece.Piece(player.Black, piece.Queen), square.C5 -> -2547
-    piece.Piece(player.White, piece.Queen), square.D4 -> 2546
-    piece.Piece(player.Black, piece.Queen), square.D5 -> -2546
-    piece.Piece(player.White, piece.Queen), square.E4 -> 2546
-    piece.Piece(player.Black, piece.Queen), square.E5 -> -2546
-    piece.Piece(player.White, piece.Queen), square.F4 -> 2547
-    piece.Piece(player.Black, piece.Queen), square.F5 -> -2547
-    piece.Piece(player.White, piece.Queen), square.G4 -> 2543
-    piece.Piece(player.Black, piece.Queen), square.G5 -> -2543
-    piece.Piece(player.White, piece.Queen), square.H4 -> 2542
-    piece.Piece(player.Black, piece.Queen), square.H5 -> -2542
-    piece.Piece(player.White, piece.Queen), square.A5 -> 2538
-    piece.Piece(player.Black, piece.Queen), square.A4 -> -2538
-    piece.Piece(player.White, piece.Queen), square.B5 -> 2552
-    piece.Piece(player.Black, piece.Queen), square.B4 -> -2552
-    piece.Piece(player.White, piece.Queen), square.C5 -> 2550
-    piece.Piece(player.Black, piece.Queen), square.C4 -> -2550
-    piece.Piece(player.White, piece.Queen), square.D5 -> 2543
-    piece.Piece(player.Black, piece.Queen), square.D4 -> -2543
-    piece.Piece(player.White, piece.Queen), square.E5 -> 2543
-    piece.Piece(player.Black, piece.Queen), square.E4 -> -2543
-    piece.Piece(player.White, piece.Queen), square.F5 -> 2550
-    piece.Piece(player.Black, piece.Queen), square.F4 -> -2550
-    piece.Piece(player.White, piece.Queen), square.G5 -> 2552
-    piece.Piece(player.Black, piece.Queen), square.G4 -> -2552
-    piece.Piece(player.White, piece.Queen), square.H5 -> 2538
-    piece.Piece(player.Black, piece.Queen), square.H4 -> -2538
-    piece.Piece(player.White, piece.Queen), square.A6 -> 2534
-    piece.Piece(player.Black, piece.Queen), square.A3 -> -2534
-    piece.Piece(player.White, piece.Queen), square.B6 -> 2548
-    piece.Piece(player.Black, piece.Queen), square.B3 -> -2548
-    piece.Piece(player.White, piece.Queen), square.C6 -> 2544
-    piece.Piece(player.Black, piece.Queen), square.C3 -> -2544
-    piece.Piece(player.White, piece.Queen), square.D6 -> 2546
-    piece.Piece(player.Black, piece.Queen), square.D3 -> -2546
-    piece.Piece(player.White, piece.Queen), square.E6 -> 2546
-    piece.Piece(player.Black, piece.Queen), square.E3 -> -2546
-    piece.Piece(player.White, piece.Queen), square.F6 -> 2544
-    piece.Piece(player.Black, piece.Queen), square.F3 -> -2544
-    piece.Piece(player.White, piece.Queen), square.G6 -> 2548
-    piece.Piece(player.Black, piece.Queen), square.G3 -> -2548
-    piece.Piece(player.White, piece.Queen), square.H6 -> 2534
-    piece.Piece(player.Black, piece.Queen), square.H3 -> -2534
-    piece.Piece(player.White, piece.Queen), square.A7 -> 2533
-    piece.Piece(player.Black, piece.Queen), square.A2 -> -2533
-    piece.Piece(player.White, piece.Queen), square.B7 -> 2544
-    piece.Piece(player.Black, piece.Queen), square.B2 -> -2544
-    piece.Piece(player.White, piece.Queen), square.C7 -> 2548
-    piece.Piece(player.Black, piece.Queen), square.C2 -> -2548
-    piece.Piece(player.White, piece.Queen), square.D7 -> 2546
-    piece.Piece(player.Black, piece.Queen), square.D2 -> -2546
-    piece.Piece(player.White, piece.Queen), square.E7 -> 2546
-    piece.Piece(player.Black, piece.Queen), square.E2 -> -2546
-    piece.Piece(player.White, piece.Queen), square.F7 -> 2548
-    piece.Piece(player.Black, piece.Queen), square.F2 -> -2548
-    piece.Piece(player.White, piece.Queen), square.G7 -> 2544
-    piece.Piece(player.Black, piece.Queen), square.G2 -> -2544
-    piece.Piece(player.White, piece.Queen), square.H7 -> 2533
-    piece.Piece(player.Black, piece.Queen), square.H2 -> -2533
-    piece.Piece(player.White, piece.Queen), square.A8 -> 2536
-    piece.Piece(player.Black, piece.Queen), square.A1 -> -2536
-    piece.Piece(player.White, piece.Queen), square.B8 -> 2536
-    piece.Piece(player.Black, piece.Queen), square.B1 -> -2536
-    piece.Piece(player.White, piece.Queen), square.C8 -> 2539
-    piece.Piece(player.Black, piece.Queen), square.C1 -> -2539
-    piece.Piece(player.White, piece.Queen), square.D8 -> 2536
-    piece.Piece(player.Black, piece.Queen), square.D1 -> -2536
-    piece.Piece(player.White, piece.Queen), square.E8 -> 2536
-    piece.Piece(player.Black, piece.Queen), square.E1 -> -2536
-    piece.Piece(player.White, piece.Queen), square.F8 -> 2539
-    piece.Piece(player.Black, piece.Queen), square.F1 -> -2539
-    piece.Piece(player.White, piece.Queen), square.G8 -> 2536
-    piece.Piece(player.Black, piece.Queen), square.G1 -> -2536
-    piece.Piece(player.White, piece.Queen), square.H8 -> 2536
-    piece.Piece(player.Black, piece.Queen), square.H1 -> -2536
-    piece.Piece(player.White, piece.King), square.A1 -> 271
-    piece.Piece(player.Black, piece.King), square.A8 -> -271
-    piece.Piece(player.White, piece.King), square.B1 -> 327
-    piece.Piece(player.Black, piece.King), square.B8 -> -327
-    piece.Piece(player.White, piece.King), square.C1 -> 271
-    piece.Piece(player.Black, piece.King), square.C8 -> -271
-    piece.Piece(player.White, piece.King), square.D1 -> 198
-    piece.Piece(player.Black, piece.King), square.D8 -> -198
-    piece.Piece(player.White, piece.King), square.E1 -> 198
-    piece.Piece(player.Black, piece.King), square.E8 -> -198
-    piece.Piece(player.White, piece.King), square.F1 -> 271
-    piece.Piece(player.Black, piece.King), square.F8 -> -271
-    piece.Piece(player.White, piece.King), square.G1 -> 327
-    piece.Piece(player.Black, piece.King), square.G8 -> -327
-    piece.Piece(player.White, piece.King), square.H1 -> 271
-    piece.Piece(player.Black, piece.King), square.H8 -> -271
-    piece.Piece(player.White, piece.King), square.A2 -> 278
-    piece.Piece(player.Black, piece.King), square.A7 -> -278
-    piece.Piece(player.White, piece.King), square.B2 -> 303
-    piece.Piece(player.Black, piece.King), square.B7 -> -303
-    piece.Piece(player.White, piece.King), square.C2 -> 234
-    piece.Piece(player.Black, piece.King), square.C7 -> -234
-    piece.Piece(player.White, piece.King), square.D2 -> 179
-    piece.Piece(player.Black, piece.King), square.D7 -> -179
-    piece.Piece(player.White, piece.King), square.E2 -> 179
-    piece.Piece(player.Black, piece.King), square.E7 -> -179
-    piece.Piece(player.White, piece.King), square.F2 -> 234
-    piece.Piece(player.Black, piece.King), square.F7 -> -234
-    piece.Piece(player.White, piece.King), square.G2 -> 303
-    piece.Piece(player.Black, piece.King), square.G7 -> -303
-    piece.Piece(player.White, piece.King), square.H2 -> 278
-    piece.Piece(player.Black, piece.King), square.H7 -> -278
-    piece.Piece(player.White, piece.King), square.A3 -> 195
-    piece.Piece(player.Black, piece.King), square.A6 -> -195
-    piece.Piece(player.White, piece.King), square.B3 -> 258
-    piece.Piece(player.Black, piece.King), square.B6 -> -258
-    piece.Piece(player.White, piece.King), square.C3 -> 169
-    piece.Piece(player.Black, piece.King), square.C6 -> -169
-    piece.Piece(player.White, piece.King), square.D3 -> 120
-    piece.Piece(player.Black, piece.King), square.D6 -> -120
-    piece.Piece(player.White, piece.King), square.E3 -> 120
-    piece.Piece(player.Black, piece.King), square.E6 -> -120
-    piece.Piece(player.White, piece.King), square.F3 -> 169
-    piece.Piece(player.Black, piece.King), square.F6 -> -169
-    piece.Piece(player.White, piece.King), square.G3 -> 258
-    piece.Piece(player.Black, piece.King), square.G6 -> -258
-    piece.Piece(player.White, piece.King), square.H3 -> 195
-    piece.Piece(player.Black, piece.King), square.H6 -> -195
-    piece.Piece(player.White, piece.King), square.A4 -> 164
-    piece.Piece(player.Black, piece.King), square.A5 -> -164
-    piece.Piece(player.White, piece.King), square.B4 -> 190
-    piece.Piece(player.Black, piece.King), square.B5 -> -190
-    piece.Piece(player.White, piece.King), square.C4 -> 138
-    piece.Piece(player.Black, piece.King), square.C5 -> -138
-    piece.Piece(player.White, piece.King), square.D4 -> 98
-    piece.Piece(player.Black, piece.King), square.D5 -> -98
-    piece.Piece(player.White, piece.King), square.E4 -> 98
-    piece.Piece(player.Black, piece.King), square.E5 -> -98
-    piece.Piece(player.White, piece.King), square.F4 -> 138
-    piece.Piece(player.Black, piece.King), square.F5 -> -138
-    piece.Piece(player.White, piece.King), square.G4 -> 190
-    piece.Piece(player.Black, piece.King), square.G5 -> -190
-    piece.Piece(player.White, piece.King), square.H4 -> 164
-    piece.Piece(player.Black, piece.King), square.H5 -> -164
-    piece.Piece(player.White, piece.King), square.A5 -> 154
-    piece.Piece(player.Black, piece.King), square.A4 -> -154
-    piece.Piece(player.White, piece.King), square.B5 -> 179
-    piece.Piece(player.Black, piece.King), square.B4 -> -179
-    piece.Piece(player.White, piece.King), square.C5 -> 105
-    piece.Piece(player.Black, piece.King), square.C4 -> -105
-    piece.Piece(player.White, piece.King), square.D5 -> 70
-    piece.Piece(player.Black, piece.King), square.D4 -> -70
-    piece.Piece(player.White, piece.King), square.E5 -> 70
-    piece.Piece(player.Black, piece.King), square.E4 -> -70
-    piece.Piece(player.White, piece.King), square.F5 -> 105
-    piece.Piece(player.Black, piece.King), square.F4 -> -105
-    piece.Piece(player.White, piece.King), square.G5 -> 179
-    piece.Piece(player.Black, piece.King), square.G4 -> -179
-    piece.Piece(player.White, piece.King), square.H5 -> 154
-    piece.Piece(player.Black, piece.King), square.H4 -> -154
-    piece.Piece(player.White, piece.King), square.A6 -> 123
-    piece.Piece(player.Black, piece.King), square.A3 -> -123
-    piece.Piece(player.White, piece.King), square.B6 -> 145
-    piece.Piece(player.Black, piece.King), square.B3 -> -145
-    piece.Piece(player.White, piece.King), square.C6 -> 81
-    piece.Piece(player.Black, piece.King), square.C3 -> -81
-    piece.Piece(player.White, piece.King), square.D6 -> 31
-    piece.Piece(player.Black, piece.King), square.D3 -> -31
-    piece.Piece(player.White, piece.King), square.E6 -> 31
-    piece.Piece(player.Black, piece.King), square.E3 -> -31
-    piece.Piece(player.White, piece.King), square.F6 -> 81
-    piece.Piece(player.Black, piece.King), square.F3 -> -81
-    piece.Piece(player.White, piece.King), square.G6 -> 145
-    piece.Piece(player.Black, piece.King), square.G3 -> -145
-    piece.Piece(player.White, piece.King), square.H6 -> 123
-    piece.Piece(player.Black, piece.King), square.H3 -> -123
-    piece.Piece(player.White, piece.King), square.A7 -> 88
-    piece.Piece(player.Black, piece.King), square.A2 -> -88
-    piece.Piece(player.White, piece.King), square.B7 -> 120
-    piece.Piece(player.Black, piece.King), square.B2 -> -120
-    piece.Piece(player.White, piece.King), square.C7 -> 65
-    piece.Piece(player.Black, piece.King), square.C2 -> -65
-    piece.Piece(player.White, piece.King), square.D7 -> 33
-    piece.Piece(player.Black, piece.King), square.D2 -> -33
-    piece.Piece(player.White, piece.King), square.E7 -> 33
-    piece.Piece(player.Black, piece.King), square.E2 -> -33
-    piece.Piece(player.White, piece.King), square.F7 -> 65
-    piece.Piece(player.Black, piece.King), square.F2 -> -65
-    piece.Piece(player.White, piece.King), square.G7 -> 120
-    piece.Piece(player.Black, piece.King), square.G2 -> -120
-    piece.Piece(player.White, piece.King), square.H7 -> 88
-    piece.Piece(player.Black, piece.King), square.H2 -> -88
-    piece.Piece(player.White, piece.King), square.A8 -> 59
-    piece.Piece(player.Black, piece.King), square.A1 -> -59
-    piece.Piece(player.White, piece.King), square.B8 -> 89
-    piece.Piece(player.Black, piece.King), square.B1 -> -89
-    piece.Piece(player.White, piece.King), square.C8 -> 45
-    piece.Piece(player.Black, piece.King), square.C1 -> -45
-    piece.Piece(player.White, piece.King), square.D8 -> -1
-    piece.Piece(player.Black, piece.King), square.D1 -> 1
-    piece.Piece(player.White, piece.King), square.E8 -> -1
-    piece.Piece(player.Black, piece.King), square.E1 -> 1
-    piece.Piece(player.White, piece.King), square.F8 -> 45
-    piece.Piece(player.Black, piece.King), square.F1 -> -45
-    piece.Piece(player.White, piece.King), square.G8 -> 89
-    piece.Piece(player.Black, piece.King), square.G1 -> -89
-    piece.Piece(player.White, piece.King), square.H8 -> 59
-    piece.Piece(player.Black, piece.King), square.H1 -> -59
+fn get_psq_score_midgame(piece: piece.Piece, square: square.Square) {
+  let file = square.file(square)
+  let rank = case piece.player {
+    player.White -> square.rank(square)
+    player.Black -> 7 - square.rank(square)
+  }
+
+  let table = case piece.symbol {
+    piece.Pawn -> pawn
+    piece.Rook -> rook
+    piece.Knight -> knight
+    piece.Bishop -> bishop
+    piece.Queen -> queen
+    piece.King -> king_midgame
+  }
+  let value = index_psqt_table(table, rank, file)
+
+  case piece.player {
+    player.White -> value
+    player.Black -> -value
   }
 }
+
+fn index_psqt_table(
+  table: #(
+    #(Int, Int, Int, Int, Int, Int, Int, Int),
+    #(Int, Int, Int, Int, Int, Int, Int, Int),
+    #(Int, Int, Int, Int, Int, Int, Int, Int),
+    #(Int, Int, Int, Int, Int, Int, Int, Int),
+    #(Int, Int, Int, Int, Int, Int, Int, Int),
+    #(Int, Int, Int, Int, Int, Int, Int, Int),
+    #(Int, Int, Int, Int, Int, Int, Int, Int),
+    #(Int, Int, Int, Int, Int, Int, Int, Int),
+  ),
+  rank: Int,
+  file: Int,
+) {
+  let table_row = case rank {
+    0 -> table.7
+    1 -> table.6
+    2 -> table.5
+    3 -> table.4
+    4 -> table.3
+    5 -> table.2
+    6 -> table.1
+    7 -> table.0
+    _ -> panic
+  }
+
+  case file {
+    0 -> table_row.0
+    1 -> table_row.1
+    2 -> table_row.2
+    3 -> table_row.3
+    4 -> table_row.4
+    5 -> table_row.5
+    6 -> table_row.6
+    7 -> table_row.7
+    _ -> panic
+  }
+}
+
+// piece square tables with top left being A8
+// from white's perspective (mirrored for black)
+// The current values are based on 
+// https://www.chessprogramming.org/Simplified_Evaluation_Function#Piece-Square_Tables
+// TODO: either we generate our own, or copy stockfish's evaluation function
+// https://github.com/GediminasMasaitis/texel-tuner
+
+const pawn = #(
+  #(000, 000, 000, 000, 000, 000, 000, 000),
+  #(050, 050, 050, 050, 050, 050, 050, 050),
+  #(010, 010, 020, 030, 030, 020, 010, 010),
+  #(005, 005, 010, 025, 025, 010, 005, 005),
+  #(000, 000, 000, 020, 020, 000, 000, 000),
+  #(005, -05, -10, 000, 000, -10, -05, 005),
+  #(005, 010, 010, -20, -20, 010, 010, 005),
+  #(000, 000, 000, 000, 000, 000, 000, 000),
+)
+
+const knight = #(
+  #(-50, -40, -30, -30, -30, -30, -40, -50),
+  #(-40, -20, 0, 0, 0, 0, -20, -40),
+  #(-30, 0, 10, 15, 15, 10, 0, -30),
+  #(-30, 5, 15, 20, 20, 15, 5, -30),
+  #(-30, 0, 15, 20, 20, 15, 0, -30),
+  #(-30, 5, 10, 15, 15, 10, 5, -30),
+  #(-40, -20, 0, 5, 5, 0, -20, -40),
+  #(-50, -40, -30, -30, -30, -30, -40, -50),
+)
+
+const bishop = #(
+  #(-20, -10, -10, -10, -10, -10, -10, -20),
+  #(-10, 0, 0, 0, 0, 0, 0, -10),
+  #(-10, 0, 5, 10, 10, 5, 0, -10),
+  #(-10, 5, 5, 10, 10, 5, 5, -10),
+  #(-10, 0, 10, 10, 10, 10, 0, -10),
+  #(-10, 10, 10, 10, 10, 10, 10, -10),
+  #(-10, 5, 0, 0, 0, 0, 5, -10),
+  #(-20, -10, -10, -10, -10, -10, -10, -20),
+)
+
+const rook = #(
+  #(0, 0, 0, 0, 0, 0, 0, 0),
+  #(5, 10, 10, 10, 10, 10, 10, 5),
+  #(-5, 0, 0, 0, 0, 0, 0, -5),
+  #(-5, 0, 0, 0, 0, 0, 0, -5),
+  #(-5, 0, 0, 0, 0, 0, 0, -5),
+  #(-5, 0, 0, 0, 0, 0, 0, -5),
+  #(-5, 0, 0, 0, 0, 0, 0, -5),
+  #(0, 0, 0, 5, 5, 0, 0, 0),
+)
+
+const queen = #(
+  #(-20, -10, -10, -5, -5, -10, -10, -20),
+  #(-10, 0, 0, 0, 0, 0, 0, -10),
+  #(-10, 0, 5, 5, 5, 5, 0, -10),
+  #(-5, 0, 5, 5, 5, 5, 0, -5),
+  #(0, 0, 5, 5, 5, 5, 0, -5),
+  #(-10, 5, 5, 5, 5, 5, 0, -10),
+  #(-10, 0, 5, 0, 0, 0, 0, -10),
+  #(-20, -10, -10, -5, -5, -10, -10, -20),
+)
+
+const king_midgame = #(
+  #(-30, -40, -40, -50, -50, -40, -40, -30),
+  #(-30, -40, -40, -50, -50, -40, -40, -30),
+  #(-30, -40, -40, -50, -50, -40, -40, -30),
+  #(-30, -40, -40, -50, -50, -40, -40, -30),
+  #(-20, -30, -30, -40, -40, -30, -30, -20),
+  #(-10, -20, -20, -20, -20, -20, -20, -10),
+  #(20, 20, 0, 0, 0, 0, 20, 20),
+  #(20, 30, 10, 0, 0, 10, 30, 20),
+)
+
+const king_endgame = #(
+  #(-50, -40, -30, -20, -20, -30, -40, -50),
+  #(-30, -20, -10, 0, 0, -10, -20, -30),
+  #(-30, -10, 20, 30, 30, 20, -10, -30),
+  #(-30, -10, 30, 40, 40, 30, -10, -30),
+  #(-30, -10, 30, 40, 40, 30, -10, -30),
+  #(-30, -10, 20, 30, 30, 20, -10, -30),
+  #(-30, -30, 0, 0, 0, 0, -30, -30),
+  #(-50, -30, -30, -30, -30, -30, -30, -50),
+)

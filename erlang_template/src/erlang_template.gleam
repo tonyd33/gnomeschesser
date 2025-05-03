@@ -2,8 +2,12 @@ import chess/game
 import chess/player
 import chess/robot
 import gleam/dynamic/decode
+import gleam/erlang
+import gleam/erlang/atom
 import gleam/erlang/process
 import gleam/json
+import gleam/list
+import gleam/string
 import mist
 import wisp.{type Request, type Response}
 import wisp/wisp_mist
@@ -20,8 +24,35 @@ pub fn main() {
     |> mist.bind("0.0.0.0")
     |> mist.port(8000)
     |> mist.start_http
+
   process.sleep_forever()
 }
+
+// fn handle_uci() {
+//   case erlang.get_line("") {
+//     Error(erlang.Eof) -> Nil
+//     Error(erlang.NoData) -> Nil
+//     Ok(line) -> {
+//       case list.filter(string.split(line, " "), fn(x) { !string.is_empty(x) }) {
+//         ["position", ..rest] -> {
+//           let #(fen, moves) = case rest {
+//             ["startpos", ..rest] -> #(game.start_fen, rest)
+//             ["fen", fen, ..rest] -> #(fen, rest)
+//             _ -> panic
+//           }
+//           let assert Ok(game) = game.load_fen(fen)
+//           case moves {
+
+//           }
+//         }
+
+//         _ -> panic as { "Line not recognized: " <> line }
+//       }
+
+//       handle_uci()
+//     }
+//   }
+// }
 
 fn handle_request(request: Request, robot: robot.Robot) -> Response {
   case wisp.path_segments(request) {
@@ -46,12 +77,15 @@ fn handle_move(request: Request, robot: robot.Robot) -> Response {
   case json.parse(body, move_decoder()) {
     Error(_) -> wisp.bad_request()
     Ok(MoveRequest(fen:, turn: _, failed_moves:)) -> {
-      let result = robot.get_best_move(robot, fen, failed_moves)
+      robot.update_fen(robot, fen, failed_moves)
+
+      // TODO: do more precise timing so we can squeeze the most thinking time
+      let result = robot.get_best_move_after(robot, 4950)
       case result {
         Ok(move) -> wisp.ok() |> wisp.string_body(move)
         Error(Nil) ->
           wisp.internal_server_error()
-          |> wisp.string_body("Didn't get a move")
+          |> wisp.string_body("Didn't get a move!!!")
       }
     }
   }

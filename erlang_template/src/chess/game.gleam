@@ -49,6 +49,8 @@ pub fn to_hash(game: Game) -> GameHash {
   hash
 }
 
+pub const start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
 pub fn load_fen(fen: String) -> Result(Game, Nil) {
   use
     #(
@@ -72,52 +74,55 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
     },
   )
 
-  use board <- result.try(
-    piece_placement_data
-    // Flatten the entire board into char array
-    |> string.to_graphemes
-    // Fold over a flat position, cell-dictionary pair.
-    |> list.fold(from: Ok(#(0, dict.new())), with: fn(acc, val) {
-      use acc <- result.try(acc)
-      let #(square, board) = acc
+  let pieces =
+    {
+      string.split(piece_placement_data, "/")
+      |> list.strict_zip(list.range(7, 0))
+    }
+    |> result.try(fn(x) {
+      list.flat_map(x, fn(x) {
+        let #(piece_placements, rank) = x
 
-      // String -> Result(Piece, Int)
-      // If found a piece, then returns the piece
-      // Otherwise, returns how many cells to skip
-      let piece_or_skip = case val {
-        "r" -> Ok(piece.Piece(player.Black, piece.Rook))
-        "n" -> Ok(piece.Piece(player.Black, piece.Knight))
-        "b" -> Ok(piece.Piece(player.Black, piece.Bishop))
-        "q" -> Ok(piece.Piece(player.Black, piece.Queen))
-        "k" -> Ok(piece.Piece(player.Black, piece.King))
-        "p" -> Ok(piece.Piece(player.Black, piece.Pawn))
+        let #(_, pieces) =
+          string.to_graphemes(piece_placements)
+          |> list.fold(from: #(0, []), with: fn(acc, contents) {
+            let #(file, pieces) = acc
 
-        "R" -> Ok(piece.Piece(player.White, piece.Rook))
-        "N" -> Ok(piece.Piece(player.White, piece.Knight))
-        "B" -> Ok(piece.Piece(player.White, piece.Bishop))
-        "Q" -> Ok(piece.Piece(player.White, piece.Queen))
-        "K" -> Ok(piece.Piece(player.White, piece.King))
-        "P" -> Ok(piece.Piece(player.White, piece.Pawn))
+            let piece_symbol = case contents |> string.lowercase {
+              "r" -> Some(piece.Rook)
+              "n" -> Some(piece.Knight)
+              "b" -> Some(piece.Bishop)
+              "q" -> Some(piece.Queen)
+              "k" -> Some(piece.King)
+              "p" -> Some(piece.Pawn)
+              _ -> None
+            }
 
-        "/" -> Error(8)
-        // If the int.parse fails, we should really be failing this entire
-        // fold, but fuck, I kinda backed myself into a corner with this flow
-        // control and I'm too lazy to fix it. I mean, we're gonna be getting
-        // valid boards anyway.
-        _ -> int.parse(val) |> result.unwrap(0) |> Error
-      }
-
-      case piece_or_skip {
-        Ok(piece) ->
-          square.algebraic(square)
-          |> result.map(fn(alg_square) {
-            #(square + 1, board |> dict.insert(alg_square, piece))
+            option.map(piece_symbol, fn(piece_symbol) {
+              let square = square.from_rank_file(rank, file)
+              let player = case contents == string.lowercase(contents) {
+                True -> player.Black
+                False -> player.White
+              }
+              let new_piece =
+                result.map(square, pair.new(
+                  _,
+                  piece.Piece(player, piece_symbol),
+                ))
+              #(file + 1, [new_piece, ..pieces])
+            })
+            |> option.lazy_unwrap(fn() {
+              let advance = int.parse(contents) |> result.unwrap(0)
+              #(file + advance, pieces)
+            })
           })
-        Error(skip) -> Ok(#(square + skip, board))
-      }
+        pieces
+      })
+      |> result.all
     })
-    |> result.map(pair.second),
-  )
+
+  use pieces <- result.try(pieces)
+  let board = dict.from_list(pieces)
   use halfmove_clock <- result.try(int.parse(halfmove_clock))
   use fullmove_number <- result.try(int.parse(fullmove_number))
 
@@ -258,12 +263,10 @@ pub fn to_fen(game: Game) -> String {
     player.White -> "w"
   }
 
-  let en_passant_target_string =
-    case game.en_passant_target_square {
-      option.Some(target_square) -> square.to_string(target_square)
-      option.None -> Ok("-")
-    }
-    |> result.unwrap("-")
+  let en_passant_target_string = case game.en_passant_target_square {
+    option.Some(target_square) -> square.to_string(target_square)
+    option.None -> "-"
+  }
 
   string.join(
     [
@@ -328,20 +331,21 @@ pub fn attackers(
   square: square.Square,
   by: player.Player,
 ) -> List(#(square.Square, piece.Piece)) {
-  let square = square.ox88(square)
+  let square = square.to_ox88(square)
 
   let pieces =
     game.board
     |> dict.to_list
 
-  let occupied_squares = list.map(pieces, fn(x) { square.ox88(pair.first(x)) })
+  let occupied_squares =
+    list.map(pieces, fn(x) { square.to_ox88(pair.first(x)) })
 
   pieces
   |> list.filter(fn(piece) {
     let #(from, piece) = piece
     use <- bool.guard(piece.player != by, False)
 
-    let from = square.ox88(from)
+    let from = square.to_ox88(from)
     let difference = from - square
 
     // skip if to/from square are the same
@@ -366,8 +370,8 @@ pub fn attackers(
       // Pawns can only attack forwards
       piece.Pawn ->
         case piece.player {
-          player.Black -> difference < 0
-          player.White -> difference > 0
+          player.Black -> difference > 0
+          player.White -> difference < 0
         }
       // These slide, so we check if their path is empty
       piece.Bishop | piece.Queen | piece.Rook -> {
@@ -428,24 +432,30 @@ pub fn is_game_over(game: Game) -> Bool {
 }
 
 pub fn ascii(game: Game) -> String {
-  "   +------------------------+\n"
-  <> list.fold(square.squares, "", fn(acc, val) {
-    let start_string = case square.file(square.ox88(val)) {
-      0 -> " " <> int.to_string(8 - square.rank(square.ox88(val))) <> " |"
-      _ -> ""
-    }
-    let middle_string = case dict.get(game.board, val) {
-      Error(_) -> " . "
-      Ok(other) -> " " <> piece.to_string(other) <> " "
-    }
-    let end_string = case square.file(square.ox88(val)) {
-      7 -> "|\n"
-      _ -> ""
-    }
-    acc <> start_string <> middle_string <> end_string
-  })
-  <> "   +------------------------+\n"
-  <> "     a  b  c  d  e  f  g  h"
+  [
+    ["   +------------------------+"],
+    {
+      list.map(list.range(7, 0), fn(rank) {
+        " "
+        <> int.to_string(rank + 1)
+        <> " |"
+        <> string.concat(
+          list.map(list.range(0, 7), fn(file) {
+            let assert Ok(square) = square.from_rank_file(rank, file)
+            case dict.get(game.board, square) {
+              Ok(piece) -> " " <> piece.to_string(piece) <> " "
+              _ -> " . "
+            }
+          }),
+        )
+        <> "|"
+      })
+    },
+    ["   +------------------------+"],
+    ["     a  b  c  d  e  f  g  h"],
+  ]
+  |> list.flatten
+  |> string.join("\n")
 }
 
 pub fn pieces(game: Game) -> List(#(square.Square, piece.Piece)) {
@@ -463,8 +473,8 @@ pub type SAN =
 pub opaque type Move {
   Move(
     player: player.Player,
-    from: Int,
-    to: Int,
+    from: square.Square,
+    to: square.Square,
     piece: piece.PieceSymbol,
     captured: Option(piece.PieceSymbol),
     promotion: Option(piece.PieceSymbol),
@@ -514,6 +524,11 @@ pub fn move_from_san(san: String, game: Game) -> Result(Move, Nil) {
   |> list.find(fn(move) { move_to_san(move) == san })
 }
 
+// there's a specific kind of long algebraic notation used by UCI
+pub fn move_from_uci_lan(game: Game, lan: String) -> Result(Move, Nil) {
+  todo
+}
+
 /// Apply a move to a game. Moves should only be passed in with a `game` from
 /// moves created with `from_san` or `moves` with the same `game`.
 ///
@@ -549,15 +564,12 @@ fn assert_move_sanity_checks(move: InternalMove, game: Game) -> Nil {
   let InternalMove(player, from, to, piece, captured, promotion, flags) = move
   let opponent = player.opponent(player)
 
-  let assert Ok(from_square) = square.algebraic(from)
-  let assert Ok(to_square) = square.algebraic(to)
-
   // It should be our turn
   let assert True = player == turn(game)
 
   // Piece should match what was stated in move
   let assert Ok(_) =
-    piece_at(game, from_square)
+    piece_at(game, from)
     |> result_addons.expect_or(
       fn(actual_piece) {
         actual_piece.symbol == piece && actual_piece.player == player
@@ -586,10 +598,10 @@ fn assert_move_sanity_checks(move: InternalMove, game: Game) -> Nil {
             player.Black -> -16
             player.White -> 16
           }
-          square.algebraic(square.ox88(to_square) + offset)
+          square.add(to, offset)
           |> result.try(piece_at(game, _))
         }
-        False -> piece_at(game, to_square)
+        False -> piece_at(game, to)
       }
       real_piece.symbol == captured_piece && real_piece.player == opponent
     }
@@ -619,8 +631,7 @@ fn apply_internal_move(game: Game, move: InternalMove) -> Result(Game, Nil) {
   let history = history(game)
   let castling_availability = castling_availability(game)
 
-  use from_square <- result.try(square.algebraic(from))
-  use to_square <- result.try(square.algebraic(to))
+  let from_square = from
 
   // If we're debugging, we'll purposely be more strict to ensure correctness.
   // When actually competing though, we don't want the program to crash, even
@@ -641,7 +652,7 @@ fn apply_internal_move(game: Game, move: InternalMove) -> Result(Game, Nil) {
         player.White -> 16
         player.Black -> -16
       }
-      let square = square.algebraic(to + offset)
+      let square = square.from_ox88(square.to_ox88(to) + offset)
       option.from_result(square)
     }
     False -> None
@@ -669,7 +680,7 @@ fn apply_internal_move(game: Game, move: InternalMove) -> Result(Game, Nil) {
       piece.Rook -> {
         let position_flags =
           rook_positions_flags(us)
-          |> list.find(fn(x) { x.0 == from_square })
+          |> list.find(fn(x) { x.0 == from })
         case position_flags {
           Error(_) -> castling_availability
           Ok(#(_, side)) ->
@@ -687,7 +698,7 @@ fn apply_internal_move(game: Game, move: InternalMove) -> Result(Game, Nil) {
       Some(piece.Rook) -> {
         let position_flags =
           rook_positions_flags(them)
-          |> list.find(fn(x) { x.0 == to_square })
+          |> list.find(fn(x) { x.0 == to })
         case position_flags {
           Error(_) -> castling_availability
           Ok(#(_, side)) ->
@@ -709,8 +720,8 @@ fn apply_internal_move(game: Game, move: InternalMove) -> Result(Game, Nil) {
       None -> piece.Piece(us, piece)
     }
     board(game)
-    |> dict.delete(from_square)
-    |> dict.insert(to_square, become_piece)
+    |> dict.delete(from)
+    |> dict.insert(to, become_piece)
   }
   // If it's en passant, we have to kill a different square too
   use next_board <- result.try(case is_en_passant {
@@ -719,7 +730,7 @@ fn apply_internal_move(game: Game, move: InternalMove) -> Result(Game, Nil) {
         player.Black -> -16
         player.White -> 16
       }
-      let ep_square = square.algebraic(to + offset)
+      let ep_square = square.from_ox88(square.to_ox88(to) + offset)
       ep_square
       |> result.map(dict.delete(next_board, _))
     }
@@ -738,11 +749,11 @@ fn apply_internal_move(game: Game, move: InternalMove) -> Result(Game, Nil) {
         True -> 1
         False -> -2
       }
-      use castling_to_square <- result.try(square.algebraic(
-        to - castling_to_offset,
+      use castling_to_square <- result.try(square.from_ox88(
+        square.to_ox88(to) - castling_to_offset,
       ))
-      use castling_from_square <- result.try(square.algebraic(
-        to + castling_from_offset,
+      use castling_from_square <- result.try(square.from_ox88(
+        square.to_ox88(to) + castling_from_offset,
       ))
       use castling_from_piece <- result.try(piece_at(game, castling_from_square))
 
@@ -777,7 +788,6 @@ fn internal_moves(game: Game) -> List(InternalMove) {
     // Not our piece
     use <- bool.guard(piece.player != us, moves)
 
-    let from = square.ox88(square)
     let standard_moves = case piece.symbol {
       piece.Pawn -> pawn_moves(game, square)
       _ -> {
@@ -787,13 +797,14 @@ fn internal_moves(game: Game) -> List(InternalMove) {
             piece.King | piece.Knight -> 1
             _ -> 8
           }
-          collect_ray_moves(game, piece.symbol, from, offset, max_depth)
+          collect_ray_moves(game, piece.symbol, square, offset, max_depth)
         })
       }
     }
     moves |> list.append(standard_moves)
   })
   |> list.append(castle_moves)
+  // TODO: remove
   |> list.filter(fn(move) {
     // We should continue using assert here rather than silently failing.
     // If we failed to apply the move here, we really fucked something up.
@@ -820,7 +831,7 @@ fn king_castle_moves(game: Game) {
       !set.contains(castling_availability, #(us, KingSide)),
       Error(Nil),
     )
-    let castling_from_square = square.ox88(king_piece.0)
+    let castling_from_square = square.to_ox88(king_piece.0)
     let castling_to_square = castling_from_square + 2
 
     let should_be_empty_squares = [castling_from_square + 1, castling_to_square]
@@ -834,12 +845,12 @@ fn king_castle_moves(game: Game) {
         list.flatten([
           should_be_empty_squares
             |> list.map(fn(x) {
-              square.algebraic(x)
+              square.from_ox88(x)
               |> result.map(empty_at(game, _))
             }),
           should_be_safe_squares
             |> list.map(fn(x) {
-              square.algebraic(x)
+              square.from_ox88(x)
               |> result.map(is_attacked(game, _, them))
               |> result.map(fn(x) { !x })
             }),
@@ -848,6 +859,9 @@ fn king_castle_moves(game: Game) {
       |> result.map(list.all(_, fn(x) { x }))
       |> result_addons.expect_or(fn(x) { x }, fn(_) { Nil }),
     )
+
+    let assert Ok(castling_to_square) = square.from_ox88(castling_to_square)
+    let assert Ok(castling_from_square) = square.from_ox88(castling_from_square)
 
     Ok(InternalMove(
       player: us,
@@ -864,32 +878,28 @@ fn king_castle_moves(game: Game) {
       !set.contains(castling_availability, #(us, QueenSide)),
       Error(Nil),
     )
-    let castling_from_square = square.ox88(king_piece.0)
-    let castling_to_square = castling_from_square - 2
+    let castling_from_square = king_piece.0
+    let assert Ok(castling_to_square) = square.add(castling_from_square, -2)
 
     let should_be_empty_squares = [
-      castling_from_square - 1,
-      castling_from_square - 2,
-      castling_from_square - 3,
+      square.add(castling_from_square, -1),
+      square.add(castling_from_square, -2),
+      square.add(castling_from_square, -3),
     ]
     let should_be_safe_squares = [
-      castling_from_square,
-      castling_from_square - 1,
-      castling_from_square - 2,
+      Ok(castling_from_square),
+      square.add(castling_from_square, -1),
+      square.add(castling_from_square, -2),
     ]
 
     use _ <- result.try(
       result.all(
         list.flatten([
           should_be_empty_squares
-            |> list.map(fn(x) {
-              square.algebraic(x)
-              |> result.map(empty_at(game, _))
-            }),
+            |> list.map(fn(x) { result.map(x, empty_at(game, _)) }),
           should_be_safe_squares
             |> list.map(fn(x) {
-              square.algebraic(x)
-              |> result.map(is_attacked(game, _, them))
+              result.map(x, is_attacked(game, _, them))
               |> result.map(fn(x) { !x })
             }),
         ]),
@@ -911,19 +921,16 @@ fn king_castle_moves(game: Game) {
   [kingside, queenside] |> list.filter_map(fn(x) { x })
 }
 
-fn pawn_moves(game: Game, square: square.Square) {
+fn pawn_moves(game: Game, from: square.Square) {
   let us = turn(game)
-  let from = square.ox88(square)
   let offsets: List(Int) = pawn_offsets(us)
   let assert [single, double, x1, x2] = offsets
 
   let single_jump_move = {
-    let to = from + single
-    square.algebraic(to)
-    |> result.map(empty_at(game, _))
     // Only create move if square is empty
-    |> result.try(fn(empty) {
-      case empty {
+    square.add(from, single)
+    |> result.try(fn(to) {
+      case empty_at(game, to) {
         True ->
           Ok(InternalMove(
             player: us,
@@ -940,24 +947,19 @@ fn pawn_moves(game: Game, square: square.Square) {
   }
 
   let double_jump_move = {
-    let to = from + double
+    let to = square.add(from, double)
     // When double jumping, the square directly ahead must be empty.
     use square_ahead_empty <- result.try(
-      square.algebraic(from + single)
+      square.add(from, single)
       |> result.map(empty_at(game, _)),
     )
     use <- bool.guard(!square_ahead_empty, Error(Nil))
 
-    square.algebraic(to)
-    // Ensure this square our second rank
-    |> result_addons.expect_or(
-      fn(_) { { 8 - square.rank(from) } == second_rank(us) },
-      fn(_) { Nil },
-    )
-    |> result.map(empty_at(game, _))
-    // Only create move if square is empty
-    |> result.try(fn(empty) {
-      case empty {
+    to
+    |> result.try(fn(to) {
+      // Ensure this square our second rank
+      // Only create move if square is empty
+      case { square.rank(from) + 1 } == second_rank(us) && empty_at(game, to) {
         True ->
           Ok(InternalMove(
             player: us,
@@ -974,47 +976,50 @@ fn pawn_moves(game: Game, square: square.Square) {
   }
 
   let make_x_moves = fn(jump) {
-    let to = from + jump
+    let to = square.add(from, jump)
     let standard_x_move =
-      square.algebraic(to)
-      |> result.try(piece_at(game, _))
-      |> result_addons.expect_or(fn(x) { x.player != us }, fn(_) { Nil })
-      |> result.map(fn(x) {
-        InternalMove(
+      result.try(to, fn(to) {
+        case piece_at(game, to) {
+          Ok(piece) if piece.player != us -> {
+            Ok(InternalMove(
+              player: us,
+              from: from,
+              to: to,
+              piece: piece.Pawn,
+              captured: Some(piece.symbol),
+              promotion: None,
+              flags: set.from_list([Capture]),
+            ))
+          }
+          _ -> Error(Nil)
+        }
+      })
+
+    let ep_move =
+      result.try(to, fn(to) {
+        {
+          use ep_square <- result.try(
+            en_passant_target_square(game)
+            |> option.to_result(Nil),
+          )
+          use <- bool.guard(ep_square != to, Error(Nil))
+          let ep_rank = square.rank(ep_square)
+          case us {
+            player.White if ep_rank == 6 -> Ok(ep_square)
+            player.Black if ep_rank == 3 -> Ok(ep_square)
+            _ -> Error(Nil)
+          }
+        }
+        |> result.replace(InternalMove(
           player: us,
           from: from,
           to: to,
           piece: piece.Pawn,
-          captured: Some(x.symbol),
+          captured: Some(piece.Pawn),
           promotion: None,
-          flags: set.from_list([Capture]),
-        )
+          flags: set.from_list([EnPassant, Capture]),
+        ))
       })
-
-    let ep_move =
-      {
-        use to_alg <- result.try(square.algebraic(to))
-        use ep_square <- result.try(
-          en_passant_target_square(game)
-          |> option.to_result(Nil),
-        )
-        use <- bool.guard(ep_square != to_alg, Error(Nil))
-        let ep_rank = square.rank(ep_square |> square.ox88)
-        case us {
-          player.White if ep_rank == 6 -> Ok(ep_square)
-          player.Black if ep_rank == 3 -> Ok(ep_square)
-          _ -> Error(Nil)
-        }
-      }
-      |> result.replace(InternalMove(
-        player: us,
-        from: from,
-        to: to,
-        piece: piece.Pawn,
-        captured: Some(piece.Pawn),
-        promotion: None,
-        flags: set.from_list([EnPassant, Capture]),
-      ))
 
     [standard_x_move, ep_move]
   }
@@ -1071,7 +1076,7 @@ fn pawn_moves(game: Game, square: square.Square) {
 fn collect_ray_moves(
   game: Game,
   from_piece: piece.PieceSymbol,
-  from: Int,
+  from: square.Square,
   offset: Int,
   max_depth: Int,
 ) -> List(InternalMove) {
@@ -1081,7 +1086,7 @@ fn collect_ray_moves(
 fn collect_ray_moves_inner(
   game: Game,
   from_piece: piece.PieceSymbol,
-  from: Int,
+  from: square.Square,
   offset: Int,
   depth: Int,
   max_depth: Int,
@@ -1091,11 +1096,11 @@ fn collect_ray_moves_inner(
 
   use <- bool.guard(depth > max_depth, moves)
 
-  let to = from + { offset * depth }
-  case square.algebraic(to) {
+  let to = square.add(from, offset * depth)
+  case to {
     Error(_) -> moves
-    Ok(square) ->
-      case piece_at(game, square) {
+    Ok(to) ->
+      case piece_at(game, to) {
         // Nothing. Then keep going
         Error(_) ->
           collect_ray_moves_inner(
@@ -1156,8 +1161,8 @@ type Lazy(a) =
 type InternalMove {
   InternalMove(
     player: player.Player,
-    from: Int,
-    to: Int,
+    from: square.Square,
+    to: square.Square,
     piece: piece.PieceSymbol,
     captured: Option(piece.PieceSymbol),
     promotion: Option(piece.PieceSymbol),
@@ -1218,8 +1223,6 @@ fn internal_move_to_san(
     use <- bool.guard(is_kingside_castle, "O-O")
     use <- bool.guard(is_queenside_castle, "O-O-O")
 
-    let assert Ok(from_square) = square.algebraic(move.from)
-    let assert Ok(to_square) = square.algebraic(move.to)
     let disambiguation_level =
       all_moves
       |> list.fold(Unambiguous, fn(level: DisambiguationLevel, other_move) {
@@ -1254,7 +1257,7 @@ fn internal_move_to_san(
         piece.Pawn ->
           // https://en.wikipedia.org/wiki/Algebraic_notation_(chess)#Captures
           case is_capture {
-            True -> square.string_file(from_square)
+            True -> square.string_file(move.from)
             False -> ""
           }
         piece.Queen -> "Q"
@@ -1266,9 +1269,9 @@ fn internal_move_to_san(
 
     let san = case disambiguation_level, move.piece {
       Unambiguous, _ | _, piece.Pawn -> san
-      GenerallyAmbiguous, _ | Rank, _ -> san <> square.string_file(from_square)
-      File, _ -> san <> square.string_rank(from_square)
-      Both, _ -> san <> square.string(from_square)
+      GenerallyAmbiguous, _ | Rank, _ -> san <> square.string_file(move.from)
+      File, _ -> san <> square.string_rank(move.from)
+      Both, _ -> san <> square.to_string(move.from)
     }
 
     let san = case is_capture {
@@ -1276,7 +1279,7 @@ fn internal_move_to_san(
       False -> san
     }
 
-    let san = san <> square.string(to_square)
+    let san = san <> square.to_string(move.to)
     let san = case move.promotion {
       Some(promotion_piece) -> san <> "=" <> piece_san(promotion_piece)
       None -> san
@@ -1320,8 +1323,8 @@ fn second_rank(player: player.Player) {
 
 fn pawn_offsets(player: player.Player) {
   case player {
-    player.Black -> [16, 32, 17, 15]
-    player.White -> [-16, -32, -17, -15]
+    player.Black -> [-16, -32, -17, -15]
+    player.White -> [16, 32, 17, 15]
   }
 }
 
@@ -1337,9 +1340,13 @@ fn piece_offsets(piece: piece.Piece) {
 }
 
 fn rook_positions_flags(player: player.Player) {
+  let assert Ok(a1) = square.from_string("a1")
+  let assert Ok(h1) = square.from_string("h1")
+  let assert Ok(a8) = square.from_string("a8")
+  let assert Ok(h8) = square.from_string("h8")
   case player {
-    player.White -> [#(square.A1, QueenSide), #(square.H1, KingSide)]
-    player.Black -> [#(square.A8, QueenSide), #(square.H8, KingSide)]
+    player.White -> [#(a1, QueenSide), #(h1, KingSide)]
+    player.Black -> [#(a8, QueenSide), #(h8, KingSide)]
   }
 }
 
