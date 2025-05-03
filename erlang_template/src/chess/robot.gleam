@@ -94,8 +94,6 @@ fn main_loop(state: RobotState, update: process.Selector(UpdateMessage)) {
     }
     // If we receive a request for the best move, respond with the current best move we're tracking
     GetBestMove(response) -> {
-      echo "requested best move"
-      echo state.best_move
       case state.best_move {
         Some(best_move) -> {
           process.send(response, Ok(best_move))
@@ -128,11 +126,12 @@ fn update_game(state: RobotState, game: game.Game) -> RobotState {
 
   let searcher_pid = search.new(game, memo, search_subject)
 
-  let best_move =
+  // TODO: check for collision, then add to state
+  let _best_move =
     case dict.get(memo.dict, game.to_hash(game)) {
       Ok(#(_, search.Evaluation(_, _, best_move))) -> best_move
       Error(Nil) -> None
     }
     |> option.map(game.move_to_san)
-  RobotState(game, best_move, #(searcher_pid, search_subject), memo)
+  RobotState(game, None, #(searcher_pid, search_subject), memo)
 }

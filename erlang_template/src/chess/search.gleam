@@ -66,13 +66,11 @@ fn search(
   current_depth: Depth,
   transposition: TranspositionTable,
 ) -> Nil {
-  echo current_depth
   // perform the search at each depth, the negamax function will handle sorting and caching
   let #(best_evaluation, transposition) =
     negamax_alphabeta_failsoft(game, current_depth, -1.0, 1.0, transposition)
   let Evaluation(_score, _node_type, best_move) = best_evaluation
 
-  echo best_evaluation
   case best_move {
     Some(best_move) ->
       process.send(search_subject, SearchUpdate(best_move, transposition))
