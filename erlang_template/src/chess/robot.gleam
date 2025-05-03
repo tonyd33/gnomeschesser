@@ -11,7 +11,11 @@ pub opaque type Robot {
 
 type UpdateMessage {
   UpdateFen(fen: String, failed_moves: List(game.SAN))
-  UpdateBestMove(move: game.SAN, memo: search.TranspositionTable)
+  UpdateBestMove(
+    move: game.SAN,
+    game: game.GameHash,
+    memo: search.TranspositionTable,
+  )
   GetBestMove(response: Subject(Result(game.SAN, Nil)))
 }
 
@@ -73,6 +77,7 @@ fn create_robot_thread() -> Subject(UpdateMessage) {
           |> process.selecting(search_subject, fn(search) {
             UpdateBestMove(
               game.move_to_san(search.best_move),
+              search.game,
               search.transposition,
             )
           }),
@@ -98,7 +103,9 @@ fn main_loop(state: RobotState, update: process.Selector(UpdateMessage)) {
         Some(best_move) -> {
           process.send(response, Ok(best_move))
 
+          echo "requested best move"
           // TODO: generate the new game in a much better way
+          echo best_move
           let assert Ok(move) = game.move_from_san(best_move, state.game)
           let assert Ok(new_game) = game.apply(state.game, move)
 
@@ -111,8 +118,15 @@ fn main_loop(state: RobotState, update: process.Selector(UpdateMessage)) {
       }
     }
     // If we receive an update for the best move, just update the state
-    UpdateBestMove(best_move, memo) ->
-      RobotState(..state, best_move: Some(best_move), memo:)
+    UpdateBestMove(best_move, game, memo) -> {
+      case game == game.to_hash(state.game) {
+        True -> RobotState(..state, best_move: Some(best_move), memo:)
+        False -> {
+          echo "received best move for incorrect game"
+          RobotState(..state, memo:)
+        }
+      }
+    }
   }
 
   main_loop(state, update)
@@ -121,17 +135,17 @@ fn main_loop(state: RobotState, update: process.Selector(UpdateMessage)) {
 fn update_game(state: RobotState, game: game.Game) -> RobotState {
   let RobotState(_game, _best_move, #(search_pid, search_subject), memo) = state
 
-  // TODO: don't restart searcher if it's the same game
-  process.kill(search_pid)
-
-  let searcher_pid = search.new(game, memo, search_subject)
+  let new_search_pid = search.new(game, memo, search_subject)
 
   // TODO: check for collision, then add to state
-  let _best_move =
+  let best_move =
     case dict.get(memo.dict, game.to_hash(game)) {
       Ok(#(_, search.Evaluation(_, _, best_move))) -> best_move
       Error(Nil) -> None
     }
     |> option.map(game.move_to_san)
-  RobotState(game, None, #(searcher_pid, search_subject), memo)
+
+  // TODO: don't restart searcher if it's the same game
+  process.kill(search_pid)
+  RobotState(game, best_move, #(new_search_pid, search_subject), memo)
 }

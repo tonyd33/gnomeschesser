@@ -14,7 +14,11 @@ import gleam/result
 import util/yielder
 
 pub type SearchMessage {
-  SearchUpdate(best_move: game.Move, transposition: TranspositionTable)
+  SearchUpdate(
+    best_move: game.Move,
+    game: game.GameHash,
+    transposition: TranspositionTable,
+  )
 }
 
 pub type TranspositionTable {
@@ -73,7 +77,10 @@ fn search(
 
   case best_move {
     Some(best_move) ->
-      process.send(search_subject, SearchUpdate(best_move, transposition))
+      process.send(
+        search_subject,
+        SearchUpdate(best_move, game.to_hash(game), transposition),
+      )
     None -> Nil
   }
   search(search_subject, game, current_depth + 1, transposition)
