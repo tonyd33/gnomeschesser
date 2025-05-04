@@ -1,7 +1,6 @@
 import chess/game.{load_fen, to_fen}
 import chess/piece
 import chess/player
-import chess/robot
 import chess/square
 import gleam/dict
 import gleam/list

@@ -22,6 +22,7 @@ pub type Castle {
 pub opaque type Game {
   Game(
     board: Dict(square.Square, piece.Piece),
+    bitboards: Bitboards,
     active_color: player.Player,
     castling_availability: List(#(player.Player, Castle)),
     en_passant_target_square: Option(square.Square),
@@ -33,6 +34,23 @@ pub opaque type Game {
 
 pub type GameHash =
   Int
+
+type Bitboards {
+  Bitboards(
+    white_pawns: Int,
+    white_knights: Int,
+    white_bishops: Int,
+    white_rooks: Int,
+    white_queens: Int,
+    white_king: Int,
+    black_pawns: Int,
+    black_knights: Int,
+    black_bishops: Int,
+    black_rooks: Int,
+    black_queens: Int,
+    black_king: Int,
+  )
+}
 
 pub fn to_hash(game: Game) -> GameHash {
   // TODO: use proper zobrist hashing
@@ -146,6 +164,7 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
   Ok(
     Game(
       board: board,
+      bitboards: board_to_bitboards(board),
       active_color: case active_color {
         "w" -> player.White
         "b" -> player.Black
@@ -158,6 +177,62 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
       history: [],
     ),
   )
+}
+
+fn board_to_bitboards(board: Dict(square.Square, piece.Piece)) {
+  let empty_bitboards =
+    Bitboards(
+      white_pawns: 0,
+      white_knights: 0,
+      white_bishops: 0,
+      white_rooks: 0,
+      white_queens: 0,
+      white_king: 0,
+      black_pawns: 0,
+      black_knights: 0,
+      black_bishops: 0,
+      black_rooks: 0,
+      black_queens: 0,
+      black_king: 0,
+    )
+  board
+  |> dict.to_list
+  |> list.fold(empty_bitboards, fn(bbs, x) {
+    let #(square, piece) = x
+
+    let rank = square.rank(square)
+    let file = square.file(square)
+
+    let idx = rank * 8 + file
+    let bit = int.bitwise_shift_left(1, idx)
+
+    case piece {
+      piece.Piece(player.White, piece.Pawn) ->
+        Bitboards(..bbs, white_pawns: int.bitwise_or(bbs.white_pawns, bit))
+      piece.Piece(player.White, piece.Knight) ->
+        Bitboards(..bbs, white_knights: int.bitwise_or(bbs.white_knights, bit))
+      piece.Piece(player.White, piece.Bishop) ->
+        Bitboards(..bbs, white_bishops: int.bitwise_or(bbs.white_bishops, bit))
+      piece.Piece(player.White, piece.Rook) ->
+        Bitboards(..bbs, white_rooks: int.bitwise_or(bbs.white_rooks, bit))
+      piece.Piece(player.White, piece.Queen) ->
+        Bitboards(..bbs, white_queens: int.bitwise_or(bbs.white_queens, bit))
+      piece.Piece(player.White, piece.King) ->
+        Bitboards(..bbs, white_king: int.bitwise_or(bbs.white_king, bit))
+      piece.Piece(player.Black, piece.Pawn) ->
+        Bitboards(..bbs, black_pawns: int.bitwise_or(bbs.black_pawns, bit))
+      piece.Piece(player.Black, piece.Knight) ->
+        Bitboards(..bbs, black_knights: int.bitwise_or(bbs.black_knights, bit))
+      piece.Piece(player.Black, piece.Bishop) ->
+        Bitboards(..bbs, black_bishops: int.bitwise_or(bbs.black_bishops, bit))
+      piece.Piece(player.Black, piece.Rook) ->
+        Bitboards(..bbs, black_rooks: int.bitwise_or(bbs.black_rooks, bit))
+      piece.Piece(player.Black, piece.Queen) ->
+        Bitboards(..bbs, black_queens: int.bitwise_or(bbs.black_queens, bit))
+      piece.Piece(player.Black, piece.King) ->
+        Bitboards(..bbs, black_king: int.bitwise_or(bbs.black_king, bit))
+    }
+  })
 }
 
 pub fn turn(game: Game) -> player.Player {
@@ -307,10 +382,24 @@ pub fn piece_at(game: Game, square: square.Square) -> Result(piece.Piece, Nil) {
 }
 
 pub fn empty_at(game: Game, square: square.Square) -> Bool {
-  case piece_at(game, square) {
-    Ok(_) -> False
-    Error(_) -> True
+  let bit =
+    int.bitwise_shift_left(1, square.rank(square) * 8 + square.file(square))
+  {
+    game.bitboards.white_pawns
+    |> int.bitwise_or(game.bitboards.white_knights)
+    |> int.bitwise_or(game.bitboards.white_bishops)
+    |> int.bitwise_or(game.bitboards.white_rooks)
+    |> int.bitwise_or(game.bitboards.white_queens)
+    |> int.bitwise_or(game.bitboards.white_king)
+    |> int.bitwise_or(game.bitboards.black_pawns)
+    |> int.bitwise_or(game.bitboards.black_knights)
+    |> int.bitwise_or(game.bitboards.black_bishops)
+    |> int.bitwise_or(game.bitboards.black_rooks)
+    |> int.bitwise_or(game.bitboards.black_queens)
+    |> int.bitwise_or(game.bitboards.black_king)
+    |> int.bitwise_and(bit)
   }
+  == 0
 }
 
 pub fn find_piece(game: Game, piece: piece.Piece) -> List(square.Square) {
@@ -378,7 +467,7 @@ pub fn attackers(
         |> yielder.take_while(fn(x) { x != square })
         |> yielder.any(fn(x) {
           let assert Ok(x) = square.from_ox88(x)
-          dict.has_key(game.board, x)
+          !empty_at(game, x)
         })
         |> bool.negate
       }
@@ -648,6 +737,8 @@ pub fn apply(game: Game, move: Move) -> Result(Game, Nil) {
   let is_big_pawn = set.contains(flags, BigPawn)
   let is_capture = option.is_some(captured)
 
+  use from_piece <- result.try(piece_at(game, from))
+
   let next_en_passant_target_square = case is_big_pawn {
     True -> {
       let offset = case us {
@@ -715,63 +806,81 @@ pub fn apply(game: Game, move: Move) -> Result(Game, Nil) {
   }
 
   // Apply basic to/from
-  let next_board = {
+  let #(next_board, next_bitboards) = {
     // If pawn promotion, replace with new piece
     let become_piece = case promotion {
       Some(promotion_piece) -> piece.Piece(us, promotion_piece)
       None -> piece.Piece(us, piece)
     }
-    board(game)
-    |> dict.delete(from)
-    |> dict.insert(to, become_piece)
+    #(
+      game.board
+        |> dict.delete(from)
+        |> dict.insert(to, become_piece),
+      game.bitboards
+        |> bitboards_remove(from, from_piece)
+        |> bitboards_insert(to, become_piece),
+    )
   }
   // If it's en passant, we have to kill a different square too
-  use next_board <- result.try(case is_en_passant {
+  use #(next_board, next_bitboards) <- result.try(case is_en_passant {
     True -> {
       let offset = case us {
         player.Black -> -16
         player.White -> 16
       }
-      let ep_square = square.from_ox88(square.to_ox88(to) + offset)
-      ep_square
-      |> result.map(dict.delete(next_board, _))
+      use ep_square <- result.try(square.from_ox88(square.to_ox88(to) + offset))
+      use ep_piece <- result.try(piece_at(game, ep_square))
+
+      Ok(#(
+        dict.delete(next_board, ep_square),
+        bitboards_remove(next_bitboards, ep_square, ep_piece),
+      ))
     }
-    False -> Ok(next_board)
+    False -> Ok(#(next_board, next_bitboards))
   })
 
   // If castling, we have to move the rook too
-  use next_board <- result.try(case is_kingside_castle || is_queenside_castle {
-    False -> Ok(next_board)
-    True -> {
-      let castling_to_offset = case is_kingside_castle {
-        True -> -1
-        False -> 1
-      }
-      let castling_from_offset = case is_kingside_castle {
-        True -> 1
-        False -> -2
-      }
-      use castling_to_square <- result.try(square.from_ox88(
-        square.to_ox88(to) - castling_to_offset,
-      ))
-      use castling_from_square <- result.try(square.from_ox88(
-        square.to_ox88(to) + castling_from_offset,
-      ))
-      use castling_from_piece <- result.try(piece_at(game, castling_from_square))
+  use #(next_board, next_bitboards) <- result.try(
+    case is_kingside_castle || is_queenside_castle {
+      False -> Ok(#(next_board, next_bitboards))
+      True -> {
+        let castling_to_offset = case is_kingside_castle {
+          True -> -1
+          False -> 1
+        }
+        let castling_from_offset = case is_kingside_castle {
+          True -> 1
+          False -> -2
+        }
+        use castling_to_square <- result.try(square.from_ox88(
+          square.to_ox88(to) - castling_to_offset,
+        ))
+        use castling_from_square <- result.try(square.from_ox88(
+          square.to_ox88(to) + castling_from_offset,
+        ))
+        use castling_from_piece <- result.try(piece_at(
+          game,
+          castling_from_square,
+        ))
 
-      Ok(
-        next_board
-        |> dict.delete(castling_from_square)
-        |> dict.insert(castling_to_square, castling_from_piece),
-      )
-    }
-  })
+        Ok(#(
+          next_board
+            |> dict.delete(castling_from_square)
+            |> dict.insert(castling_to_square, castling_from_piece),
+          next_bitboards
+            |> bitboards_remove(castling_from_square, castling_from_piece)
+            |> bitboards_insert(castling_to_square, castling_from_piece),
+        ))
+      }
+    },
+  )
 
   // We better not have moved ourselves into check! That would disqualify this
   // move as being legal
   let g =
     Game(
       board: next_board,
+      bitboards: next_bitboards,
       active_color: next_player,
       castling_availability: next_castling_availability,
       en_passant_target_square: next_en_passant_target_square,
@@ -1277,6 +1386,89 @@ fn add_disambiguation_levels(l1: DisambiguationLevel, l2: DisambiguationLevel) {
 
     _, _ -> add_disambiguation_levels(l2, l1)
   }
+}
+
+fn bitboards_insert(bbs: Bitboards, square: square.Square, piece: piece.Piece) {
+  let bit =
+    int.bitwise_shift_left(1, square.rank(square) * 8 + square.file(square))
+  case piece {
+    piece.Piece(player.White, piece.Pawn) ->
+      Bitboards(..bbs, white_pawns: int.bitwise_or(bbs.white_pawns, bit))
+    piece.Piece(player.White, piece.Knight) ->
+      Bitboards(..bbs, white_knights: int.bitwise_or(bbs.white_knights, bit))
+    piece.Piece(player.White, piece.Bishop) ->
+      Bitboards(..bbs, white_bishops: int.bitwise_or(bbs.white_bishops, bit))
+    piece.Piece(player.White, piece.Rook) ->
+      Bitboards(..bbs, white_rooks: int.bitwise_or(bbs.white_rooks, bit))
+    piece.Piece(player.White, piece.Queen) ->
+      Bitboards(..bbs, white_queens: int.bitwise_or(bbs.white_queens, bit))
+    piece.Piece(player.White, piece.King) ->
+      Bitboards(..bbs, white_king: int.bitwise_or(bbs.white_king, bit))
+    piece.Piece(player.Black, piece.Pawn) ->
+      Bitboards(..bbs, black_pawns: int.bitwise_or(bbs.black_pawns, bit))
+    piece.Piece(player.Black, piece.Knight) ->
+      Bitboards(..bbs, black_knights: int.bitwise_or(bbs.black_knights, bit))
+    piece.Piece(player.Black, piece.Bishop) ->
+      Bitboards(..bbs, black_bishops: int.bitwise_or(bbs.black_bishops, bit))
+    piece.Piece(player.Black, piece.Rook) ->
+      Bitboards(..bbs, black_rooks: int.bitwise_or(bbs.black_rooks, bit))
+    piece.Piece(player.Black, piece.Queen) ->
+      Bitboards(..bbs, black_queens: int.bitwise_or(bbs.black_queens, bit))
+    piece.Piece(player.Black, piece.King) ->
+      Bitboards(..bbs, black_king: int.bitwise_or(bbs.black_king, bit))
+  }
+}
+
+fn bitboards_remove(bbs: Bitboards, square: square.Square, piece: piece.Piece) {
+  let bit =
+    int.bitwise_shift_left(1, square.rank(square) * 8 + square.file(square))
+    |> int.bitwise_not
+  case piece {
+    piece.Piece(player.White, piece.Pawn) ->
+      Bitboards(..bbs, white_pawns: int.bitwise_and(bbs.white_pawns, bit))
+    piece.Piece(player.White, piece.Knight) ->
+      Bitboards(..bbs, white_knights: int.bitwise_and(bbs.white_knights, bit))
+    piece.Piece(player.White, piece.Bishop) ->
+      Bitboards(..bbs, white_bishops: int.bitwise_and(bbs.white_bishops, bit))
+    piece.Piece(player.White, piece.Rook) ->
+      Bitboards(..bbs, white_rooks: int.bitwise_and(bbs.white_rooks, bit))
+    piece.Piece(player.White, piece.Queen) ->
+      Bitboards(..bbs, white_queens: int.bitwise_and(bbs.white_queens, bit))
+    piece.Piece(player.White, piece.King) ->
+      Bitboards(..bbs, white_king: int.bitwise_and(bbs.white_king, bit))
+    piece.Piece(player.Black, piece.Pawn) ->
+      Bitboards(..bbs, black_pawns: int.bitwise_and(bbs.black_pawns, bit))
+    piece.Piece(player.Black, piece.Knight) ->
+      Bitboards(..bbs, black_knights: int.bitwise_and(bbs.black_knights, bit))
+    piece.Piece(player.Black, piece.Bishop) ->
+      Bitboards(..bbs, black_bishops: int.bitwise_and(bbs.black_bishops, bit))
+    piece.Piece(player.Black, piece.Rook) ->
+      Bitboards(..bbs, black_rooks: int.bitwise_and(bbs.black_rooks, bit))
+    piece.Piece(player.Black, piece.Queen) ->
+      Bitboards(..bbs, black_queens: int.bitwise_and(bbs.black_queens, bit))
+    piece.Piece(player.Black, piece.King) ->
+      Bitboards(..bbs, black_king: int.bitwise_and(bbs.black_king, bit))
+  }
+}
+
+/// Don't use this! Try to use bitboards_remove instead. This is inefficient,
+/// but I'm leaving it in as a quick-n-dirty way of getting things done if we
+/// need to.
+///
+fn bitboards_remove_indiscriminately(bbs: Bitboards, square: square.Square) {
+  bbs
+  |> bitboards_remove(square, piece.Piece(player.White, piece.Pawn))
+  |> bitboards_remove(square, piece.Piece(player.White, piece.Knight))
+  |> bitboards_remove(square, piece.Piece(player.White, piece.Bishop))
+  |> bitboards_remove(square, piece.Piece(player.White, piece.Rook))
+  |> bitboards_remove(square, piece.Piece(player.White, piece.Queen))
+  |> bitboards_remove(square, piece.Piece(player.White, piece.King))
+  |> bitboards_remove(square, piece.Piece(player.Black, piece.Pawn))
+  |> bitboards_remove(square, piece.Piece(player.Black, piece.Knight))
+  |> bitboards_remove(square, piece.Piece(player.Black, piece.Bishop))
+  |> bitboards_remove(square, piece.Piece(player.Black, piece.Rook))
+  |> bitboards_remove(square, piece.Piece(player.Black, piece.Queen))
+  |> bitboards_remove(square, piece.Piece(player.Black, piece.King))
 }
 
 // BEGIN: Constants
