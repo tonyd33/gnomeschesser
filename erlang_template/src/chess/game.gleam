@@ -478,8 +478,14 @@ pub opaque type Move {
     piece: piece.PieceSymbol,
     captured: Option(piece.PieceSymbol),
     promotion: Option(piece.PieceSymbol),
+    castle: Option(Castle),
     flags: Set(MoveFlags),
   )
+}
+
+type MoveFlags {
+  EnPassant
+  BigPawn
 }
 
 pub fn move_piece(move: Move) {
@@ -487,11 +493,11 @@ pub fn move_piece(move: Move) {
 }
 
 pub fn move_is_capture(move: Move) -> Bool {
-  set.contains(move.flags, Capture)
+  option.is_some(move.captured)
 }
 
 pub fn move_is_promotion(move: Move) -> Bool {
-  set.contains(move.flags, Promotion)
+  option.is_some(move.promotion)
 }
 
 pub fn move_is_en_passant(move: Move) -> Bool {
@@ -499,11 +505,11 @@ pub fn move_is_en_passant(move: Move) -> Bool {
 }
 
 pub fn move_is_kingside_castle(move: Move) -> Bool {
-  set.contains(move.flags, KingsideCastle)
+  move.castle == Some(KingSide)
 }
 
 pub fn move_is_queenside_castle(move: Move) -> Bool {
-  set.contains(move.flags, QueensideCastle)
+  move.castle == Some(QueenSide)
 }
 
 pub fn move_is_big_pawn(move: Move) -> Bool {
@@ -520,8 +526,8 @@ pub fn move_piece_to_move(move: Move) -> piece.Piece {
 pub fn move_to_san(move: Move, game: Game) -> SAN {
   let all_moves = moves(game)
 
-  let is_kingside_castle = set.contains(move.flags, KingsideCastle)
-  let is_queenside_castle = set.contains(move.flags, QueensideCastle)
+  let is_kingside_castle = move.castle == Some(KingSide)
+  let is_queenside_castle = move.castle == Some(QueenSide)
 
   // SAN without # or +
   let undecorated_san = {
@@ -552,7 +558,7 @@ pub fn move_to_san(move: Move, game: Game) -> SAN {
         }
         |> add_disambiguation_levels(level)
       })
-    let is_capture = set.contains(move.flags, Capture)
+    let is_capture = option.is_some(move.captured)
 
     let piece_san = fn(piece) {
       case piece {
@@ -621,7 +627,7 @@ pub fn move_from_uci_lan(lan: String, game: Game) -> Result(Move, Nil) {
 /// moves created with `from_san` or `moves` with the same `game`.
 ///
 pub fn apply(game: Game, move: Move) -> Result(Game, Nil) {
-  let Move(us, from, to, piece, captured, promotion, flags) = move
+  let Move(us, from, to, piece, captured, promotion, castle, flags) = move
   let them = player.opponent(us)
 
   let fullmove_number = fullmove_number(game)
@@ -636,11 +642,11 @@ pub fn apply(game: Game, move: Move) -> Result(Game, Nil) {
   assert_move_sanity_checks(move, game)
   // #endif
 
-  let is_kingside_castle = set.contains(flags, KingsideCastle)
-  let is_queenside_castle = set.contains(flags, QueensideCastle)
+  let is_kingside_castle = castle == Some(KingSide)
+  let is_queenside_castle = castle == Some(QueenSide)
   let is_en_passant = set.contains(flags, EnPassant)
   let is_big_pawn = set.contains(flags, BigPawn)
-  let is_capture = set.contains(flags, Capture)
+  let is_capture = option.is_some(captured)
 
   let next_en_passant_target_square = case is_big_pawn {
     True -> {
@@ -803,7 +809,7 @@ fn find_player_king(
 /// crash. Use this only when debugging.
 ///
 fn assert_move_sanity_checks(move: Move, game: Game) -> Nil {
-  let Move(player, from, to, piece, captured, promotion, flags) = move
+  let Move(player, from, to, piece, captured, _, _, flags) = move
   let opponent = player.opponent(player)
 
   // It should be our turn
@@ -818,18 +824,6 @@ fn assert_move_sanity_checks(move: Move, game: Game) -> Nil {
       },
       fn(_) { Nil },
     )
-
-  // Promotion piece must match flag
-  let assert True = case promotion {
-    Some(_) -> set.contains(flags, Promotion)
-    None -> True
-  }
-
-  // Capture must match flag
-  let assert True = case captured {
-    Some(_) -> set.contains(flags, Capture)
-    None -> True
-  }
 
   // Capture must match actual piece
   let assert True = case captured {
@@ -850,16 +844,9 @@ fn assert_move_sanity_checks(move: Move, game: Game) -> Nil {
     None -> True
   }
 
-  // Can't be kingside *and* queenside castle at the same time!
-  let assert True =
-    bool.nand(
-      set.contains(flags, KingsideCastle),
-      set.contains(flags, QueensideCastle),
-    )
-
   // is_en_passant implies is_capture
   let assert True =
-    !set.contains(flags, EnPassant) || set.contains(flags, Capture)
+    !set.contains(flags, EnPassant) || option.is_some(captured)
 
   Nil
 }
@@ -963,7 +950,8 @@ fn king_castle_moves(game: Game) {
       piece: piece.King,
       captured: None,
       promotion: None,
-      flags: set.from_list([KingsideCastle]),
+      castle: Some(KingSide),
+      flags: set.from_list([]),
     ))
   }
   let queenside = {
@@ -1012,7 +1000,8 @@ fn king_castle_moves(game: Game) {
       piece: piece.King,
       captured: None,
       promotion: None,
-      flags: set.from_list([QueensideCastle]),
+      castle: Some(QueenSide),
+      flags: set.new()
     ))
   }
 
@@ -1037,6 +1026,7 @@ fn pawn_moves(game: Game, from: square.Square) {
             piece: piece.Pawn,
             captured: None,
             promotion: None,
+            castle: None,
             flags: set.new(),
           ))
         False -> Error(Nil)
@@ -1066,6 +1056,7 @@ fn pawn_moves(game: Game, from: square.Square) {
             piece: piece.Pawn,
             captured: None,
             promotion: None,
+            castle: None,
             flags: set.from_list([BigPawn]),
           ))
         False -> Error(Nil)
@@ -1086,7 +1077,8 @@ fn pawn_moves(game: Game, from: square.Square) {
               piece: piece.Pawn,
               captured: Some(piece.symbol),
               promotion: None,
-              flags: set.from_list([Capture]),
+              castle: None,
+              flags: set.new()
             ))
           }
           _ -> Error(Nil)
@@ -1115,7 +1107,8 @@ fn pawn_moves(game: Game, from: square.Square) {
           piece: piece.Pawn,
           captured: Some(piece.Pawn),
           promotion: None,
-          flags: set.from_list([EnPassant, Capture]),
+          castle: None,
+          flags: set.from_list([EnPassant]),
         ))
       })
 
@@ -1149,7 +1142,8 @@ fn pawn_moves(game: Game, from: square.Square) {
         piece: move.piece,
         captured: move.captured,
         promotion: Some(candidate),
-        flags: move.flags |> set.insert(Promotion),
+        castle: move.castle,
+        flags: move.flags
       )
     })
   }
@@ -1217,6 +1211,7 @@ fn collect_ray_moves_inner(
                   piece: from_piece,
                   captured: None,
                   promotion: None,
+                  castle: None,
                   flags: set.new(),
                 ),
               ]),
@@ -1236,7 +1231,8 @@ fn collect_ray_moves_inner(
                   piece: from_piece,
                   captured: Some(piece.symbol),
                   promotion: None,
-                  flags: set.from_list([Capture]),
+                  castle: None,
+                  flags: set.new()
                 ),
               ])
           }
@@ -1244,14 +1240,6 @@ fn collect_ray_moves_inner(
   }
 }
 
-type MoveFlags {
-  Capture
-  Promotion
-  EnPassant
-  KingsideCastle
-  QueensideCastle
-  BigPawn
-}
 
 /// How ambiguous a move is. Used when converting to SAN.
 /// https://en.wikipedia.org/wiki/Algebraic_notation_(chess)#Disambiguating_moves
@@ -1264,7 +1252,7 @@ type DisambiguationLevel {
   // Rank does, we need this extra enum member for the
   // `add_disambiguation_levels` algebra to work out correctly
   GenerallyAmbiguous
-  // There is aMoveFlagsme piece on the same rank moving to the same
+  // There is a piece on the same rank moving to the same
   // square
   Rank
   // There is a move with the same piece on the same file moving to the same
