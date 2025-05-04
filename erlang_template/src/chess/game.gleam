@@ -728,7 +728,7 @@ pub fn apply(game: Game, move: Move) -> Result(Game, Nil) {
   // When actually competing though, we don't want the program to crash, even
   // if something's incorrect though.
   // #ifdef DEV
-  assert_move_sanity_checks(move, game)
+  // assert_move_sanity_checks(move, game)
   // #endif
 
   let is_kingside_castle = castle == Some(KingSide)
@@ -816,9 +816,17 @@ pub fn apply(game: Game, move: Move) -> Result(Game, Nil) {
       game.board
         |> dict.delete(from)
         |> dict.insert(to, become_piece),
-      game.bitboards
-        |> bitboards_remove(from, from_piece)
-        |> bitboards_insert(to, become_piece),
+      case captured {
+        Some(captured) ->
+          game.bitboards
+          |> bitboards_remove(from, from_piece)
+          |> bitboards_remove(to, piece.Piece(them, captured))
+          |> bitboards_insert(to, become_piece)
+        None ->
+          game.bitboards
+          |> bitboards_remove(from, from_piece)
+          |> bitboards_insert(to, become_piece)
+      },
     )
   }
   // If it's en passant, we have to kill a different square too
@@ -888,6 +896,10 @@ pub fn apply(game: Game, move: Move) -> Result(Game, Nil) {
       fullmove_number: next_fullmove_number,
       history: next_history,
     )
+
+  // #ifdef DEV
+  // assert_board_bitboards_consistency(g)
+  // #endif
   use #(our_king_square, _) <- result.try(find_player_king(g, us))
   case is_attacked(g, our_king_square, them) {
     True -> Error(Nil)
@@ -912,6 +924,15 @@ fn find_player_king(
     let #(_, piece) = x
     piece.symbol == piece.King && piece.player == player
   })
+}
+
+/// Assert that the board matches the bitboard.
+/// For debugging only!! We want to noisily fail if we detect an inconsistency.
+///
+fn assert_board_bitboards_consistency(game: Game) {
+  let bbs_board = board_to_bitboards(game.board)
+  let assert True = bbs_board == game.bitboards
+  Nil
 }
 
 /// Validate a move is internally consistent. If it's not, the program will
@@ -1389,8 +1410,11 @@ fn add_disambiguation_levels(l1: DisambiguationLevel, l2: DisambiguationLevel) {
 }
 
 fn bitboards_insert(bbs: Bitboards, square: square.Square, piece: piece.Piece) {
-  let bit =
-    int.bitwise_shift_left(1, square.rank(square) * 8 + square.file(square))
+  let rank = square.rank(square)
+  let file = square.file(square)
+
+  let idx = rank * 8 + file
+  let bit = int.bitwise_shift_left(1, idx)
   case piece {
     piece.Piece(player.White, piece.Pawn) ->
       Bitboards(..bbs, white_pawns: int.bitwise_or(bbs.white_pawns, bit))
