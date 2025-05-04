@@ -76,11 +76,7 @@ fn create_robot_thread() -> Subject(UpdateMessage) {
         process.new_selector()
           |> process.selecting(robot_subject, function.identity)
           |> process.selecting(search_subject, fn(search) {
-            UpdateBestMove(
-              search.best_move,
-              search.game,
-              search.transposition,
-            )
+            UpdateBestMove(search.best_move, search.game, search.transposition)
           }),
       )
     },

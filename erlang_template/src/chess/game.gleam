@@ -845,8 +845,7 @@ fn assert_move_sanity_checks(move: Move, game: Game) -> Nil {
   }
 
   // is_en_passant implies is_capture
-  let assert True =
-    !set.contains(flags, EnPassant) || option.is_some(captured)
+  let assert True = !set.contains(flags, EnPassant) || option.is_some(captured)
 
   Nil
 }
@@ -1001,7 +1000,7 @@ fn king_castle_moves(game: Game) {
       captured: None,
       promotion: None,
       castle: Some(QueenSide),
-      flags: set.new()
+      flags: set.new(),
     ))
   }
 
@@ -1078,7 +1077,7 @@ fn pawn_moves(game: Game, from: square.Square) {
               captured: Some(piece.symbol),
               promotion: None,
               castle: None,
-              flags: set.new()
+              flags: set.new(),
             ))
           }
           _ -> Error(Nil)
@@ -1143,7 +1142,7 @@ fn pawn_moves(game: Game, from: square.Square) {
         captured: move.captured,
         promotion: Some(candidate),
         castle: move.castle,
-        flags: move.flags
+        flags: move.flags,
       )
     })
   }
@@ -1232,14 +1231,13 @@ fn collect_ray_moves_inner(
                   captured: Some(piece.symbol),
                   promotion: None,
                   castle: None,
-                  flags: set.new()
+                  flags: set.new(),
                 ),
               ])
           }
       }
   }
 }
-
 
 /// How ambiguous a move is. Used when converting to SAN.
 /// https://en.wikipedia.org/wiki/Algebraic_notation_(chess)#Disambiguating_moves
@@ -1252,7 +1250,7 @@ type DisambiguationLevel {
   // Rank does, we need this extra enum member for the
   // `add_disambiguation_levels` algebra to work out correctly
   GenerallyAmbiguous
-  // There is a piece on the same rank moving to the same
+  // There is a move with the piece on the same rank moving to the same
   // square
   Rank
   // There is a move with the same piece on the same file moving to the same

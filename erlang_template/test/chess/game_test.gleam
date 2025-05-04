@@ -818,4 +818,3 @@ pub fn to_fen_starting_position_test() {
   to_fen(game)
   |> should.equal(four_knights_scotch_fen)
 }
-
