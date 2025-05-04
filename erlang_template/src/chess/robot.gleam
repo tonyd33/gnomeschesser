@@ -13,7 +13,7 @@ pub opaque type Robot {
 type UpdateMessage {
   UpdateFen(fen: String, failed_moves: List(game.SAN))
   UpdateBestMove(
-    move: game.SAN,
+    move: game.Move,
     game: game.GameHash,
     memo: search.TranspositionTable,
   )
@@ -23,7 +23,7 @@ type UpdateMessage {
 type RobotState {
   RobotState(
     game: game.Game,
-    best_move: Option(game.SAN),
+    best_move: Option(game.Move),
     searcher: #(process.Pid, Subject(search.SearchMessage)),
     memo: search.TranspositionTable,
   )
@@ -77,7 +77,7 @@ fn create_robot_thread() -> Subject(UpdateMessage) {
           |> process.selecting(robot_subject, function.identity)
           |> process.selecting(search_subject, fn(search) {
             UpdateBestMove(
-              game.move_to_san(search.best_move),
+              search.best_move,
               search.game,
               search.transposition,
             )
@@ -102,13 +102,13 @@ fn main_loop(state: RobotState, update: process.Selector(UpdateMessage)) {
     GetBestMove(response) -> {
       case state.best_move {
         Some(best_move) -> {
-          process.send(response, Ok(best_move))
+          let san = game.move_to_san(best_move, state.game)
+          process.send(response, Ok(san))
 
           echo "requested best move"
           // TODO: generate the new game in a much better way
           echo best_move
-          let assert Ok(move) = game.move_from_san(best_move, state.game)
-          let assert Ok(new_game) = game.apply(state.game, move)
+          let assert Ok(new_game) = game.apply(state.game, best_move)
 
           update_game(state, new_game)
         }
@@ -145,7 +145,6 @@ fn update_game(state: RobotState, game: game.Game) -> RobotState {
         best_move
       Error(Nil) -> None
     }
-    |> option.map(game.move_to_san)
 
   // TODO: don't restart searcher if it's the same game
   process.kill(search_pid)
