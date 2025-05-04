@@ -1,5 +1,6 @@
 import chess/game
 import chess/search
+import chess/zobrist
 import gleam/dict
 import gleam/erlang/process.{type Subject}
 import gleam/function
@@ -14,7 +15,7 @@ type UpdateMessage {
   UpdateFen(fen: String, failed_moves: List(game.SAN))
   UpdateBestMove(
     move: game.Move,
-    game: game.GameHash,
+    game: zobrist.Hash,
     memo: search.TranspositionTable,
   )
   GetBestMove(response: Subject(Result(game.SAN, Nil)))
@@ -116,7 +117,7 @@ fn main_loop(state: RobotState, update: process.Selector(UpdateMessage)) {
     }
     // If we receive an update for the best move, just update the state
     UpdateBestMove(best_move, game, memo) -> {
-      case game == game.to_hash(state.game) {
+      case game == zobrist.hash(state.game) {
         True -> RobotState(..state, best_move: Some(best_move), memo:)
         False -> {
           echo "received best move for incorrect game"
@@ -131,17 +132,17 @@ fn main_loop(state: RobotState, update: process.Selector(UpdateMessage)) {
 
 fn update_game(state: RobotState, game: game.Game) -> RobotState {
   let RobotState(_game, _best_move, #(search_pid, search_subject), memo) = state
+  // TODO: don't restart searcher if it's the same game state
+  process.kill(search_pid)
 
   let new_search_pid = search.new(game, memo, search_subject)
 
   // TODO: check for collision, then add to state
-  let best_move = case dict.get(memo.dict, game.to_hash(game)) {
+  let best_move = case dict.get(memo.dict, zobrist.hash(game)) {
     Ok(search.TranspositionEntry(_, search.Evaluation(_, _, best_move), _)) ->
       best_move
     Error(Nil) -> None
   }
 
-  // TODO: don't restart searcher if it's the same game
-  process.kill(search_pid)
   RobotState(game, best_move, #(new_search_pid, search_subject), memo)
 }

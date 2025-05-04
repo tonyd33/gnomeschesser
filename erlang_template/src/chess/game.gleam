@@ -32,9 +32,6 @@ pub opaque type Game {
   )
 }
 
-pub type GameHash =
-  Int
-
 type Bitboards {
   Bitboards(
     white_pawns: Int,
@@ -50,21 +47,6 @@ type Bitboards {
     black_queens: Int,
     black_king: Int,
   )
-}
-
-pub fn to_hash(game: Game) -> GameHash {
-  // TODO: use proper zobrist hashing
-  let assert Ok(hash) =
-    [
-      dict.to_list(game.board)
-        |> list.map(erlang.phash2),
-      list.map(game.castling_availability, erlang.phash2),
-      [erlang.phash2(game.active_color)],
-      [erlang.phash2(game.en_passant_target_square)],
-    ]
-    |> list.flatten
-    |> list.reduce(int.bitwise_exclusive_or)
-  hash
 }
 
 pub const start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"

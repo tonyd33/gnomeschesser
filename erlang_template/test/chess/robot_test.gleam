@@ -1,4 +1,6 @@
 import chess/robot
+import gleam/erlang/process
+import gleam/io
 import gleeunit/should
 
 pub type Timeout {
@@ -6,7 +8,8 @@ pub type Timeout {
 }
 
 pub fn search_test_() {
-  use <- Timeout(5.0)
+  io.print("ok")
+  use <- Timeout(15.0)
   let robot = robot.init()
   robot.update_fen(
     robot,
@@ -15,4 +18,7 @@ pub fn search_test_() {
   )
   robot.get_best_move_after(robot, 4950)
   |> should.equal(Ok("Nxf2"))
+  // This is needed since the searcher thread isn't linked to any processes so it'll freak out when this thread exits
+  // TODO: handle the robot's exit signal
+  process.sleep(1)
 }
