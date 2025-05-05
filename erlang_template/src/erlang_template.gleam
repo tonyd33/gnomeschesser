@@ -2,12 +2,8 @@ import chess/game
 import chess/player
 import chess/robot
 import gleam/dynamic/decode
-import gleam/erlang
-import gleam/erlang/atom
 import gleam/erlang/process
 import gleam/json
-import gleam/list
-import gleam/string
 import mist
 import wisp.{type Request, type Response}
 import wisp/wisp_mist

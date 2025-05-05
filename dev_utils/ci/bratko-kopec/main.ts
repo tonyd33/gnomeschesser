@@ -16,7 +16,13 @@ async function askRobot(fen: string): Promise<string> {
 }
 
 type TestCase = { fen: string; bms: string[]; id: string };
-type TestResult = { ok: boolean; id: string; expected: string; got: string };
+type TestResult = {
+  ok: boolean;
+  id: string;
+  input: string;
+  expected: string;
+  got: string;
+};
 
 const testCases: TestCase[] = [
   {
@@ -153,6 +159,7 @@ async function runTestCase(
   return {
     ok: tc.bms.includes(robotResponse),
     id: tc.id,
+    input: tc.fen,
     expected: tc.bms.join("/"),
     got: robotResponse,
   };
@@ -163,7 +170,7 @@ function generateReport(results: TestResult[]): string {
   const numFailed = results.length - numPassed;
   const failedTableRows = results
     .filter((x) => !x.ok)
-    .map((x) => `| ${x.id} | ${x.expected} | ${x.got} |`)
+    .map((x) => `| ${x.id} | ${x.input} | ${x.expected} | ${x.got} |`)
     .join("\n");
 
   const failureDetails = `
@@ -171,8 +178,8 @@ function generateReport(results: TestResult[]): string {
 
 For more information on each test id, see the [Bratko-Kopec test wiki](https://www.chessprogramming.org/Bratko-Kopec_Test#EPD-Record) and see the tests at \`dev_utils/ci/bratko-kopec/main.ts\`
 
-| id | expected | got |
-| -- |    --    | --  |
+| id | input | expected | got |
+| -- |  --   |    --    | --  |
 ${failedTableRows}
 `;
   let output = `# 📝 Bratko-Kopec Report
@@ -192,7 +199,13 @@ ${failedTableRows}
   return output;
 }
 
-async function main() {
+type RobotHandle = {
+  robot: child_process.ChildProcessWithoutNullStreams;
+  pid: number;
+  exitGracefully: () => Promise<never>;
+};
+
+async function startRobot(silent): Promise<RobotHandle> {
   const robot = child_process.spawn("gleam", ["run"], {
     cwd: path.join(
       new URL(".", import.meta.url).pathname,
@@ -208,30 +221,32 @@ async function main() {
   // Make sure this typechecks as a number for later
   const robotPid = robot.pid;
 
-  robot.stdout.on(
-    "data",
-    (data) =>
-      process.stderr.write(
-        data
-          .toString()
-          .split("\n")
-          .filter((line: string) => line.length > 0)
-          .map((line: string) => `[ROBOT STDOUT]: ${line}`)
-          .join("\n") + "\n",
-      ),
-  );
-  robot.stderr.on(
-    "data",
-    (data) =>
-      process.stderr.write(
-        data
-          .toString()
-          .split("\n")
-          .filter((line: string) => line.length > 0)
-          .map((line: string) => `[ROBOT STDERR]: ${line}`)
-          .join("\n") + "\n",
-      ),
-  );
+  if (!silent) {
+    robot.stdout.on(
+      "data",
+      (data) =>
+        process.stderr.write(
+          data
+            .toString()
+            .split("\n")
+            .filter((line: string) => line.length > 0)
+            .map((line: string) => `[ROBOT STDOUT]: ${line}`)
+            .join("\n") + "\n",
+        ),
+    );
+    robot.stderr.on(
+      "data",
+      (data) =>
+        process.stderr.write(
+          data
+            .toString()
+            .split("\n")
+            .filter((line: string) => line.length > 0)
+            .map((line: string) => `[ROBOT STDERR]: ${line}`)
+            .join("\n") + "\n",
+        ),
+    );
+  }
 
   const errorIfClosedEarly = () => {
     process.stdout.write("Robot failed to start\n");
@@ -259,11 +274,36 @@ async function main() {
   process.on("SIGINT", exitGracefully);
   process.on("SIGTERM", exitGracefully);
 
+  return {
+    robot,
+    pid: robotPid,
+    exitGracefully,
+  };
+}
+
+async function killRobot({ robot, pid, exitGracefully }: RobotHandle) {
+  process.removeListener("SIGINT", exitGracefully);
+  process.removeListener("SIGTERM", exitGracefully);
+
+  const death = new Promise((resolve) => robot.on("close", resolve));
+  const timeout = new Promise<void>((resolve) => setTimeout(resolve, 5000));
+  // Kill process group. Works only on unix
+  process.kill(-pid, "SIGKILL");
+  await Promise.race([death, timeout]);
+}
+
+async function main() {
+  const silent = !!process.argv.find((arg) => arg === "--silent");
   try {
     const results: TestResult[] = [];
+    // We really shouldn't have to reboot the robot every time, but we don't
+    // have a proper interface with communicating with the robot to reset its
+    // state yet
     for (const tc of testCases) {
+      const rh = await startRobot(silent);
       process.stderr.write(`⏰ RUN: ${tc.id}\n`);
       const result = await runTestCase(tc);
+      await killRobot(rh);
       results.push(result);
       if (result.ok) {
         process.stderr.write(`✅ OK\n`);
@@ -279,8 +319,6 @@ async function main() {
     } else {
       process.stderr.write("Unknown error\n");
     }
-  } finally {
-    await exitGracefully();
   }
 }
 

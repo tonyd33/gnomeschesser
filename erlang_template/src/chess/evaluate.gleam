@@ -7,11 +7,14 @@ import gleam/int
 import gleam/list
 import gleam_community/maths
 
-// Evaluates the score of the game position
-// +1 is white
-// -1 is black
-// Scaled from -1 to +1
+/// Evaluates the score of the game position
+/// > 0 means white is winning
+/// < 0 means black is winning
+/// Scaled from -1 to +1
+///
 pub fn game(game: game.Game) -> Float {
+  let us = game.turn(game)
+
   // evaluate material score
   let material_score =
     game.pieces(game)
@@ -34,8 +37,38 @@ pub fn game(game: game.Game) -> Float {
     |> int.to_float
     |> float.divide(1000.0)
   }
+
+  // TODO: DON'T CALL MOVES HERE! IT'S (relatively) EXPENSIVE STILL!
+  //       We may have the callee pass in the moves since the callee is likely
+  //       to calculate this anyway. Or, we may create another function in
+  //       `game` to optimize for our use case
+  let moves = game.moves(game)
+
+  // Calculate a [mobility score](https://www.chessprogramming.org/Mobility).
+  //
+  // Roughly, we want to capture the idea that "the more choices we have at
+  // our disposal, the stronger our position."
+  //
+  // This is implemented in a similar fashion: for every move, it counts
+  // positively towards the mobility score and is weighted by the piece.
+  let assert Ok(mobility_score) =
+    moves
+    |> list.fold(0.0, fn(mobility_score, move) {
+      let s = case game.move_piece(move) {
+        piece.Pawn -> 0.0
+        piece.Knight -> 0.0
+        piece.Bishop -> 458_758.0
+        piece.Rook -> 262_147.0
+        piece.Queen -> 196_611.0
+        piece.King -> -10.0
+      }
+      mobility_score +. s
+    })
+    |> float.multiply(player(us))
+    |> float.divide(100_000.0)
+
   // combine scores with weight
-  { material_score *. 0.95 +. pqst_score *. 0.05 }
+  { material_score *. 0.9 +. mobility_score *. 0.05 +. pqst_score *. 0.05 }
   // scale from -1.0 to 1.0
   |> fn(score) { maths.atan(score /. 4.0) *. 2.0 /. maths.pi() }
 }
