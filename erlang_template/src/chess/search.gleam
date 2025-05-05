@@ -4,14 +4,11 @@ import gleam/bool
 import gleam/dict
 import gleam/erlang/process
 import gleam/float
-import gleam/int
-import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/order
 import gleam/pair
 import gleam/result
-import util/yielder
 
 pub type SearchMessage {
   SearchUpdate(

@@ -483,6 +483,10 @@ pub opaque type Move {
   )
 }
 
+pub fn move_piece(move: Move) {
+  move.piece
+}
+
 pub fn move_is_capture(move: Move) -> Bool {
   set.contains(move.flags, Capture)
 }
