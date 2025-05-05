@@ -38,8 +38,19 @@ pub fn game(game: game.Game) -> Float {
     |> float.divide(1000.0)
   }
 
-  // TODO: DON'T CALL MOVES HERE! IT'S (relatively) EXPENSIVE!
+  // TODO: DON'T CALL MOVES HERE! IT'S (relatively) EXPENSIVE STILL!
+  //       We may have the callee pass in the moves since the callee is likely
+  //       to calculate this anyway. Or, we may create another function in
+  //       `game` to optimize for our use case
   let moves = game.moves(game)
+
+  // Calculate a [mobility score](https://www.chessprogramming.org/Mobility).
+  //
+  // Roughly, we want to capture the idea that "the more choices we have at
+  // our disposal, the stronger our position."
+  //
+  // This is implemented in a similar fashion: for every move, it counts
+  // positively towards the mobility score and is weighted by the piece.
   let assert Ok(mobility_score) =
     moves
     |> list.fold(0.0, fn(mobility_score, move) {

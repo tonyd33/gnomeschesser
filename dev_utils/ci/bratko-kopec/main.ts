@@ -205,7 +205,7 @@ type RobotHandle = {
   exitGracefully: () => Promise<never>;
 };
 
-async function startRobot(): Promise<RobotHandle> {
+async function startRobot(silent): Promise<RobotHandle> {
   const robot = child_process.spawn("gleam", ["run"], {
     cwd: path.join(
       new URL(".", import.meta.url).pathname,
@@ -221,30 +221,32 @@ async function startRobot(): Promise<RobotHandle> {
   // Make sure this typechecks as a number for later
   const robotPid = robot.pid;
 
-  robot.stdout.on(
-    "data",
-    (data) =>
-      process.stderr.write(
-        data
-          .toString()
-          .split("\n")
-          .filter((line: string) => line.length > 0)
-          .map((line: string) => `[ROBOT STDOUT]: ${line}`)
-          .join("\n") + "\n",
-      ),
-  );
-  robot.stderr.on(
-    "data",
-    (data) =>
-      process.stderr.write(
-        data
-          .toString()
-          .split("\n")
-          .filter((line: string) => line.length > 0)
-          .map((line: string) => `[ROBOT STDERR]: ${line}`)
-          .join("\n") + "\n",
-      ),
-  );
+  if (!silent) {
+    robot.stdout.on(
+      "data",
+      (data) =>
+        process.stderr.write(
+          data
+            .toString()
+            .split("\n")
+            .filter((line: string) => line.length > 0)
+            .map((line: string) => `[ROBOT STDOUT]: ${line}`)
+            .join("\n") + "\n",
+        ),
+    );
+    robot.stderr.on(
+      "data",
+      (data) =>
+        process.stderr.write(
+          data
+            .toString()
+            .split("\n")
+            .filter((line: string) => line.length > 0)
+            .map((line: string) => `[ROBOT STDERR]: ${line}`)
+            .join("\n") + "\n",
+        ),
+    );
+  }
 
   const errorIfClosedEarly = () => {
     process.stdout.write("Robot failed to start\n");
@@ -291,13 +293,14 @@ async function killRobot({ robot, pid, exitGracefully }: RobotHandle) {
 }
 
 async function main() {
+  const silent = !!process.argv.find((arg) => arg === "--silent");
   try {
     const results: TestResult[] = [];
     // We really shouldn't have to reboot the robot every time, but we don't
     // have a proper interface with communicating with the robot to reset its
     // state yet
     for (const tc of testCases) {
-      const rh = await startRobot();
+      const rh = await startRobot(silent);
       process.stderr.write(`⏰ RUN: ${tc.id}\n`);
       const result = await runTestCase(tc);
       await killRobot(rh);
