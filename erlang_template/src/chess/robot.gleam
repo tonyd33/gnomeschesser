@@ -4,6 +4,7 @@ import gleam/dict
 import gleam/erlang/process.{type Subject}
 import gleam/function
 import gleam/option.{type Option, None, Some}
+import gleam/time/timestamp
 
 pub opaque type Robot {
   Robot(main_subject: Subject(UpdateMessage))
@@ -59,7 +60,7 @@ fn create_robot_thread() -> Subject(UpdateMessage) {
       let assert Ok(game): Result(game.Game, Nil) =
         game.load_fen(game.start_fen)
 
-      let memo = search.transposition_table_new()
+      let memo = search.tt_new(timestamp.system_time())
       // The search_subject will be used by searchers to update new best moves found
       let search_subject: Subject(search.SearchMessage) = process.new_subject()
 
@@ -140,7 +141,8 @@ fn update_game(state: RobotState, game: game.Game) -> RobotState {
   // TODO: check for collision, then add to state
   let best_move =
     case dict.get(memo.dict, game.to_hash(game)) {
-      Ok(#(_, search.Evaluation(_, _, best_move))) -> best_move
+      Ok(search.TranspositionEntry(_, search.Evaluation(_, _, best_move), _)) ->
+        best_move
       Error(Nil) -> None
     }
     |> option.map(game.move_to_san)
