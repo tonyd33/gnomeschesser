@@ -9,6 +9,7 @@ import gleam/option.{type Option, None, Some}
 import gleam/order
 import gleam/pair
 import gleam/result
+import util/state.{type State, State}
 
 pub type SearchMessage {
   SearchUpdate(
@@ -19,11 +20,74 @@ pub type SearchMessage {
 }
 
 pub type TranspositionTable {
-  TranspositionTable(dict: dict.Dict(game.GameHash, #(Depth, Evaluation)))
+  TranspositionTable(
+    dict: dict.Dict(game.GameHash, TranspositionEntry),
+    nodes_searched: Int,
+  )
+}
+
+pub type TranspositionEntry {
+  TranspositionEntry(depth: Depth, eval: Evaluation, last_accessed: Int)
 }
 
 pub fn transposition_table_new() {
-  TranspositionTable(dict.new())
+  TranspositionTable(dict.new(), 0)
+}
+
+pub fn transposition_table_get(tt: TranspositionTable, hash: game.GameHash) {
+  let rv = dict.get(tt.dict, hash)
+  let dict_ = case rv {
+    Ok(v) ->
+      dict.insert(
+        tt.dict,
+        hash,
+        TranspositionEntry(..v, last_accessed: tt.nodes_searched),
+      )
+    _ -> tt.dict
+  }
+  let tt_ = TranspositionTable(..tt, dict: dict_)
+
+  #(rv, tt_)
+}
+
+pub fn tt_get(
+  hash: game.GameHash,
+) -> State(TranspositionTable, Result(TranspositionEntry, Nil)) {
+  State(run: fn(tt: TranspositionTable) {
+    let rv = dict.get(tt.dict, hash)
+    let dict_ = case rv {
+      Ok(v) ->
+        dict.insert(
+          tt.dict,
+          hash,
+          TranspositionEntry(..v, last_accessed: tt.nodes_searched),
+        )
+      _ -> tt.dict
+    }
+    let tt_ = TranspositionTable(..tt, dict: dict_)
+
+    #(rv, tt_)
+  })
+}
+
+pub fn tt_inc() -> State(TranspositionTable, Nil) {
+  State(run: fn(tt) {
+    #(Nil, TranspositionTable(..tt, nodes_searched: tt.nodes_searched + 1))
+  })
+}
+
+pub fn tt_prune() -> State(TranspositionTable, Nil) {
+  state.return(Nil)
+  // todo
+}
+
+pub fn transposition_table_prune(tt: TranspositionTable, max_recency: Int) {
+  TranspositionTable(
+    ..tt,
+    dict: dict.filter(tt.dict, fn(_, v) {
+      tt.nodes_searched - v.last_accessed <= max_recency
+    }),
+  )
 }
 
 pub type Depth =
@@ -69,7 +133,9 @@ fn search(
 ) -> Nil {
   // perform the search at each depth, the negamax function will handle sorting and caching
   let #(best_evaluation, transposition) =
-    negamax_alphabeta_failsoft(game, current_depth, -1.0, 1.0, transposition)
+    negamax_alphabeta_failsoft_state(game, current_depth, -1.0, 1.0).run(
+      transposition,
+    )
   let Evaluation(_score, _node_type, best_move) = best_evaluation
 
   case best_move {
@@ -105,7 +171,7 @@ fn negamax_alphabeta_failsoft(
   let cached_evaluation =
     dict.get(transposition.dict, game_hash)
     |> result.then(fn(x) {
-      let #(cached_depth, evaluation) = x
+      let TranspositionEntry(cached_depth, evaluation, _) = x
       use <- bool.guard(cached_depth < depth, Error(Nil))
       case evaluation {
         Evaluation(_, PV, _) -> Ok(evaluation)
@@ -122,10 +188,20 @@ fn negamax_alphabeta_failsoft(
   let #(evaluation, transposition) =
     do_negamax_alphabeta_failsoft(game, depth, alpha, beta, transposition)
 
+  let nodes_searched = transposition.nodes_searched + 1
   let transposition =
     TranspositionTable(
-      dict: dict.insert(transposition.dict, game_hash, #(depth, evaluation)),
+      dict: dict.insert(
+        transposition.dict,
+        game_hash,
+        TranspositionEntry(depth, evaluation, nodes_searched),
+      ),
+      nodes_searched: nodes_searched,
     )
+  let transposition = case dict.size(transposition.dict) > 1000 {
+    True -> transposition_table_prune(transposition, 500)
+    False -> transposition
+  }
 
   #(evaluation, transposition)
 }
@@ -192,6 +268,111 @@ fn do_negamax_alphabeta_failsoft(
   #(best_evaluation, transposition)
 }
 
+fn negamax_alphabeta_failsoft_state(
+  game: game.Game,
+  depth: Depth,
+  alpha: Float,
+  beta: Float,
+) -> State(TranspositionTable, Evaluation) {
+  let game_hash = game.to_hash(game)
+
+  // TODO: check for cache collision here
+  use cached_evaluation <- state.bind(
+    tt_get(game_hash)
+    |> state.fmap(
+      result.then(_, fn(x) {
+        let TranspositionEntry(cached_depth, evaluation, _) = x
+        use <- bool.guard(cached_depth < depth, Error(Nil))
+        case evaluation {
+          Evaluation(_, PV, _) -> Ok(evaluation)
+          Evaluation(score, Cut, _) if score >=. beta -> Ok(evaluation)
+          Evaluation(score, All, _) if score <=. alpha -> Ok(evaluation)
+          _ -> Error(Nil)
+        }
+      }),
+    ),
+  )
+
+  use <- result.lazy_unwrap(result.map(cached_evaluation, state.return))
+
+  use evaluation <- state.bind(do_negamax_alphabeta_failsoft_state(
+    game,
+    depth,
+    alpha,
+    beta,
+  ))
+  use _ <- state.bind(tt_inc())
+  use _ <- state.bind(tt_prune())
+
+  state.return(evaluation)
+}
+
+fn do_negamax_alphabeta_failsoft_state(
+  game: game.Game,
+  depth: Depth,
+  alpha: Float,
+  beta: Float,
+) -> State(TranspositionTable, Evaluation) {
+  use <- bool.lazy_guard(depth <= 0, fn() {
+    let score = quiesce(game, alpha, beta)
+    state.return(Evaluation(score:, node_type: PV, best_move: None))
+  })
+
+  use move_game_list <- state.bind(state.gets(sorted_moves(game, _)))
+
+  use <- bool.lazy_guard(list.is_empty(move_game_list), fn() {
+    // if checkmate/stalemate
+    let score = case game.is_check(game) {
+      True -> -1.0
+      False -> 0.0
+    }
+    state.return(Evaluation(score:, node_type: PV, best_move: None))
+  })
+
+  // We iterate through every move and perform minimax to evaluate said move
+  // accumulator keeps track of best evaluation while updating the node type
+  use #(best_evaluation, _alpha) <- state.bind(
+    state.fold_until_s(
+      move_game_list,
+      #(Evaluation(-1.0, PV, None), alpha),
+      fn(acc, move_game) {
+        {
+          let #(best_evaluation, alpha) = acc
+          let #(move, game) = move_game
+          use evaluation <- state.bind(negamax_alphabeta_failsoft_state(
+            game,
+            depth - 1,
+            float.negate(beta),
+            float.negate(alpha),
+          ))
+          let evaluation =
+            Evaluation(..evaluation_negate(evaluation), best_move: Some(move))
+          let best_evaluation = case best_evaluation.score <. evaluation.score {
+            True -> evaluation
+            False -> best_evaluation
+          }
+          let alpha = float.max(alpha, evaluation.score)
+
+          state.return(#(evaluation, best_evaluation, alpha))
+        }
+        |> state.fmap(fn(x) {
+          let #(evaluation, best_evaluation, alpha) = x
+          case evaluation.score >=. beta {
+            True -> {
+              let best_evaluation =
+                Evaluation(..best_evaluation, node_type: Cut)
+              list.Stop(#(best_evaluation, alpha))
+            }
+            False -> list.Continue(#(best_evaluation, alpha))
+          }
+        })
+      },
+    ),
+  )
+
+  state.return(best_evaluation)
+}
+
 // returns the score of the current game while checking
 // every capture and check
 // scores are from the perspective of the active player
@@ -239,7 +420,8 @@ fn sorted_moves(
     // negate the evaluation so that it's relative to our current game
     let assert Ok(new_game) = game.apply(game, move)
     let evaluation = case dict.get(transposition.dict, game.to_hash(new_game)) {
-      Ok(#(_, evaluation)) -> Some(evaluation_negate(evaluation))
+      Ok(TranspositionEntry(_, evaluation, _)) ->
+        Some(evaluation_negate(evaluation))
       Error(Nil) -> None
     }
     #(#(move, new_game), evaluation)

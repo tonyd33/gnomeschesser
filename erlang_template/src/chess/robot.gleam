@@ -140,7 +140,8 @@ fn update_game(state: RobotState, game: game.Game) -> RobotState {
   // TODO: check for collision, then add to state
   let best_move =
     case dict.get(memo.dict, game.to_hash(game)) {
-      Ok(#(_, search.Evaluation(_, _, best_move))) -> best_move
+      Ok(search.TranspositionEntry(_, search.Evaluation(_, _, best_move), _)) ->
+        best_move
       Error(Nil) -> None
     }
     |> option.map(game.move_to_san)
