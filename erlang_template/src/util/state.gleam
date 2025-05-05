@@ -46,6 +46,15 @@ pub fn get() -> State(s, s) {
   State(run: fn(s) { #(s, s) })
 }
 
+pub fn put(s: s) -> State(s, Nil) {
+  State(run: fn(_) { #(Nil, s) })
+}
+
+pub fn modify(f: fn(s) -> s) -> State(s, Nil) {
+  use s <- do(get())
+  put(f(s))
+}
+
 /// Like `list.fold_until`, but accumulates effects on the state monad
 ///
 pub fn fold_until_s(
