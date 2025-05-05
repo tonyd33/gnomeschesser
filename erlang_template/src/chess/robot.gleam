@@ -135,12 +135,11 @@ fn update_game(state: RobotState, game: game.Game) -> RobotState {
   let new_search_pid = search.new(game, memo, search_subject)
 
   // TODO: check for collision, then add to state
-  let best_move =
-    case dict.get(memo.dict, game.to_hash(game)) {
-      Ok(search.TranspositionEntry(_, search.Evaluation(_, _, best_move), _)) ->
-        best_move
-      Error(Nil) -> None
-    }
+  let best_move = case dict.get(memo.dict, game.to_hash(game)) {
+    Ok(search.TranspositionEntry(_, search.Evaluation(_, _, best_move), _)) ->
+      best_move
+    Error(Nil) -> None
+  }
 
   // TODO: don't restart searcher if it's the same game
   process.kill(search_pid)
