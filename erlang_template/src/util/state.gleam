@@ -36,8 +36,14 @@ pub fn bind(state: State(s, a), f: fn(a) -> State(s, b)) -> State(s, b) {
   })
 }
 
+pub const do = bind
+
 pub fn gets(f: fn(s) -> a) -> State(s, a) {
   State(run: fn(s) { #(f(s), s) })
+}
+
+pub fn get() -> State(s, s) {
+  State(run: fn(s) { #(s, s) })
 }
 
 /// Like `list.fold_until`, but accumulates effects on the state monad
@@ -57,4 +63,8 @@ pub fn fold_until_s(
       }
     }
   }
+}
+
+pub fn go(state: State(s, a), initial: s) {
+  state.run(initial)
 }
