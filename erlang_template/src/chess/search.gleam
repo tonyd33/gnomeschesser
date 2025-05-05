@@ -314,7 +314,7 @@ pub type TranspositionTable {
 
 /// We don't let the transposition table get bigger than this
 ///
-const max_tt_size = 10_000
+const max_tt_size = 20_000
 
 /// When pruning the transposition table, how recent of entries do we decide to
 /// keep?
