@@ -60,7 +60,7 @@ fn create_robot_thread() -> Subject(UpdateMessage) {
       let assert Ok(game): Result(game.Game, Nil) =
         game.load_fen(game.start_fen)
 
-      let memo = search.transposition_table_new(timestamp.system_time())
+      let memo = search.tt_new(timestamp.system_time())
       // The search_subject will be used by searchers to update new best moves found
       let search_subject: Subject(search.SearchMessage) = process.new_subject()
 

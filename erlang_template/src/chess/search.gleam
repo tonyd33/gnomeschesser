@@ -23,150 +23,8 @@ pub type SearchMessage {
   )
 }
 
-pub type TranspositionTable {
-  TranspositionTable(
-    dict: dict.Dict(game.GameHash, TranspositionEntry),
-    nodes_searched: Int,
-    init_time: timestamp.Timestamp,
-  )
-}
-
-pub type TranspositionEntry {
-  TranspositionEntry(depth: Depth, eval: Evaluation, last_accessed: Int)
-}
-
-type SearchContext(a) =
-  State(TranspositionTable, a)
-
-pub fn transposition_table_new(now: timestamp.Timestamp) {
-  TranspositionTable(dict.new(), 0, now)
-}
-
-pub fn transposition_table_get(tt: TranspositionTable, hash: game.GameHash) {
-  let rv = dict.get(tt.dict, hash)
-  let dict_ = case rv {
-    Ok(v) ->
-      dict.insert(
-        tt.dict,
-        hash,
-        TranspositionEntry(..v, last_accessed: tt.nodes_searched),
-      )
-    _ -> tt.dict
-  }
-  let tt_ = TranspositionTable(..tt, dict: dict_)
-
-  #(rv, tt_)
-}
-
-pub fn transposition_table_insert(
-  tt: TranspositionTable,
-  hash: game.GameHash,
-  e: #(Depth, Evaluation),
-) {
-  let #(depth, eval) = e
-  TranspositionTable(
-    ..tt,
-    dict: dict.insert(
-      tt.dict,
-      hash,
-      TranspositionEntry(depth, eval, tt.nodes_searched),
-    ),
-  )
-}
-
-pub fn transposition_table_inc(tt: TranspositionTable) {
-  TranspositionTable(..tt, nodes_searched: tt.nodes_searched + 1)
-}
-
-pub fn transposition_table_prune(tt: TranspositionTable, max_recency: Int) {
-  TranspositionTable(
-    ..tt,
-    dict: dict.filter(tt.dict, fn(_, v) {
-      tt.nodes_searched - v.last_accessed <= max_recency
-    }),
-  )
-}
-
-pub fn tt_get(
-  hash: game.GameHash,
-) -> SearchContext(Result(TranspositionEntry, Nil)) {
-  State(run: fn(tt: TranspositionTable) {
-    let rv = dict.get(tt.dict, hash)
-    let dict_ = case rv {
-      Ok(v) ->
-        dict.insert(
-          tt.dict,
-          hash,
-          TranspositionEntry(..v, last_accessed: tt.nodes_searched),
-        )
-      _ -> tt.dict
-    }
-    let tt_ = TranspositionTable(..tt, dict: dict_)
-
-    #(rv, tt_)
-  })
-}
-
-pub fn tt_inc() -> SearchContext(Nil) {
-  use tt <- state.modify
-  TranspositionTable(..tt, nodes_searched: tt.nodes_searched + 1)
-}
-
-pub fn tt_insert(
-  hash: game.GameHash,
-  e: #(Depth, Evaluation),
-) -> SearchContext(Nil) {
-  let #(depth, eval) = e
-  use tt <- state.modify
-  TranspositionTable(
-    ..tt,
-    dict: dict.insert(
-      tt.dict,
-      hash,
-      TranspositionEntry(depth, eval, tt.nodes_searched),
-    ),
-  )
-}
-
-pub fn tt_prune(max_recency) -> SearchContext(Nil) {
-  use tt <- state.modify
-  TranspositionTable(
-    ..tt,
-    dict: dict.filter(tt.dict, fn(_, v) {
-      tt.nodes_searched - v.last_accessed <= max_recency
-    }),
-  )
-}
-
-fn tt_nps(now: timestamp.Timestamp) -> SearchContext(Float) {
-  use tt: TranspositionTable <- state.do(state.get())
-  let dt = timestamp.difference(tt.init_time, now)
-  let assert Ok(nps) =
-    tt.nodes_searched
-    |> int.to_float
-    |> float.divide(duration.to_seconds(dt))
-
-  state.return(nps)
-}
-
-pub fn tt_info(now: timestamp.Timestamp) -> SearchContext(String) {
-  use tt: TranspositionTable <- state.do(state.get())
-  use nps <- state.do(tt_nps(now))
-  {
-    ""
-    <> "Stats:\n"
-    <> "  NPS: "
-    <> { nps |> float.to_precision(2) |> float.to_string }
-    <> "\n"
-    <> "  Nodes: "
-    <> { tt.nodes_searched |> int.to_string }
-    <> "\n"
-    <> "  Size: "
-    <> { dict.size(tt.dict) |> int.to_string }
-    <> "\n"
-  }
-  |> state.return
-}
+type SearchContext =
+  TranspositionTable
 
 pub type Depth =
   Int
@@ -194,7 +52,7 @@ fn evaluation_negate(evaluation: Evaluation) -> Evaluation {
   Evaluation(..evaluation, score: float.negate(evaluation.score), node_type:)
 }
 
-pub const new = new_nostate
+pub const new = new_state
 
 pub fn new_state(
   game: game.Game,
@@ -208,33 +66,24 @@ pub fn new_state(
   )
 }
 
-pub fn new_nostate(
-  game: game.Game,
-  transposition: TranspositionTable,
-  search_subject: process.Subject(SearchMessage),
-) -> process.Pid {
-  // Spawns a searcher thread, NOT linked so we can kill it whenever
-  process.start(
-    fn() { search_nostate(search_subject, game, 1, transposition) },
-    False,
-  )
-}
-
 fn search_state(
   search_subject: process.Subject(SearchMessage),
   game: game.Game,
   current_depth: Depth,
-) -> SearchContext(Nil) {
+) -> State(SearchContext, Nil) {
   let now = timestamp.system_time()
   // perform the search at each depth, the negamax function will handle sorting and caching
-  use best_evaluation <- state.do(negamax_alphabeta_failsoft_state(
+  use best_evaluation <- state.do(negamax_alphabeta_failsoft(
     game,
     current_depth,
     -1.0,
     1.0,
   ))
-  use _ <- state.do(tt_prune(1000))
-  use info <- state.do(tt_info(now))
+  use _ <- state.do(tt_prune_by(
+    when: LargerThan(max_tt_size),
+    do: ByRecency(max_tt_recency),
+  ))
+  use info <- state.do(tt_info_s(now))
   use tt <- state.do(state.get())
   let Evaluation(_score, _node_type, best_move) = best_evaluation
 
@@ -254,157 +103,26 @@ fn search_state(
   search_state(search_subject, game, current_depth + 1)
 }
 
-fn search_nostate(
-  search_subject: process.Subject(SearchMessage),
-  game: game.Game,
-  current_depth: Depth,
-  transposition: TranspositionTable,
-) -> Nil {
-  let now = timestamp.system_time()
-  // perform the search at each depth, the negamax function will handle sorting and caching
-  let #(best_evaluation, transposition) =
-    negamax_alphabeta_failsoft(game, current_depth, -1.0, 1.0, transposition)
-
-  let #(_, transposition) = tt_prune(1000) |> state.go(transposition)
-  let #(info, transposition) = tt_info(now) |> state.go(transposition)
-  io.print(info)
-
-  let Evaluation(_score, _node_type, best_move) = best_evaluation
-
-  case best_move {
-    Some(best_move) ->
-      process.send(
-        search_subject,
-        SearchUpdate(best_move, game.to_hash(game), transposition),
-      )
-    None -> Nil
-  }
-  search_nostate(search_subject, game, current_depth + 1, transposition)
-}
-
-// https://www.chessprogramming.org/Alpha-Beta#Negamax_Framework
-// returns the score of the current game searched at depth
-// uses negamax version of alpha beta pruning with failsoft
-// scores are from the perspective of the active player
-// If white's turn, +1 is white's advantage
-// If black's turn, +1 is black's advantage
-// alpha is the "best" score for active player
-// beta is the "best" score for non-active player
-
+/// https://www.chessprogramming.org/Alpha-Beta#Negamax_Framework
+/// returns the score of the current game searched at depth
+/// uses negamax version of alpha beta pruning with failsoft
+/// scores are from the perspective of the active player
+/// If white's turn, +1 is white's advantage
+/// If black's turn, +1 is black's advantage
+/// alpha is the "best" score for active player
+/// beta is the "best" score for non-active player
+///
 fn negamax_alphabeta_failsoft(
   game: game.Game,
   depth: Depth,
   alpha: Float,
   beta: Float,
-  transposition: TranspositionTable,
-) -> #(Evaluation, TranspositionTable) {
-  let game_hash = game.to_hash(game)
-
-  // TODO: check for cache collision here
-  let #(cached_evaluation, transposition) =
-    transposition_table_get(transposition, game_hash)
-
-  let cached_evaluation =
-    cached_evaluation
-    |> result.then(fn(x) {
-      let TranspositionEntry(cached_depth, evaluation, _) = x
-      use <- bool.guard(cached_depth < depth, Error(Nil))
-      case evaluation {
-        Evaluation(_, PV, _) -> Ok(evaluation)
-        Evaluation(score, Cut, _) if score >=. beta -> Ok(evaluation)
-        Evaluation(score, All, _) if score <=. alpha -> Ok(evaluation)
-        _ -> Error(Nil)
-      }
-    })
-
-  use <- result.lazy_unwrap(
-    result.map(cached_evaluation, pair.new(_, transposition)),
-  )
-
-  let #(evaluation, transposition) =
-    do_negamax_alphabeta_failsoft(game, depth, alpha, beta, transposition)
-
-  let transposition =
-    transposition_table_insert(transposition, game_hash, #(depth, evaluation))
-  let transposition = transposition_table_inc(transposition)
-  let transposition = transposition_table_prune(transposition, 1000)
-
-  #(evaluation, transposition)
-}
-
-fn do_negamax_alphabeta_failsoft(
-  game: game.Game,
-  depth: Depth,
-  alpha: Float,
-  beta: Float,
-  transposition: TranspositionTable,
-) -> #(Evaluation, TranspositionTable) {
-  use <- bool.lazy_guard(depth <= 0, fn() {
-    let score = quiesce(game, alpha, beta)
-    #(Evaluation(score:, node_type: PV, best_move: None), transposition)
-  })
-
-  let move_game_list = sorted_moves(game, transposition)
-
-  use <- bool.lazy_guard(list.is_empty(move_game_list), fn() {
-    // if checkmate/stalemate
-    let score = case game.is_check(game) {
-      True -> -1.0
-      False -> 0.0
-    }
-    #(Evaluation(score:, node_type: PV, best_move: None), transposition)
-  })
-
-  // We iterate through every move and perform minimax to evaluate said move
-  // accumulator keeps track of best evaluation while updating the node type
-  let #(best_evaluation, _alpha, transposition) =
-    list.fold_until(
-      move_game_list,
-      #(Evaluation(-1.0, PV, None), alpha, transposition),
-      fn(acc, move_game) {
-        let #(best_evaluation, alpha, transposition) = acc
-        let #(move, game) = move_game
-        let #(evaluation, transposition) =
-          negamax_alphabeta_failsoft(
-            game,
-            depth - 1,
-            float.negate(beta),
-            float.negate(alpha),
-            transposition,
-          )
-        let evaluation =
-          Evaluation(..evaluation_negate(evaluation), best_move: Some(move))
-        let best_evaluation = case best_evaluation.score <. evaluation.score {
-          True -> evaluation
-          False -> best_evaluation
-        }
-        let alpha = float.max(alpha, evaluation.score)
-
-        // beta-cutoff
-        case evaluation.score >=. beta {
-          True -> {
-            let best_evaluation = Evaluation(..best_evaluation, node_type: Cut)
-            list.Stop(#(best_evaluation, alpha, transposition))
-          }
-          False -> list.Continue(#(best_evaluation, alpha, transposition))
-        }
-      },
-    )
-
-  #(best_evaluation, transposition)
-}
-
-fn negamax_alphabeta_failsoft_state(
-  game: game.Game,
-  depth: Depth,
-  alpha: Float,
-  beta: Float,
-) -> SearchContext(Evaluation) {
+) -> State(SearchContext, Evaluation) {
   let game_hash = game.to_hash(game)
 
   // TODO: check for cache collision here
   use cached_evaluation <- state.do(
-    tt_get(game_hash)
+    tt_get_s(game_hash)
     |> state.fmap(
       result.then(_, fn(x) {
         let TranspositionEntry(cached_depth, evaluation, _) = x
@@ -421,25 +139,28 @@ fn negamax_alphabeta_failsoft_state(
 
   use <- result.lazy_unwrap(result.map(cached_evaluation, state.return))
 
-  use evaluation <- state.do(do_negamax_alphabeta_failsoft_state(
+  use evaluation <- state.do(do_negamax_alphabeta_failsoft(
     game,
     depth,
     alpha,
     beta,
   ))
 
-  use _ <- state.do(tt_insert(game_hash, #(depth, evaluation)))
-  use _ <- state.do(tt_inc())
-  use _ <- state.do(tt_prune(1000))
+  use _ <- state.do(tt_insert_s(game_hash, #(depth, evaluation)))
+  use _ <- state.do(tt_inc_s())
+  use _ <- state.do(tt_prune_by(
+    when: LargerThan(max_tt_size),
+    do: ByRecency(max_tt_recency),
+  ))
   state.return(evaluation)
 }
 
-fn do_negamax_alphabeta_failsoft_state(
+fn do_negamax_alphabeta_failsoft(
   game: game.Game,
   depth: Depth,
   alpha: Float,
   beta: Float,
-) -> SearchContext(Evaluation) {
+) -> State(SearchContext, Evaluation) {
   use <- bool.lazy_guard(depth <= 0, fn() {
     let score = quiesce(game, alpha, beta)
     state.return(Evaluation(score:, node_type: PV, best_move: None))
@@ -466,7 +187,7 @@ fn do_negamax_alphabeta_failsoft_state(
         {
           let #(best_evaluation, alpha) = acc
           let #(move, game) = move_game
-          use evaluation <- state.do(negamax_alphabeta_failsoft_state(
+          use evaluation <- state.do(negamax_alphabeta_failsoft(
             game,
             depth - 1,
             float.negate(beta),
@@ -573,4 +294,162 @@ fn sorted_moves(
     }
   })
   |> list.map(pair.first)
+}
+
+/// A table to cache calculation results.
+/// Additionally, we store extra metadata to allow us to prune the table if it
+/// gets too large.
+///
+pub type TranspositionTable {
+  TranspositionTable(
+    dict: dict.Dict(game.GameHash, TranspositionEntry),
+    // Honestly, this attribute doesn't really belong in here. it belongs more
+    // in `SearchContext`, but... whatever.
+    nodes_searched: Int,
+    // Same with this. The only reason we store this is so calculate the
+    // number of nodes searched per second (nps).
+    init_time: timestamp.Timestamp,
+  )
+}
+
+/// We don't let the transposition table get bigger than this
+///
+const max_tt_size = 10_000
+
+/// When pruning the transposition table, how recent of entries do we decide to
+/// keep?
+///
+const max_tt_recency = 5000
+
+/// We also store "when" an entry was last accessed so we can prune it if need be.
+/// "when" should be any monotonic non-decreasing measure; time is an obvious
+/// choice, but the number of nodes searched serves us just as well.
+///
+pub type TranspositionEntry {
+  TranspositionEntry(depth: Depth, eval: Evaluation, last_accessed: Int)
+}
+
+/// When should we prune the transposition table?
+///
+pub type TranspositionPolicy {
+  Indiscriminately
+  LargerThan(max_size: Int)
+}
+
+/// How should we prune the transposition table?
+///
+pub type TranspositionRemediation {
+  ByRecency(max_recency: Int)
+}
+
+pub fn tt_new(now: timestamp.Timestamp) {
+  TranspositionTable(dict.new(), 0, now)
+}
+
+fn tt_nps(tt: TranspositionTable, now: timestamp.Timestamp) -> Float {
+  let dt = timestamp.difference(tt.init_time, now)
+  let assert Ok(nps) =
+    tt.nodes_searched
+    |> int.to_float
+    |> float.divide(duration.to_seconds(dt))
+
+  nps
+}
+
+fn tt_info(tt: TranspositionTable, now: timestamp.Timestamp) -> String {
+  let nps = tt_nps(tt, now)
+  ""
+  <> "Stats:\n"
+  <> "  NPS: "
+  <> { nps |> float.to_precision(2) |> float.to_string }
+  <> "\n"
+  <> "  Nodes: "
+  <> { tt.nodes_searched |> int.to_string }
+  <> "\n"
+  <> "  Size: "
+  <> { dict.size(tt.dict) |> int.to_string }
+  <> "\n"
+}
+
+pub fn tt_info_s(now: timestamp.Timestamp) {
+  state.gets(tt_info(_, now))
+}
+
+pub fn tt_get_s(
+  hash: game.GameHash,
+) -> State(TranspositionTable, Result(TranspositionEntry, Nil)) {
+  State(run: fn(tt: TranspositionTable) {
+    let rv = dict.get(tt.dict, hash)
+    let dict_ = case rv {
+      Ok(v) ->
+        dict.insert(
+          tt.dict,
+          hash,
+          TranspositionEntry(..v, last_accessed: tt.nodes_searched),
+        )
+      _ -> tt.dict
+    }
+    let tt_ = TranspositionTable(..tt, dict: dict_)
+
+    #(rv, tt_)
+  })
+}
+
+pub fn tt_inc_s() -> State(TranspositionTable, Nil) {
+  use tt <- state.modify
+  TranspositionTable(..tt, nodes_searched: tt.nodes_searched + 1)
+}
+
+pub fn tt_insert_s(
+  hash: game.GameHash,
+  e: #(Depth, Evaluation),
+) -> State(TranspositionTable, Nil) {
+  let #(depth, eval) = e
+  use tt <- state.modify
+  TranspositionTable(
+    ..tt,
+    dict: dict.insert(
+      tt.dict,
+      hash,
+      TranspositionEntry(depth, eval, tt.nodes_searched),
+    ),
+  )
+}
+
+fn tt_policy_met(tt: TranspositionTable, policy: TranspositionPolicy) -> Bool {
+  case policy {
+    Indiscriminately -> True
+    LargerThan(ms) -> dict.size(tt.dict) > ms
+  }
+}
+
+fn tt_remediate(tt: TranspositionTable, remedy: TranspositionRemediation) {
+  case remedy {
+    ByRecency(mr) ->
+      TranspositionTable(
+        ..tt,
+        dict: dict.filter(tt.dict, fn(_, v) {
+          tt.nodes_searched - v.last_accessed <= mr
+        }),
+      )
+  }
+}
+
+fn tt_remediate_s(
+  remedy: TranspositionRemediation,
+) -> State(TranspositionTable, Nil) {
+  use tt <- state.modify
+  tt_remediate(tt, remedy)
+}
+
+pub fn tt_prune_by(
+  when policy: TranspositionPolicy,
+  do remedy: TranspositionRemediation,
+) -> State(TranspositionTable, Nil) {
+  use met <- state.do(state.gets(tt_policy_met(_, policy)))
+
+  case met {
+    True -> tt_remediate_s(remedy)
+    False -> state.return(Nil)
+  }
 }
