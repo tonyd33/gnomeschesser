@@ -182,47 +182,43 @@ fn do_negamax_alphabeta_failsoft(
 
   // We iterate through every move and perform minimax to evaluate said move
   // accumulator keeps track of best evaluation while updating the node type
-  use #(best_evaluation, _alpha) <- state.do(
-    state.fold_until_s(
-      move_game_list,
-      #(Evaluation(-1.0, PV, None), alpha),
-      fn(acc, move_game) {
-        {
-          let #(best_evaluation, alpha) = acc
-          let #(move, game) = move_game
-          use evaluation <- state.do(negamax_alphabeta_failsoft(
-            game,
-            depth - 1,
-            float.negate(beta),
-            float.negate(alpha),
-          ))
-          let evaluation =
-            Evaluation(..evaluation_negate(evaluation), best_move: Some(move))
-          let best_evaluation = case best_evaluation.score <. evaluation.score {
-            True -> evaluation
-            False -> best_evaluation
-          }
-          let alpha = float.max(alpha, evaluation.score)
-
-          state.return(#(evaluation, best_evaluation, alpha))
+  state.fold_until_s(
+    move_game_list,
+    #(Evaluation(-1.0, PV, None), alpha),
+    fn(acc, move_game) {
+      {
+        let #(best_evaluation, alpha) = acc
+        let #(move, game) = move_game
+        use evaluation <- state.do(negamax_alphabeta_failsoft(
+          game,
+          depth - 1,
+          float.negate(beta),
+          float.negate(alpha),
+        ))
+        let evaluation =
+          Evaluation(..evaluation_negate(evaluation), best_move: Some(move))
+        let best_evaluation = case best_evaluation.score <. evaluation.score {
+          True -> evaluation
+          False -> best_evaluation
         }
-        |> state.fmap(fn(x) {
-          // beta-cutoff
-          let #(evaluation, best_evaluation, alpha) = x
-          case evaluation.score >=. beta {
-            True -> {
-              let best_evaluation =
-                Evaluation(..best_evaluation, node_type: Cut)
-              list.Stop(#(best_evaluation, alpha))
-            }
-            False -> list.Continue(#(best_evaluation, alpha))
-          }
-        })
-      },
-    ),
-  )
+        let alpha = float.max(alpha, evaluation.score)
 
-  state.return(best_evaluation)
+        state.return(#(evaluation, best_evaluation, alpha))
+      }
+      |> state.fmap(fn(x) {
+        // beta-cutoff
+        let #(evaluation, best_evaluation, alpha) = x
+        case evaluation.score >=. beta {
+          True -> {
+            let best_evaluation = Evaluation(..best_evaluation, node_type: Cut)
+            list.Stop(#(best_evaluation, alpha))
+          }
+          False -> list.Continue(#(best_evaluation, alpha))
+        }
+      })
+    },
+  )
+  |> state.fmap(fn(x) { x.0 })
 }
 
 // returns the score of the current game while checking
@@ -237,26 +233,28 @@ fn quiesce(game: game.Game, alpha: Float, beta: Float) -> Float {
   use <- bool.guard(score >=. beta, score)
   let alpha = float.max(alpha, score)
 
-  let move_game_list =
-    game.pseudolegal_moves(game)
-    |> list.filter_map(fn(move) {
-      game.apply(game, move)
-      |> result.map(fn(new_game) { #(move, new_game) })
-    })
   let #(best_score, _) =
-    move_game_list
-    |> list.filter(fn(move_game) {
-      let #(move, _new_game) = move_game
-      game.move_is_capture(move)
-    })
-    |> list.fold_until(#(score, alpha), fn(acc, move_game) {
-      let #(_move, new_game) = move_game
-      let #(best_score, alpha) = acc
-      let score =
-        float.negate(quiesce(new_game, float.negate(beta), float.negate(alpha)))
+    game.pseudolegal_moves(game)
+    |> list.fold_until(#(score, alpha), fn(acc, move) {
+      // If game isn't capture, continue
+      use <- bool.guard(!game.move_is_capture(move), list.Continue(acc))
+      {
+        // If game failed to apply, short circuit to continuing
+        use new_game <- result.try(game.apply(game, move))
+        let #(best_score, alpha) = acc
+        let score =
+          float.negate(quiesce(
+            new_game,
+            float.negate(beta),
+            float.negate(alpha),
+          ))
 
-      use <- bool.guard(score >=. beta, list.Stop(#(score, alpha)))
-      list.Continue(#(float.max(best_score, score), float.max(alpha, score)))
+        use <- bool.guard(score >=. beta, Ok(list.Stop(#(score, alpha))))
+        Ok(
+          list.Continue(#(float.max(best_score, score), float.max(alpha, score))),
+        )
+      }
+      |> result.unwrap(list.Continue(acc))
     })
   best_score
 }
@@ -271,6 +269,7 @@ fn sorted_moves(
     // retrieve the cached transposition table data
     // negate the evaluation so that it's relative to our current game
     use new_game <- result.try(game.apply(game, move))
+    // TODO: Make this stateful and update the transposition table
     let evaluation = case dict.get(transposition.dict, zobrist.hash(new_game)) {
       Ok(TranspositionEntry(_, evaluation, _)) ->
         Some(evaluation_negate(evaluation))
