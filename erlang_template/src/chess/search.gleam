@@ -53,26 +53,31 @@ fn evaluation_negate(evaluation: Evaluation) -> Evaluation {
   Evaluation(..evaluation, score: float.negate(evaluation.score), node_type:)
 }
 
-pub const new = new_state
-
-pub fn new_state(
+pub fn new(
   game: game.Game,
   transposition: TranspositionTable,
   search_subject: process.Subject(SearchMessage),
 ) -> process.Pid {
   // Spawns a searcher thread, NOT linked so we can kill it whenever
   process.start(
-    fn() { state.go(search_state(search_subject, game, 1), transposition) },
+    fn() {
+      {
+        let now = timestamp.system_time()
+        use _ <- state.do(tt_zero(now))
+        search(search_subject, game, 1)
+      }
+      |> state.go(transposition)
+    },
     True,
   )
 }
 
-fn search_state(
+fn search(
   search_subject: process.Subject(SearchMessage),
   game: game.Game,
   current_depth: Depth,
 ) -> State(SearchContext, Nil) {
-  let now = timestamp.system_time()
+  echo current_depth
   // perform the search at each depth, the negamax function will handle sorting and caching
   use best_evaluation <- state.do(negamax_alphabeta_failsoft(
     game,
@@ -84,7 +89,9 @@ fn search_state(
     when: LargerThan(max_tt_size),
     do: ByRecency(max_tt_recency),
   ))
+  let now = timestamp.system_time()
   use info <- state.do(tt_info_s(now))
+
   use tt <- state.do(state.get())
 
   // IO actions
@@ -96,7 +103,7 @@ fn search_state(
   // TODO: use a logging library for this
   io.print_error(info)
 
-  search_state(search_subject, game, current_depth + 1)
+  search(search_subject, game, current_depth + 1)
 }
 
 /// https://www.chessprogramming.org/Alpha-Beta#Negamax_Framework
@@ -231,10 +238,10 @@ fn quiesce(game: game.Game, alpha: Float, beta: Float) -> Float {
   let alpha = float.max(alpha, score)
 
   let move_game_list =
-    game.moves(game)
-    |> list.map(fn(move) {
-      let assert Ok(new_game) = game.apply(game, move)
-      #(move, new_game)
+    game.pseudolegal_moves(game)
+    |> list.filter_map(fn(move) {
+      game.apply(game, move)
+      |> result.map(fn(new_game) { #(move, new_game) })
     })
   let #(best_score, _) =
     move_game_list
@@ -259,17 +266,17 @@ fn sorted_moves(
   game: game.Game,
   transposition: TranspositionTable,
 ) -> List(#(game.Move, game.Game)) {
-  game.moves(game)
-  |> list.map(fn(move) {
+  game.pseudolegal_moves(game)
+  |> list.filter_map(fn(move) {
     // retrieve the cached transposition table data
     // negate the evaluation so that it's relative to our current game
-    let assert Ok(new_game) = game.apply(game, move)
-    let evaluation = case dict.get(transposition.dict, zobrist.hash(game)) {
+    use new_game <- result.try(game.apply(game, move))
+    let evaluation = case dict.get(transposition.dict, zobrist.hash(new_game)) {
       Ok(TranspositionEntry(_, evaluation, _)) ->
         Some(evaluation_negate(evaluation))
       Error(Nil) -> None
     }
-    #(#(move, new_game), evaluation)
+    Ok(#(#(move, new_game), evaluation))
   })
   // "smallest" elements get sorted first
   |> list.sort(fn(a, b) {
@@ -302,6 +309,8 @@ pub type TranspositionTable {
     // Honestly, this attribute doesn't really belong in here. it belongs more
     // in `SearchContext`, but... whatever.
     nodes_searched: Int,
+    // TODO: Docs
+    checkpoint: Int,
     // Same with this. The only reason we store this is so calculate the
     // number of nodes searched per second (nps).
     init_time: timestamp.Timestamp,
@@ -310,12 +319,12 @@ pub type TranspositionTable {
 
 /// We don't let the transposition table get bigger than this
 ///
-const max_tt_size = 20_000
+const max_tt_size = 40_000
 
 /// When pruning the transposition table, how recent of entries do we decide to
 /// keep?
 ///
-const max_tt_recency = 5000
+const max_tt_recency = 20_000
 
 /// We also store "when" an entry was last accessed so we can prune it if need be.
 /// "when" should be any monotonic non-decreasing measure; time is an obvious
@@ -339,28 +348,38 @@ pub type TranspositionRemediation {
 }
 
 pub fn tt_new(now: timestamp.Timestamp) {
-  TranspositionTable(dict.new(), 0, now)
+  TranspositionTable(dict.new(), 0, 0, now)
 }
 
 fn tt_nps(tt: TranspositionTable, now: timestamp.Timestamp) -> Float {
-  let dt = timestamp.difference(tt.init_time, now)
-  let assert Ok(nps) =
-    tt.nodes_searched
-    |> int.to_float
-    |> float.divide(duration.to_seconds(dt))
-
-  nps
+  let dt = timestamp.difference(tt.init_time, now) |> duration.to_seconds
+  case dt {
+    0.0 -> 0.0
+    _ -> {
+      let assert Ok(nps) =
+        { tt.nodes_searched - tt.checkpoint }
+        |> int.to_float
+        |> float.divide(dt)
+      nps
+    }
+  }
 }
 
 fn tt_info(tt: TranspositionTable, now: timestamp.Timestamp) -> String {
   let nps = tt_nps(tt, now)
   ""
-  <> "Stats:\n"
+  <> "Transposition Table Stats:\n"
   <> "  NPS: "
   <> { nps |> float.to_precision(2) |> float.to_string }
   <> "\n"
   <> "  Nodes: "
   <> { tt.nodes_searched |> int.to_string }
+  <> "\n"
+  <> "  Checkpoint: "
+  <> { tt.checkpoint |> int.to_string }
+  <> "\n"
+  <> "  DN: "
+  <> { { tt.nodes_searched - tt.checkpoint } |> int.to_string }
   <> "\n"
   <> "  Size: "
   <> { dict.size(tt.dict) |> int.to_string }
@@ -448,4 +467,14 @@ pub fn tt_prune_by(
     True -> tt_remediate_s(remedy)
     False -> state.return(Nil)
   }
+}
+
+/// "Zero" out the transposition table's log so that the next time we try
+/// to get its stats, they're calculated with respect to the current state.
+/// In particular, this is used when we want to reset the initial time for
+/// the NPS measure.
+///
+pub fn tt_zero(now: timestamp.Timestamp) {
+  use tt <- state.modify
+  TranspositionTable(..tt, init_time: now, checkpoint: tt.nodes_searched)
 }

@@ -819,6 +819,9 @@ pub fn apply(game: Game, move: Move) -> Result(Game, Nil) {
     }
   }
 
+  // TODO: Apply the changes to the board immediately and validate whether
+  // this move can be applied to potentially do less work
+
   // Apply basic to/from
   let #(next_board, next_bitboards) = {
     // If pawn promotion, replace with new piece

@@ -40,7 +40,7 @@ mkdir -p "$repo_root_path/results"
 "$run_fastchess" \
     -engine cmd="$uci_adapter_path/start.sh" args="--debug" name=gnomes \
     -engine cmd="$run_stockfish" name=stockfish 'option.Skill Level=1' \
-    -each tc=60+60 \
-    -rounds 5 -repeat -concurrency 1 \
-    -pgnout file="$repo_root_path/results/sprt.pgn" \
+    -each st=8 \
+    -rounds 1 -repeat -concurrency 1 \
+    -pgnout file="$repo_root_path/results/sprt.pgn" notation=uci \
     -log file="$repo_root_path/results/fastchess.log"
