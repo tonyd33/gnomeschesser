@@ -1,3 +1,7 @@
+//// UCI utilities.
+//// See the [spec](https://github.com/tonyd33/node-uci-protocol/blob/master/engine-interface.txt)
+////
+
 import gleam/float
 import gleam/int
 import gleam/list

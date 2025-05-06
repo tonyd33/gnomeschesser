@@ -5,7 +5,6 @@ import gleam/erlang/process.{type Subject}
 import gleam/function
 import gleam/option.{type Option, None, Some}
 import gleam/time/timestamp
-import util/parser
 
 pub opaque type Robot {
   Robot(main_subject: Subject(UpdateMessage))

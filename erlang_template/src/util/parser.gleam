@@ -1,3 +1,26 @@
+//// Monadic parser combinators for Strings in gleam.
+////
+//// Very heavily inspired by Haskell's [Parsec library](https://hackage.haskell.org/package/parsec).
+//// As such, please refer to Parsec's documentation when reading these
+//// functions.
+////
+//// The only major differences between Parsec Parsers and our Parser are that:
+//// - We backtrack automatically
+//// - We only handle String inputs
+////
+//// A very brief summary of monadic parser combinators in Gleam:
+//// - `Parser(a)` parses an `a` and returns the `a` as well as the rest of
+////   the input stream. E.g. a `Parser(Bool)` might parse `"True foo"` as
+////   `#(True, " foo")`.
+//// - `Parser(a)` forms a monad under parser composition.
+//// - Using Gleam's `use` notation gives us a reasonable substitute for
+////   Haskell's `do` notation for monadic operations.
+////
+//// For further information on monadic parser combinators, refer to:
+//// - [Article by Hasura](https://hasura.io/blog/parser-combinators-walkthrough)
+//// - [Reading by Scott Wlaschin](https://fsharpforfunandprofit.com/posts/understanding-parser-combinators/)
+////
+
 import gleam/bool
 import gleam/list
 import gleam/result
