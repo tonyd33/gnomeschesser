@@ -1,6 +1,7 @@
 import chess/piece
 import chess/player
 import chess/square
+import chess/uci
 import gleam/bool
 import gleam/dict.{type Dict}
 import gleam/erlang
