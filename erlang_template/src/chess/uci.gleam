@@ -32,8 +32,8 @@ pub type UCIInfo {
   InfoSelDepth(depth: Int)
   InfoTime(time: Int)
   InfoNodes(nodes: Int)
-  InfoPreview(moves: List(String))
-  InfoMultiPreview(n: Int)
+  InfoPrincipalVariation(moves: List(String))
+  InfoMultiPrincipalVariation(n: Int)
   InfoScore(params: List(UCIScore))
   InfoCurrMove(move: String)
   InfoCurrMoveNumber(n: Int)
@@ -129,8 +129,7 @@ fn on_off() -> Parser(Bool) {
 }
 
 pub fn word() -> Parser(String) {
-  p.none_of(" ")
-  |> p.many_till(p.lookahead(p.choice([p.whitespace(), p.eof()])))
+  p.many_1(p.none_of("\n\t\r "))
   |> p.flat
 }
 
@@ -159,6 +158,7 @@ fn p_int() -> Parser(Int) {
   }
 }
 
+// TODO: what's this function for?
 fn floating() -> Parser(Float) {
   use left <- p.do(p_int())
   use dot <- p.do(p.char("."))
@@ -329,18 +329,25 @@ pub fn engine_cmd() -> Parser(UCIEngineCommand) {
   let ponderhit = p.map(p.str("ponderhit"), fn(_) { EngCmdPonderhit })
   let quit = p.map(p.str("quit"), fn(_) { EngCmdQuit })
 
-  p.choice([
-    uci,
-    debug,
-    is_ready,
-    set_option,
-    new_game,
-    position,
-    go,
-    stop,
-    ponderhit,
-    quit,
-  ])
+  use cmd <- p.do(
+    p.choice([
+      uci,
+      debug,
+      is_ready,
+      set_option,
+      new_game,
+      position,
+      go,
+      stop,
+      ponderhit,
+      quit,
+    ]),
+  )
+
+  use _ <- p.do(p.whitespaces())
+  use _ <- p.do(p.eof())
+
+  p.return(cmd)
 }
 
 fn tokenize_gui_cmd(cmd: UCIGUICommand) -> List(String) {
@@ -379,10 +386,10 @@ fn tokenize_gui_cmd(cmd: UCIGUICommand) -> List(String) {
       InfoCurrMoveNumber(n) -> ["currmovenumber", int.to_string(n)]
       InfoDepth(n) -> ["depth", int.to_string(n)]
       InfoHashFull(n) -> ["hashfull", int.to_string(n)]
-      InfoMultiPreview(n) -> ["multipv", int.to_string(n)]
+      InfoMultiPrincipalVariation(n) -> ["multipv", int.to_string(n)]
       InfoNodes(n) -> ["nodes", int.to_string(n)]
       InfoNodesPerSecond(n) -> ["nps", int.to_string(n)]
-      InfoPreview(moves) -> ["pv", ..moves]
+      InfoPrincipalVariation(moves) -> ["pv", ..moves]
       InfoRefutation(moves) -> ["refutation", ..moves]
       InfoScore(params) -> ["score", ..list.flat_map(params, tokenize_score)]
       InfoSelDepth(n) -> ["seldepth", int.to_string(n)]
@@ -443,5 +450,4 @@ fn tokenize_gui_cmd(cmd: UCIGUICommand) -> List(String) {
 pub fn serialize_gui_cmd(cmd: UCIGUICommand) -> String {
   tokenize_gui_cmd(cmd)
   |> string.join(" ")
-  <> "\n"
 }
