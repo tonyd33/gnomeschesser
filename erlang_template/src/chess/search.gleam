@@ -1,5 +1,6 @@
 import chess/evaluate
 import chess/game
+import chess/zobrist
 import gleam/bool
 import gleam/dict
 import gleam/erlang/process
@@ -18,7 +19,7 @@ import util/state.{type State, State}
 pub type SearchMessage {
   SearchUpdate(
     best_move: game.Move,
-    game: game.GameHash,
+    game: zobrist.Hash,
     transposition: TranspositionTable,
   )
 }
@@ -93,7 +94,7 @@ fn search_state(
       Some(best_move) ->
         process.send(
           search_subject,
-          SearchUpdate(best_move, game.to_hash(game), tt),
+          SearchUpdate(best_move, zobrist.hash(game), tt),
         )
       None -> Nil
     }
@@ -118,7 +119,7 @@ fn negamax_alphabeta_failsoft(
   alpha: Float,
   beta: Float,
 ) -> State(SearchContext, Evaluation) {
-  let game_hash = game.to_hash(game)
+  let game_hash = zobrist.hash(game)
 
   // TODO: check for cache collision here
   use cached_evaluation <- state.do(
@@ -268,7 +269,7 @@ fn sorted_moves(
     // retrieve the cached transposition table data
     // negate the evaluation so that it's relative to our current game
     let assert Ok(new_game) = game.apply(game, move)
-    let evaluation = case dict.get(transposition.dict, game.to_hash(new_game)) {
+    let evaluation = case dict.get(transposition.dict, zobrist.hash(game)) {
       Ok(TranspositionEntry(_, evaluation, _)) ->
         Some(evaluation_negate(evaluation))
       Error(Nil) -> None
@@ -302,7 +303,7 @@ fn sorted_moves(
 ///
 pub type TranspositionTable {
   TranspositionTable(
-    dict: dict.Dict(game.GameHash, TranspositionEntry),
+    dict: dict.Dict(zobrist.Hash, TranspositionEntry),
     // Honestly, this attribute doesn't really belong in here. it belongs more
     // in `SearchContext`, but... whatever.
     nodes_searched: Int,
@@ -376,7 +377,7 @@ pub fn tt_info_s(now: timestamp.Timestamp) {
 }
 
 pub fn tt_get_s(
-  hash: game.GameHash,
+  hash: zobrist.Hash,
 ) -> State(TranspositionTable, Result(TranspositionEntry, Nil)) {
   State(run: fn(tt: TranspositionTable) {
     let rv = dict.get(tt.dict, hash)
@@ -401,7 +402,7 @@ pub fn tt_inc_s() -> State(TranspositionTable, Nil) {
 }
 
 pub fn tt_insert_s(
-  hash: game.GameHash,
+  hash: zobrist.Hash,
   e: #(Depth, Evaluation),
 ) -> State(TranspositionTable, Nil) {
   let #(depth, eval) = e
