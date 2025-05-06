@@ -14,6 +14,7 @@ import gleam/string
 ///   A1 B1 C1 D1 E1 F1 G1 H1
 ///
 /// https://en.wikipedia.org/wiki/0x88
+///
 pub opaque type Square {
   Square(ox88: Int)
 }
@@ -21,6 +22,7 @@ pub opaque type Square {
 /// See chess.js reference:
 /// https://github.com/jhlywa/chess.js/blob/d68055f4dae7c06d100f21d385906743dce47abc/src/chess.ts#L205
 /// https://en.wikipedia.org/wiki/0x88
+///
 pub fn to_ox88(square: Square) -> Int {
   square.ox88
 }
@@ -35,11 +37,13 @@ pub fn get_squares() -> List(Square) {
 }
 
 /// Extracts the file of a square from 0 to 7
+///
 pub fn file(square: Square) -> Int {
   int.bitwise_and(square.ox88, 0x0f)
 }
 
 /// Extracts the rank of a square from 0 to 7
+///
 pub fn rank(square: Square) -> Int {
   // Extract the 0x_0 bit
   int.bitwise_shift_right(square.ox88, 4)
@@ -81,7 +85,8 @@ pub fn from_string(square: String) -> Result(Square, Nil) {
   from_rank_file(rank, file)
 }
 
-// Where rank and file are from 0 to 7
+/// Where rank and file are from 0 to 7
+///
 pub fn from_rank_file(rank: Int, file: Int) -> Result(Square, Nil) {
   case file >= 0 && file < 8 && rank >= 0 && rank < 8 {
     True -> Ok(Square(int.bitwise_or(int.bitwise_shift_left(rank, 4), file)))
