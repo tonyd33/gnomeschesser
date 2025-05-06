@@ -1,6 +1,8 @@
 import gleam/float
 import gleam/int
+import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/string
 import util/parser.{type Parser} as p
 
 pub type UCIRegister {
@@ -335,4 +337,107 @@ pub fn engine_cmd() -> Parser(UCIEngineCommand) {
     ponderhit,
     quit,
   ])
+}
+
+fn tokenize_gui_cmd(cmd: UCIGUICommand) -> List(String) {
+  let tokenize_id = fn(id: UCIId) {
+    case id {
+      Name(name) -> ["name", name]
+      Author(author) -> ["author", author]
+    }
+  }
+  let tokenize_copy_protection_status = fn(status: CopyProtectionStatus) {
+    case status {
+      CopyProtectionError -> "error"
+      CopyProtectionOk -> "ok"
+    }
+  }
+  let tokenize_registration_status = fn(status: RegistrationStatus) {
+    case status {
+      RegistrationChecking -> "checking"
+      RegistrationError -> "error"
+      RegistrationOk -> "ok"
+    }
+  }
+  let tokenize_score = fn(score: UCIScore) {
+    case score {
+      ScoreCentipawns(n) -> ["cp", int.to_string(n)]
+      ScoreLowerbound -> ["lowerbound"]
+      ScoreMate(n) -> ["mate", int.to_string(n)]
+      ScoreUpperbound -> ["upperbound"]
+    }
+  }
+  let tokenize_info = fn(info: UCIInfo) {
+    case info {
+      InfoCPULoad(n) -> ["cpuload", int.to_string(n)]
+      InfoCurrLine(cpunr, moves) -> ["currline", int.to_string(cpunr), ..moves]
+      InfoCurrMove(move) -> ["currmove", move]
+      InfoCurrMoveNumber(n) -> ["currmovenumber", int.to_string(n)]
+      InfoDepth(n) -> ["depth", int.to_string(n)]
+      InfoHashFull(n) -> ["hashfull", int.to_string(n)]
+      InfoMultiPreview(n) -> ["multipv", int.to_string(n)]
+      InfoNodes(n) -> ["nodes", int.to_string(n)]
+      InfoNodesPerSecond(n) -> ["nps", int.to_string(n)]
+      InfoPreview(moves) -> ["pv", ..moves]
+      InfoRefutation(moves) -> ["refutation", ..moves]
+      InfoScore(params) -> ["score", ..list.flat_map(params, tokenize_score)]
+      InfoSelDepth(n) -> ["seldepth", int.to_string(n)]
+      InfoShredderBaseHits(n) -> ["sbhits", int.to_string(n)]
+      InfoString(s) -> ["string", s]
+      InfoTableBaseHits(n) -> ["tbhits", int.to_string(n)]
+      InfoTime(n) -> ["time", int.to_string(n)]
+    }
+  }
+  let tokenize_option_type = fn(option_type: UCIOptionType) {
+    case option_type {
+      OptionTypeButton -> ["button"]
+      OptionTypeCheck -> ["spin"]
+      OptionTypeCombo -> ["combo"]
+      OptionTypeString -> ["string"]
+    }
+  }
+  let tokenize_option = fn(option: UCIOption) {
+    list.flatten([
+      ["name", option.name, "type"],
+      tokenize_option_type(option.type_),
+      option.default
+        |> option.map(fn(d) { ["default", d] })
+        |> option.unwrap([]),
+      option.min
+        |> option.map(fn(d) { ["min", d] })
+        |> option.unwrap([]),
+      option.max
+        |> option.map(fn(d) { ["max", d] })
+        |> option.unwrap([]),
+      option.var
+        |> option.map(fn(d) { ["var", d] })
+        |> option.unwrap([]),
+    ])
+  }
+  case cmd {
+    GUICmdId(id) -> ["id", ..tokenize_id(id)]
+    GUICmdUCIOk -> ["uciok"]
+    GUICmdReadyOk -> ["readyok"]
+    GUICmdBestMove(move, ponder) -> [
+      "bestmove",
+      move,
+      ..{ ponder |> option.map(fn(d) { [d] }) |> option.unwrap([]) }
+    ]
+    GUICmdCopyProtection(status) -> [
+      "copyprotection",
+      tokenize_copy_protection_status(status),
+    ]
+    GUICmdRegistration(status) -> [
+      "registration",
+      tokenize_registration_status(status),
+    ]
+    GUICmdInfo(params) -> ["info", ..list.flat_map(params, tokenize_info)]
+    GUICmdOption(option) -> ["option", ..tokenize_option(option)]
+  }
+}
+
+pub fn serialize_gui_cmd(cmd: UCIGUICommand) -> String {
+  tokenize_gui_cmd(cmd)
+  |> string.join(" ")
+  <> "\n"
 }
