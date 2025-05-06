@@ -342,6 +342,8 @@ pub fn to_fen(game: Game) -> String {
 /// equality used for threefold repetition:
 /// https://en.wikipedia.org/wiki/Threefold_repetition
 ///
+// TODO: use zobrist once we generate it for every game
+
 pub fn equal(g1: Game, g2: Game) -> Bool {
   let g1_fen = to_fen(g1)
   let g2_fen = to_fen(g2)
@@ -541,6 +543,7 @@ pub fn pieces(game: Game) -> List(#(square.Square, piece.Piece)) {
 pub type SAN =
   String
 
+// TODO: use phantom types to denote whether a move is pseudolegal or plain legal
 pub opaque type Move {
   Move(
     player: player.Player,
@@ -556,6 +559,7 @@ pub opaque type Move {
 
 type MoveFlags {
   EnPassant
+  // two step pawn move
   BigPawn
 }
 
@@ -683,15 +687,43 @@ pub fn move_to_san(move: Move, game: Game) -> SAN {
 /// Create a move from a SAN. The SAN must be strictly valid, including
 /// disambiguation only when necessary, captures, check/checkmates, etc.
 /// TODO: Possibly allow more flexibility
-///
+/// TODO: generate this in a way that doesn't involve generating every move
 pub fn move_from_san(san: String, game: Game) -> Result(Move, Nil) {
   moves(game)
   |> list.find(fn(move) { move_to_san(move, game) == san })
 }
 
+pub fn move_to_lan(move: Move) -> String {
+  square.to_string(move.from)
+  <> square.to_string(move.to)
+  <> case move.promotion {
+    Some(symbol) -> piece.symbol_to_string(symbol)
+    None -> ""
+  }
+}
+
 // there's a specific kind of long algebraic notation used by UCI
-pub fn move_from_uci_lan(lan: String, game: Game) -> Result(Move, Nil) {
-  todo
+// TODO: generate this in a way that doesn't involve generating every move
+pub fn move_from_lan(lan: String, game: Game) -> Result(Move, Nil) {
+  let lan_from = square.from_string(string.slice(lan, 0, 2))
+  let lan_to = square.from_string(string.slice(lan, 2, 2))
+  let lan_promotion = piece.symbol_from_string(string.slice(lan, 4, 1))
+
+  case lan_from, lan_to {
+    Ok(lan_from), Ok(lan_to) -> {
+      pseudolegal_moves(game)
+      |> list.find(fn(move) {
+        case move {
+          Move(from:, to:, promotion:, ..) -> {
+            from == lan_from
+            && to == lan_to
+            && promotion == option.from_result(lan_promotion)
+          }
+        }
+      })
+    }
+    _, _ -> panic as { lan <> " is an invalid lan" }
+  }
 }
 
 /// Apply a move to a game. Moves should only be passed in with a `game` from

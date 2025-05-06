@@ -18,8 +18,8 @@ import util/state.{type State, State}
 
 pub type SearchMessage {
   SearchUpdate(
-    best_move: game.Move,
-    game: zobrist.Hash,
+    best_evaluation: Evaluation,
+    game: game.Game,
     transposition: TranspositionTable,
   )
 }
@@ -63,7 +63,7 @@ pub fn new_state(
   // Spawns a searcher thread, NOT linked so we can kill it whenever
   process.start(
     fn() { state.go(search_state(search_subject, game, 1), transposition) },
-    False,
+    True,
   )
 }
 
@@ -86,20 +86,15 @@ fn search_state(
   ))
   use info <- state.do(tt_info_s(now))
   use tt <- state.do(state.get())
-  let Evaluation(_score, _node_type, best_move) = best_evaluation
 
   // IO actions
-  {
-    case best_move {
-      Some(best_move) ->
-        process.send(
-          search_subject,
-          SearchUpdate(best_move, zobrist.hash(game), tt),
-        )
-      None -> Nil
-    }
-    io.print(info)
-  }
+
+  process.send(
+    search_subject,
+    SearchUpdate(best_evaluation:, game:, transposition: tt),
+  )
+  // TODO: use a logging library for this
+  io.print_error(info)
 
   search_state(search_subject, game, current_depth + 1)
 }
