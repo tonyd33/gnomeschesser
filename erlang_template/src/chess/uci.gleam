@@ -93,6 +93,28 @@ pub type UCIOption {
   )
 }
 
+pub type CopyProtectionStatus {
+  CopyProtectionOk
+  CopyProtectionError
+}
+
+pub type RegistrationStatus {
+  RegistrationOk
+  RegistrationChecking
+  RegistrationError
+}
+
+pub type UCIGUICommand {
+  GUICmdId(id: UCIId)
+  GUICmdUCIOk
+  GUICmdReadyOk
+  GUICmdBestMove(move: String, ponder: Option(String))
+  GUICmdCopyProtection(status: CopyProtectionStatus)
+  GUICmdRegistration(status: RegistrationStatus)
+  GUICmdInfo(params: List(UCIInfo))
+  GUICmdOption(option: UCIOption)
+}
+
 fn on_off() -> Parser(Bool) {
   let on = p.map(p.str("on"), fn(_) { True })
   let off = p.map(p.str("off"), fn(_) { False })
