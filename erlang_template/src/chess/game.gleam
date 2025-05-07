@@ -3,7 +3,6 @@ import chess/player
 import chess/square
 import gleam/bool
 import gleam/dict.{type Dict}
-import gleam/erlang
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -28,7 +27,6 @@ pub opaque type Game {
     en_passant_target_square: Option(square.Square),
     halfmove_clock: Int,
     fullmove_number: Int,
-    history: List(Game),
   )
 }
 
@@ -143,22 +141,19 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
     square.from_string(en_passant_target_square)
     |> option.from_result
 
-  Ok(
-    Game(
-      board: board,
-      bitboards: board_to_bitboards(board),
-      active_color: case active_color {
-        "w" -> player.White
-        "b" -> player.Black
-        _ -> panic
-      },
-      castling_availability: castling_availability,
-      en_passant_target_square: en_passant_target_square,
-      halfmove_clock: halfmove_clock,
-      fullmove_number: fullmove_number,
-      history: [],
-    ),
-  )
+  Ok(Game(
+    board: board,
+    bitboards: board_to_bitboards(board),
+    active_color: case active_color {
+      "w" -> player.White
+      "b" -> player.Black
+      _ -> panic
+    },
+    castling_availability: castling_availability,
+    en_passant_target_square: en_passant_target_square,
+    halfmove_clock: halfmove_clock,
+    fullmove_number: fullmove_number,
+  ))
 }
 
 fn board_to_bitboards(board: Dict(square.Square, piece.Piece)) {
@@ -239,10 +234,6 @@ pub fn halfmove_clock(game: Game) -> Int {
 
 pub fn fullmove_number(game: Game) -> Int {
   game.fullmove_number
-}
-
-pub fn history(game: Game) -> List(Game) {
-  game.history
 }
 
 pub fn update_fen(game: Game, fen: String) -> Result(Game, Nil) {
@@ -356,9 +347,7 @@ pub fn equal(g1: Game, g2: Game) -> Bool {
 /// repetition: https://en.wikipedia.org/wiki/Threefold_repetition
 ///
 pub fn repetition_count(game: Game) -> Int {
-  list.filter(game.history, fn(old_game) { equal(old_game, game) })
-  |> list.length()
-  |> int.add(1)
+  todo
 }
 
 pub fn piece_at(game: Game, square: square.Square) -> Result(piece.Piece, Nil) {
@@ -735,7 +724,6 @@ pub fn apply(game: Game, move: Move) -> Result(Game, Nil) {
 
   let fullmove_number = fullmove_number(game)
   let halfmove_clock = halfmove_clock(game)
-  let history = history(game)
   let castling_availability = castling_availability(game)
 
   // If we're debugging, we'll purposely be more strict to ensure correctness.
@@ -774,7 +762,6 @@ pub fn apply(game: Game, move: Move) -> Result(Game, Nil) {
     True -> 0
     False -> halfmove_clock + 1
   }
-  let next_history = history |> list.append([game])
   let next_castling_availability = {
     let castling_availability = case piece {
       // If king moved, disable castling for us entirely
@@ -818,6 +805,9 @@ pub fn apply(game: Game, move: Move) -> Result(Game, Nil) {
       _ -> castling_availability
     }
   }
+
+  // TODO: Apply the changes to the board immediately and validate whether
+  // this move can be applied to potentially do less work
 
   // Apply basic to/from
   let #(next_board, next_bitboards) = {
@@ -908,7 +898,6 @@ pub fn apply(game: Game, move: Move) -> Result(Game, Nil) {
       en_passant_target_square: next_en_passant_target_square,
       halfmove_clock: next_halfmove_clock,
       fullmove_number: next_fullmove_number,
-      history: next_history,
     )
 
   // #ifdef DEV

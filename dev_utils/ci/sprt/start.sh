@@ -42,7 +42,7 @@ mkdir -p "$repo_root_path/results"
 "$run_fastchess" \
     -engine cmd="$start_uci" name=gnomes \
     -engine cmd="$run_stockfish" name=stockfish option.Threads=4 \
-    -each st=10 \
+    -each st=15 \
     -rounds 2 -repeat -concurrency 1 \
     -pgnout file="$repo_root_path/results/sprt.pgn" \
     -log file="$repo_root_path/results/fastchess.log" level=trace
