@@ -28,6 +28,9 @@ pub opaque type Game {
     en_passant_target_square: Option(square.Square),
     halfmove_clock: Int,
     fullmove_number: Int,
+    // NOTE: The top of this list is the most RECENT game. This is a slight
+    // optimization because appending to the end of lists is O(n), while
+    // prepending is constant time.
     history: List(Game),
   )
 }
@@ -774,7 +777,7 @@ pub fn apply(game: Game, move: Move) -> Result(Game, Nil) {
     True -> 0
     False -> halfmove_clock + 1
   }
-  let next_history = history |> list.append([game])
+  let next_history = [game, ..history]
   let next_castling_availability = {
     let castling_availability = case piece {
       // If king moved, disable castling for us entirely
@@ -818,6 +821,9 @@ pub fn apply(game: Game, move: Move) -> Result(Game, Nil) {
       _ -> castling_availability
     }
   }
+
+  // TODO: Apply the changes to the board immediately and validate whether
+  // this move can be applied to potentially do less work
 
   // Apply basic to/from
   let #(next_board, next_bitboards) = {

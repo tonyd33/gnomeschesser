@@ -28,11 +28,12 @@ pub type Hash =
 pub fn hash(game: game.Game) -> Hash {
   let piece_hash =
     game.pieces(game)
-    |> list.map(fn(x) { piece_hash(x.0, x.1) })
-    |> list.fold(0x0, int.bitwise_exclusive_or)
+    |> list.fold(0x0, fn(acc, x) {
+      int.bitwise_exclusive_or(acc, piece_hash(x.0, x.1))
+    })
   let castle_hash =
     game.castling_availability(game)
-    |> list.map(fn(x) {
+    |> list.fold(0x0, fn(acc, x) {
       let castle_type = case x {
         #(player.White, game.KingSide) -> 0
         #(player.White, game.QueenSide) -> 1
@@ -40,10 +41,8 @@ pub fn hash(game: game.Game) -> Hash {
         #(player.Black, game.QueenSide) -> 3
       }
       let assert Ok(hash) = get_hash(castle_type + castle_offset)
-      hash
+      int.bitwise_exclusive_or(acc, hash)
     })
-    |> list.reduce(int.bitwise_exclusive_or)
-    |> result.unwrap(0x0)
   let en_passant_hash = {
     game.en_passant_target_square(game)
     |> option.map(fn(square) {

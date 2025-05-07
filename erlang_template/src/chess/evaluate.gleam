@@ -42,7 +42,7 @@ pub fn game(game: game.Game) -> Float {
   //       We may have the callee pass in the moves since the callee is likely
   //       to calculate this anyway. Or, we may create another function in
   //       `game` to optimize for our use case
-  let moves = game.moves(game)
+  let moves = game.pseudolegal_moves(game)
 
   // Calculate a [mobility score](https://www.chessprogramming.org/Mobility).
   //
@@ -65,7 +65,7 @@ pub fn game(game: game.Game) -> Float {
       mobility_score +. s
     })
     |> float.multiply(player(us))
-    |> float.divide(100_000.0)
+    |> float.divide(200_000.0)
 
   // combine scores with weight
   { material_score *. 0.9 +. mobility_score *. 0.05 +. pqst_score *. 0.05 }
