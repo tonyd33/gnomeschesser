@@ -56,13 +56,13 @@ jobs:
       - run: mkdir -p results
 
       - name: Run Bratko-Kopec
-        # Don't increase workers too high otherwise we're not going to have
-        # enough resources to pass tests reliably
+        # TODO: Tune depth higher as we can search more efficiently
         run: |-
           deno task test \
             --engine ../../scripts/start-uci.sh \
             --workers 2 \
-            --timeout 10000 > ${{ github.workspace }}/results/bratko-kopec.md
+            --timeout 30000 \
+            --depth 4 > ${{ github.workspace }}/results/bratko-kopec.md
         working-directory: dev_utils/ci/bratko-kopec
 
       - name: Find existing PR comment

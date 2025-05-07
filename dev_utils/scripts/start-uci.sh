@@ -37,6 +37,6 @@ if [ -n "$logfile" ]; then
   rm -f "$stdin_pipe" "$stdout_pipe" "$stderr_pipe"
   rmdir "$tmpdir"
 else
-  gleam run -m erlang_template_uci
+  exec gleam run -m erlang_template_uci
 fi
 

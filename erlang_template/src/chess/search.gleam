@@ -22,7 +22,18 @@ pub type SearchMessage {
     game: game.Game,
     transposition: TranspositionTable,
   )
+  SearchDone(
+    best_evaluation: Evaluation,
+    game: game.Game,
+    transposition: TranspositionTable,
+  )
 }
+
+pub type SearchOpts {
+  SearchOpts(max_depth: Option(Int))
+}
+
+pub const default_search_opts = SearchOpts(max_depth: None)
 
 type SearchContext =
   TranspositionTable
@@ -53,16 +64,17 @@ fn evaluation_negate(evaluation: Evaluation) -> Evaluation {
   Evaluation(..evaluation, score: float.negate(evaluation.score), node_type:)
 }
 
-pub const new = new_state
-
-pub fn new_state(
+pub fn new(
   game: game.Game,
   transposition: TranspositionTable,
   search_subject: process.Subject(SearchMessage),
+  opts: SearchOpts,
 ) -> process.Pid {
   // Spawns a searcher thread, NOT linked so we can kill it whenever
   process.start(
-    fn() { state.go(search_state(search_subject, game, 1), transposition) },
+    fn() {
+      state.go(search_state(search_subject, game, 1, opts), transposition)
+    },
     True,
   )
 }
@@ -71,6 +83,7 @@ fn search_state(
   search_subject: process.Subject(SearchMessage),
   game: game.Game,
   current_depth: Depth,
+  opts: SearchOpts,
 ) -> State(SearchContext, Nil) {
   let now = timestamp.system_time()
   // perform the search at each depth, the negamax function will handle sorting and caching
@@ -87,8 +100,6 @@ fn search_state(
   use info <- state.do(tt_info_s(now))
   use tt <- state.do(state.get())
 
-  // IO actions
-
   process.send(
     search_subject,
     SearchUpdate(best_evaluation:, game:, transposition: tt),
@@ -96,7 +107,16 @@ fn search_state(
   // TODO: use a logging library for this
   io.print_error(info)
 
-  search_state(search_subject, game, current_depth + 1)
+  case opts.max_depth {
+    Some(max_depth) if current_depth >= max_depth -> {
+      process.send(
+        search_subject,
+        SearchDone(best_evaluation:, game:, transposition: tt),
+      )
+      state.return(Nil)
+    }
+    _ -> search_state(search_subject, game, current_depth + 1, opts)
+  }
 }
 
 /// https://www.chessprogramming.org/Alpha-Beta#Negamax_Framework

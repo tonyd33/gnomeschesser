@@ -142,7 +142,22 @@ function chunk<A>(n: number, xs: A[]): A[][] {
   return [xs.slice(0, n), ...chunk(n, xs.slice(n))];
 }
 
-const sleep = (n: number) => new Promise((resolve) => setTimeout(resolve, n));
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Seeded PRNG
+ * https://stackoverflow.com/a/47593316
+ */
+function mulberry32(seed: number) {
+  return function () {
+    let t = seed += 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
 
 function generateReport(results: TestResult[]): string {
   const numPassed = results.filter((x) => x.ok).length;
@@ -180,12 +195,16 @@ ${failedTableRows}
 
 async function runTestCase(
   tc: TestCase,
-  { engine, timeout }: { engine: Engine; timeout: number },
+  { engine, timeout, depth }: {
+    engine: Engine;
+    timeout: number;
+    depth?: number;
+  },
 ): Promise<TestResult> {
   await engine.position(tc.fen, []);
   await engine.isready();
   const { bestmove }: { bestmove: string; info: string[] } = await engine
-    .go({ movetime: timeout });
+    .go({ movetime: timeout, depth });
 
   return {
     ok: tc.bms.includes(bestmove),
@@ -198,7 +217,12 @@ async function runTestCase(
 
 async function runTestCases(
   tests: TestCase[],
-  { enginePath, timeout }: { enginePath: string; timeout: number },
+  { enginePath, timeout, depth, rest }: {
+    enginePath: string;
+    timeout: number;
+    rest: number;
+    depth?: number;
+  },
 ) {
   const results: TestResult[] = [];
   const engine = new Engine(enginePath);
@@ -209,7 +233,7 @@ async function runTestCases(
     for await (const test of tests) {
       process.stderr.write(`⏰ ${test.id}: RUN\n`);
 
-      const result = await runTestCase(test, { engine, timeout });
+      const result = await runTestCase(test, { engine, timeout, depth });
 
       if (result.ok) {
         process.stderr.write(`✅ ${test.id}: OK\n`);
@@ -217,6 +241,8 @@ async function runTestCases(
         process.stderr.write(`❌ ${test.id}: FAIL\n`);
       }
       results.push(result);
+
+      await sleep(rest);
     }
   } catch (err) {
     if (err instanceof Error) {
@@ -225,7 +251,7 @@ async function runTestCases(
       process.stderr.write(`Unknown error\n`);
     }
   } finally {
-    engine.quit()
+    engine.quit();
   }
   return results;
 }
@@ -247,10 +273,37 @@ async function main() {
       default: 10000,
       describe: "timeout (ms)",
     })
+    .option("depth", {
+      alias: "d",
+      type: "number",
+      describe: "depth to search",
+    })
     .option("engine", {
       type: "string",
       demandOption: true,
       describe: "path to engine executable",
+    })
+    .option("match", {
+      type: "array",
+      string: true,
+      alias: "m",
+      default: [],
+      describe: "only run tests matching this regex",
+    })
+    .option("rest", {
+      type: "number",
+      default: 1000,
+      describe: "time (ms) to rest between tests",
+    })
+    .option("shuffle", {
+      type: "boolean",
+      default: false,
+      describe: "shuffle test order",
+    })
+    .option("seed", {
+      type: "number",
+      default: undefined,
+      describe: "seed for shuffling tests",
     })
     .parse(hideBin(process.argv));
 
@@ -259,15 +312,34 @@ async function main() {
     process.exit(1);
   }
 
+  let testsToRun = testCases;
+  {
+    const testRegexes = opts.match.map((re) => new RegExp(re));
+
+    testsToRun = testsToRun
+      .filter(({ id }) =>
+        testRegexes.length === 0 || testRegexes.some((re) => re.test(id))
+      );
+    if (opts.shuffle) {
+      const seed = opts.seed ?? ((Math.random() * 2 ** 32) >>> 0);
+      const rand = mulberry32(seed);
+      testsToRun = testsToRun.toSorted((_a, _b) => rand() - rand());
+    }
+  }
+
+  const chunkSize = Math.max(Math.floor(testsToRun.length / opts.workers), 1);
+  const tasks = chunk(chunkSize, testsToRun);
+
   const engineAbsPath = path.join(process.cwd(), opts.engine);
-  const chunkSize = Math.max(Math.floor(testCases.length / opts.workers), 1);
-  const tasks = chunk(chunkSize, testCases);
+
   const results = await Promise
     .all(
       tasks.map((tests) =>
         runTestCases(tests, {
           enginePath: engineAbsPath,
           timeout: opts.timeout,
+          depth: opts.depth,
+          rest: opts.rest,
         })
       ),
     )

@@ -35,7 +35,7 @@ pub type RobotMessage {
     white_increment: Int,
     black_increment: Int,
   )
-  GoMoveTime(time: Int)
+  GoGeneral(time: Option(Int), depth: Option(Int))
   GoInfinite
   Stop
   Kill
@@ -131,40 +131,61 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
       state
     }
     // Messages we receive from the Searcher process
-    SearcherMessage(search.SearchUpdate(
-      best_evaluation:,
-      game:,
-      transposition: memo,
-    )) -> {
-      case option.map(state.game, game.equal(_, game)) {
-        Some(True) -> {
-          let search.Evaluation(score, node_type, best_move) = best_evaluation
+    SearcherMessage(message) ->
+      case message {
+        search.SearchUpdate(best_evaluation:, game:, transposition: memo) -> {
+          case option.map(state.game, game.equal(_, game)) {
+            Some(True) -> {
+              let search.Evaluation(score, node_type, best_move) =
+                best_evaluation
 
-          option.map(best_move, fn(best_move) {
-            let info_score_list = [
-              uci.ScoreCentipawns(n: float.truncate(score *. 200.0)),
-              ..case node_type {
-                search.PV -> []
-                search.Cut -> [uci.ScoreLowerbound]
-                search.All -> [uci.ScoreUpperbound]
-              }
-            ]
-            uci.GUICmdInfo([
-              uci.InfoPrincipalVariation([game.move_to_lan(best_move)]),
-              uci.InfoScore(info_score_list),
-            ])
-            |> uci.serialize_gui_cmd
-            |> io.println
-          })
+              option.map(best_move, fn(best_move) {
+                let info_score_list = [
+                  uci.ScoreCentipawns(n: float.truncate(score *. 200.0)),
+                  ..case node_type {
+                    search.PV -> []
+                    search.Cut -> [uci.ScoreLowerbound]
+                    search.All -> [uci.ScoreUpperbound]
+                  }
+                ]
+                uci.GUICmdInfo([
+                  uci.InfoPrincipalVariation([game.move_to_lan(best_move)]),
+                  uci.InfoScore(info_score_list),
+                ])
+                |> uci.serialize_gui_cmd
+                |> io.println
+              })
 
-          RobotState(..state, best_evaluation: Some(best_evaluation), memo:)
+              RobotState(..state, best_evaluation: Some(best_evaluation), memo:)
+            }
+            _ -> {
+              echo "received best move for incorrect game"
+              RobotState(..state, memo:)
+            }
+          }
         }
-        _ -> {
-          echo "received best move for incorrect game"
-          RobotState(..state, memo:)
+        search.SearchDone(best_evaluation:, game:, transposition: memo) -> {
+          // We don't respond to this if there's no search active
+          case state.searcher.0 {
+            Some(pid) -> {
+              let search.Evaluation(_, _, best_move) = best_evaluation
+              option.map(best_move, fn(best_move) {
+                uci.GUICmdBestMove(
+                  move: game.move_to_lan(best_move),
+                  ponder: None,
+                )
+                |> uci.serialize_gui_cmd
+                |> io.println
+              })
+              process.unlink(pid)
+              process.kill(pid)
+
+              RobotState(..state, searcher: #(None, state.searcher.1))
+            }
+            None -> state
+          }
         }
       }
-    }
     GoClock(white_time: _, black_time: _, white_increment:, black_increment:) -> {
       // TODO: it's possible this will mess up if there's no valid game state
       // Then we won't have a searcher, but we will have a Stop message
@@ -179,15 +200,23 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
         }
         None -> Nil
       }
-      start_searcher(state)
+      start_searcher(state, search.default_search_opts)
     }
-    GoMoveTime(time:) -> {
-      // TODO: it's possible this will mess up if there's no valid game state
-      // Then we won't have a searcher, but we will have a Stop message
-      process.send_after(state.subject, time * 9 / 10, Stop)
-      start_searcher(state)
+    GoGeneral(time, depth) -> {
+      case time {
+        // TODO: it's possible this will mess up if there's no valid game state
+        // Then we won't have a searcher, but we will have a Stop message
+        Some(time) -> {
+          process.send_after(state.subject, time * 9 / 10, Stop)
+          Nil
+        }
+        _ -> Nil
+      }
+
+      let search_opts = search.SearchOpts(depth)
+      start_searcher(state, search_opts)
     }
-    GoInfinite -> start_searcher(state)
+    GoInfinite -> start_searcher(state, search.default_search_opts)
     Stop -> {
       // We don't respond to this if there's no search active
       case state.searcher.0 {
@@ -217,14 +246,18 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
   main_loop(state, update)
 }
 
-fn start_searcher(state: RobotState) -> RobotState {
+fn start_searcher(
+  state: RobotState,
+  search_opts: search.SearchOpts,
+) -> RobotState {
   option.map(state.searcher.0, fn(pid) {
     process.unlink(pid)
     process.kill(pid)
   })
 
   let pid =
-    state.game |> option.map(search.new(_, state.memo, state.searcher.1))
+    state.game
+    |> option.map(search.new(_, state.memo, state.searcher.1, search_opts))
 
   RobotState(..state, searcher: #(pid, state.searcher.1))
 }
