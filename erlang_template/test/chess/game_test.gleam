@@ -646,51 +646,55 @@ pub fn apply_basic_test() {
   let assert Ok(move_e4) = game.move_from_san("e4", game)
   let assert Ok(game) = game.apply(game, move_e4)
 
-  // TODO: Ideally, use game.to_fen for a more compact format
-  game.board(game)
-  |> should.equal(
-    [
-      #(square.from_string("h1"), piece.Piece(player.White, piece.Rook)),
-      #(square.from_string("h2"), piece.Piece(player.White, piece.Pawn)),
-      #(square.from_string("a1"), piece.Piece(player.White, piece.Rook)),
-      #(square.from_string("b1"), piece.Piece(player.White, piece.Knight)),
-      #(square.from_string("c1"), piece.Piece(player.White, piece.Bishop)),
-      #(square.from_string("d1"), piece.Piece(player.White, piece.Queen)),
-      #(square.from_string("e1"), piece.Piece(player.White, piece.King)),
-      #(square.from_string("f1"), piece.Piece(player.White, piece.Bishop)),
-      #(square.from_string("g1"), piece.Piece(player.White, piece.Knight)),
-      #(square.from_string("a2"), piece.Piece(player.White, piece.Pawn)),
-      #(square.from_string("b2"), piece.Piece(player.White, piece.Pawn)),
-      #(square.from_string("c2"), piece.Piece(player.White, piece.Pawn)),
-      #(square.from_string("d2"), piece.Piece(player.White, piece.Pawn)),
-      #(square.from_string("f2"), piece.Piece(player.White, piece.Pawn)),
-      #(square.from_string("g2"), piece.Piece(player.White, piece.Pawn)),
-      #(square.from_string("a8"), piece.Piece(player.Black, piece.Rook)),
-      #(square.from_string("b8"), piece.Piece(player.Black, piece.Knight)),
-      #(square.from_string("c8"), piece.Piece(player.Black, piece.Bishop)),
-      #(square.from_string("d8"), piece.Piece(player.Black, piece.Queen)),
-      #(square.from_string("e8"), piece.Piece(player.Black, piece.King)),
-      #(square.from_string("f8"), piece.Piece(player.Black, piece.Bishop)),
-      #(square.from_string("g8"), piece.Piece(player.Black, piece.Knight)),
-      #(square.from_string("h8"), piece.Piece(player.Black, piece.Rook)),
-      #(square.from_string("a7"), piece.Piece(player.Black, piece.Pawn)),
-      #(square.from_string("b7"), piece.Piece(player.Black, piece.Pawn)),
-      #(square.from_string("c7"), piece.Piece(player.Black, piece.Pawn)),
-      #(square.from_string("d7"), piece.Piece(player.Black, piece.Pawn)),
-      #(square.from_string("e7"), piece.Piece(player.Black, piece.Pawn)),
-      #(square.from_string("f7"), piece.Piece(player.Black, piece.Pawn)),
-      #(square.from_string("g7"), piece.Piece(player.Black, piece.Pawn)),
-      #(square.from_string("h7"), piece.Piece(player.Black, piece.Pawn)),
-      #(square.from_string("e4"), piece.Piece(player.White, piece.Pawn)),
-    ]
-    |> list.map(fn(x) {
-      let assert #(Ok(square), piece) = x
-      #(square, piece)
-    })
-    |> dict.from_list,
-  )
-
+  game.to_fen(game)
+  |> should.equal("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1")
   game.turn(game) |> should.equal(player.Black)
+}
+
+/// We should move rooks when castling
+///    +------------------------+
+///  8 | r  .  .  .  k  .  .  r |
+///  7 | p  p  p  p  p  p  p  p |
+///  6 | .  .  .  .  .  .  .  . |
+///  5 | .  .  .  .  .  .  .  . |
+///  4 | .  .  .  .  .  .  .  . |
+///  3 | .  .  .  .  .  .  .  . |
+///  2 | P  P  P  P  P  P  P  P |
+///  1 | R  .  .  .  K  .  .  R |
+///    +------------------------+
+///      a  b  c  d  e  f  g  h
+pub fn apply_castling_test() {
+  // White long castle
+  let assert Ok(game) =
+    load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQ - 0 1")
+  let assert Ok(move) = game.move_from_san("O-O-O", game)
+  let assert Ok(game) = game.apply(game, move)
+  game.to_fen(game)
+  |> should.equal("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/2KR3R b - - 1 1")
+
+  // White short castle
+  let assert Ok(game) =
+    load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQ - 0 1")
+  let assert Ok(move) = game.move_from_san("O-O", game)
+  let assert Ok(game) = game.apply(game, move)
+  game.to_fen(game)
+  |> should.equal("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R4RK1 b - - 1 1")
+
+  // Black long castle
+  let assert Ok(game) =
+    load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R b kq - 0 1")
+  let assert Ok(move) = game.move_from_san("O-O-O", game)
+  let assert Ok(game) = game.apply(game, move)
+  game.to_fen(game)
+  |> should.equal("2kr3r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w - - 1 2")
+
+  // Black short castle
+  let assert Ok(game) =
+    load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R b kq - 0 1")
+  let assert Ok(move) = game.move_from_san("O-O", game)
+  let assert Ok(game) = game.apply(game, move)
+  game.to_fen(game)
+  |> should.equal("r4rk1/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w - - 1 2")
 }
 
 /// White should revoke its castling availability after moving king
@@ -821,4 +825,20 @@ pub fn to_fen_starting_position_test() {
   let assert Ok(game) = load_fen(four_knights_scotch_fen)
   to_fen(game)
   |> should.equal(four_knights_scotch_fen)
+}
+
+pub fn move_from_lan_castle_test() {
+  let assert Ok(game) =
+    load_fen(
+      "r1bqk2r/ppppbppp/2n2n2/4p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R w KQkq - 1 5",
+    )
+
+  let assert Ok(move) = game.move_from_lan("e1g1", game)
+  game.move_is_kingside_castle(move) |> should.be_true
+
+  let assert Ok(game) = game.apply(game, move)
+  game.to_fen(game)
+  |> should.equal(
+    "r1bqk2r/ppppbppp/2n2n2/4p3/2B1P3/3P1N2/PPP2PPP/RNBQ1RK1 b kq - 2 5",
+  )
 }

@@ -875,7 +875,7 @@ pub fn apply(game: Game, move: Move) -> Result(Game, Nil) {
           False -> -2
         }
         use castling_to_square <- result.try(square.from_ox88(
-          square.to_ox88(to) - castling_to_offset,
+          square.to_ox88(to) + castling_to_offset,
         ))
         use castling_from_square <- result.try(square.from_ox88(
           square.to_ox88(to) + castling_from_offset,
