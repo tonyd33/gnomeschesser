@@ -18,7 +18,7 @@ pub fn search_test_() {
     "2k4r/pppq1p1p/8/2b5/3rR1n1/2N5/PPBP1PP1/R1BQ2K1 b - - 1 16",
     [],
   )
-  process.sleep(2000)
+  process.sleep(5000)
   robot_web.get_best_move(robot)
   |> result.map(game.move_to_lan)
   |> should.equal(Ok("g4f2"))

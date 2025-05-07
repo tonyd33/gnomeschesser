@@ -30,7 +30,9 @@ jobs:
         working-directory: erlang_template
 
   evaluation_test:
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux, x64, fast]
+    env:
+      ImageOS: ubuntu24
     steps:
       - uses: actions/checkout@v4
 
@@ -54,14 +56,14 @@ jobs:
       - run: mkdir -p results
 
       - name: Run Bratko-Kopec
-        run: deno task test > ${{ github.workspace }}/results/bratko-kopec.md
+        # Don't increase workers too high otherwise we're not going to have
+        # enough resources to pass tests reliably
+        run: |-
+          deno task test \
+            --engine ../../scripts/start-uci.sh \
+            --workers 2 \
+            --timeout 10000 > ${{ github.workspace }}/results/bratko-kopec.md
         working-directory: dev_utils/ci/bratko-kopec
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: bratko-kopec
-          path: results/
 
       - name: Find existing PR comment
         if: github.event_name == 'pull_request'
@@ -82,37 +84,37 @@ jobs:
           body-file: results/bratko-kopec.md
           comment-id: ${{ steps.find-comment.outputs.comment-id }}
 
-  # TODO: Enable after SPRT works reliably
-  #
-  # sprt:
-  #   runs-on: self-hosted
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #       with:
-  #         submodules: true
-  #
-  #     - uses: erlef/setup-beam@v1
-  #       with:
-  #         otp-version: "27.1.2"
-  #         gleam-version: "1.9.1"
-  #         rebar3-version: "3"
-  #
-  #     - run: gleam deps download
-  #       working-directory: erlang_template
-  #
-  #     - run: gleam build
-  #       working-directory: erlang_template
-  #
-  #     - name: Install Deno
-  #       uses: denoland/setup-deno@v2
-  #       with:
-  #         deno-version: v2.x
-  #
-  #     - name: Run SPRT
-  #       run: dev_utils/ci/sprt/start.sh
-  #
-  #     - name: Upload artifacts
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: sprt
-  #         path: results/
+  sprt:
+    runs-on: [self-hosted, linux, x64, fast]
+    env:
+      ImageOS: ubuntu24
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.1.2"
+          gleam-version: "1.9.1"
+          rebar3-version: "3"
+
+      - run: gleam deps download
+        working-directory: erlang_template
+
+      - run: gleam build
+        working-directory: erlang_template
+
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Run SPRT
+        run: dev_utils/ci/sprt/start.sh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sprt
+          path: results/
