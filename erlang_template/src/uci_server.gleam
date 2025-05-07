@@ -27,26 +27,23 @@ fn handle_input(robot: robot.Robot) {
 
     Ok(line) -> {
       io.print_error("received: " <> line)
-      let continue = {
+      {
         let parsed = p.run(engine_cmd, line)
         // TODO: I forgot how to do this without bool.guard
 
         case parsed {
           Ok(uci.EngCmdUCI) -> {
             process.send(robot.subject, robot.UciStart)
-            True
           }
           Ok(uci.EngCmdQuit) -> {
             process.send(robot.subject, robot.Kill)
-            False
+            panic as "quit"
           }
           Ok(uci.EngCmdUCINewGame) -> {
             process.send(robot.subject, robot.Clear)
-            True
           }
           Ok(uci.EngCmdIsReady) -> {
             process.send(robot.subject, robot.IsReady)
-            True
           }
           Ok(uci.EngCmdPosition(moves:, position:)) -> {
             case position {
@@ -59,11 +56,9 @@ fn handle_input(robot: robot.Robot) {
             list.each(moves, fn(move) {
               process.send(robot.subject, robot.ApplyMove(move))
             })
-            True
           }
           Ok(uci.EngCmdStop) -> {
             process.send(robot.subject, robot.Stop)
-            True
           }
           Ok(uci.EngCmdGo(params:)) -> {
             {
@@ -119,19 +114,12 @@ fn handle_input(robot: robot.Robot) {
               }
             }
             |> process.send(robot.subject, _)
-            True
           }
           // We ignore unrecognized commands
-          _ -> True
+          _ -> Nil
         }
       }
-      case continue {
-        True -> handle_input(robot)
-        False -> {
-          // TODO: How do I kill myself with exit 0?
-          panic as "quit"
-        }
-      }
+      handle_input(robot)
     }
   }
 }
