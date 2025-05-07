@@ -30,7 +30,9 @@ jobs:
         working-directory: erlang_template
 
   evaluation_test:
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux, x64, fast]
+    env:
+      ImageOS: ubuntu24
     steps:
       - uses: actions/checkout@v4
 
@@ -54,14 +56,14 @@ jobs:
       - run: mkdir -p results
 
       - name: Run Bratko-Kopec
-        run: deno task test > ${{ github.workspace }}/results/bratko-kopec.md
+        # TODO: Tune depth higher as we can search more efficiently
+        run: |-
+          deno task test \
+            --engine ../../scripts/start-uci.sh \
+            --workers 2 \
+            --timeout 30000 \
+            --depth 4 > ${{ github.workspace }}/results/bratko-kopec.md
         working-directory: dev_utils/ci/bratko-kopec
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: bratko-kopec
-          path: results/
 
       - name: Find existing PR comment
         if: github.event_name == 'pull_request'
@@ -82,10 +84,12 @@ jobs:
           body-file: results/bratko-kopec.md
           comment-id: ${{ steps.find-comment.outputs.comment-id }}
 
-  # TODO: Enable after SPRT works reliably
+  # TODO: Enable when ready
   #
   # sprt:
-  #   runs-on: self-hosted
+  #   runs-on: [self-hosted, linux, x64, fast]
+  #   env:
+  #     ImageOS: ubuntu24
   #   steps:
   #     - uses: actions/checkout@v4
   #       with:

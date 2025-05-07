@@ -32,10 +32,19 @@ fn handle_input(robot: robot.Robot) {
         // TODO: I forgot how to do this without bool.guard
 
         case parsed {
-          Ok(uci.EngCmdUCI) -> process.send(robot.subject, robot.UciStart)
-          Ok(uci.EngCmdQuit) -> process.send(robot.subject, robot.Kill)
-          Ok(uci.EngCmdUCINewGame) -> process.send(robot.subject, robot.Clear)
-          Ok(uci.EngCmdIsReady) -> process.send(robot.subject, robot.IsReady)
+          Ok(uci.EngCmdUCI) -> {
+            process.send(robot.subject, robot.UciStart)
+          }
+          Ok(uci.EngCmdQuit) -> {
+            process.send(robot.subject, robot.Kill)
+            panic as "quit"
+          }
+          Ok(uci.EngCmdUCINewGame) -> {
+            process.send(robot.subject, robot.Clear)
+          }
+          Ok(uci.EngCmdIsReady) -> {
+            process.send(robot.subject, robot.IsReady)
+          }
           Ok(uci.EngCmdPosition(moves:, position:)) -> {
             case position {
               uci.PositionStartPos -> game.start_fen
@@ -48,7 +57,9 @@ fn handle_input(robot: robot.Robot) {
               process.send(robot.subject, robot.ApplyMove(move))
             })
           }
-          Ok(uci.EngCmdStop) -> process.send(robot.subject, robot.Stop)
+          Ok(uci.EngCmdStop) -> {
+            process.send(robot.subject, robot.Stop)
+          }
           Ok(uci.EngCmdGo(params:)) -> {
             {
               let param_dict =
@@ -66,41 +77,52 @@ fn handle_input(robot: robot.Robot) {
                       dict.insert(acc, uci.GoParamMoveTime(0), time)
                     uci.GoParamInfinite ->
                       dict.insert(acc, uci.GoParamInfinite, 0)
+                    uci.GoParamDepth(depth) ->
+                      dict.insert(acc, uci.GoParamDepth(0), depth)
                     _ -> panic as { "Go command " <> line <> " has conflicts" }
                   }
                 })
 
-              use <- result.lazy_unwrap(
+              let go_infinite =
                 dict.get(param_dict, uci.GoParamInfinite)
-                |> result.replace(robot.GoInfinite),
-              )
+                |> result.replace(robot.GoInfinite)
+              let go_clock = {
+                let x =
+                  [
+                    uci.GoParamWTime(0),
+                    uci.GoParamBTime(0),
+                    uci.GoParamWInc(0),
+                    uci.GoParamBInc(0),
+                  ]
+                  |> list.map(dict.get(param_dict, _))
+                  |> result.all
 
-              use <- result.lazy_unwrap(
-                dict.get(param_dict, uci.GoParamMoveTime(0))
-                |> result.map(robot.GoMoveTime),
-              )
-              case
-                dict.get(param_dict, uci.GoParamWTime(0)),
-                dict.get(param_dict, uci.GoParamBTime(0)),
-                dict.get(param_dict, uci.GoParamWInc(0)),
-                dict.get(param_dict, uci.GoParamBInc(0))
-              {
-                Ok(white_time),
-                  Ok(black_time),
-                  Ok(white_increment),
-                  Ok(black_increment)
-                ->
-                  robot.GoClock(
-                    white_time:,
-                    black_time:,
-                    white_increment:,
-                    black_increment:,
-                  )
-                _, _, _, _ ->
-                  panic as {
-                    "go command " <> line <> "does not have valid arguments"
-                  }
+                case x {
+                  Ok([white_time, black_time, white_increment, black_increment]) ->
+                    Ok(robot.GoClock(
+                      white_time:,
+                      black_time:,
+                      white_increment:,
+                      black_increment:,
+                    ))
+                  _ -> Error(Nil)
+                }
               }
+              let go_general = {
+                let assert [movetime, depth] =
+                  [uci.GoParamMoveTime(0), uci.GoParamDepth(0)]
+                  |> list.map(fn(x) {
+                    x |> dict.get(param_dict, _) |> option.from_result
+                  })
+                Ok(robot.GoGeneral(movetime, depth))
+              }
+
+              // Get first matching command
+              let assert Ok(msg) =
+                [go_infinite, go_clock, go_general]
+                |> list.find_map(fn(x) { x })
+
+              msg
             }
             |> process.send(robot.subject, _)
           }

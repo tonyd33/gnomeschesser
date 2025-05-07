@@ -1,19 +1,8 @@
 import process from "node:process";
-import child_process from "node:child_process";
 import path from "node:path";
-
-const robotUrl = "http://localhost:8000/move";
-
-async function askRobot(fen: string): Promise<string> {
-  return fetch(robotUrl, {
-    method: "POST",
-    body: JSON.stringify({
-      fen: fen,
-      turn: fen.split(" ")[1] === "w" ? "white" : "black",
-      failed_moves: [],
-    }),
-  }).then((res) => res.text());
-}
+import yargs from "yargs";
+import { hideBin } from "yargs/helpers";
+import { Engine } from "node-uci";
 
 type TestCase = { fen: string; bms: string[]; id: string };
 type TestResult = {
@@ -148,20 +137,25 @@ const testCases: TestCase[] = [
   },
 ];
 
-async function runTestCase(
-  tc: TestCase,
-): Promise<TestResult> {
-  const timeout = new Promise<string>((resolve) =>
-    setTimeout(() => resolve("timeout"), 10000)
-  );
-  const robotResponse = await Promise.race([askRobot(tc.fen), timeout]);
+function chunk<A>(n: number, xs: A[]): A[][] {
+  if (n >= xs.length) return [xs];
+  return [xs.slice(0, n), ...chunk(n, xs.slice(n))];
+}
 
-  return {
-    ok: tc.bms.includes(robotResponse),
-    id: tc.id,
-    input: tc.fen,
-    expected: tc.bms.join("/"),
-    got: robotResponse,
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Seeded PRNG
+ * https://stackoverflow.com/a/47593316
+ */
+function mulberry32(seed: number) {
+  return function () {
+    let t = seed += 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
   };
 }
 
@@ -199,127 +193,161 @@ ${failedTableRows}
   return output;
 }
 
-type RobotHandle = {
-  robot: child_process.ChildProcessWithoutNullStreams;
-  pid: number;
-  exitGracefully: () => Promise<never>;
-};
-
-async function startRobot(silent): Promise<RobotHandle> {
-  const robot = child_process.spawn("gleam", ["run"], {
-    cwd: path.join(
-      new URL(".", import.meta.url).pathname,
-      "../../../erlang_template",
-    ),
-    env: process.env,
-    detached: true,
-  });
-  if (!robot.pid) {
-    process.stderr.write("Failed to spawn robot\n");
-    process.exit(1);
-  }
-  // Make sure this typechecks as a number for later
-  const robotPid = robot.pid;
-
-  if (!silent) {
-    robot.stdout.on(
-      "data",
-      (data) =>
-        process.stderr.write(
-          data
-            .toString()
-            .split("\n")
-            .filter((line: string) => line.length > 0)
-            .map((line: string) => `[ROBOT STDOUT]: ${line}`)
-            .join("\n") + "\n",
-        ),
-    );
-    robot.stderr.on(
-      "data",
-      (data) =>
-        process.stderr.write(
-          data
-            .toString()
-            .split("\n")
-            .filter((line: string) => line.length > 0)
-            .map((line: string) => `[ROBOT STDERR]: ${line}`)
-            .join("\n") + "\n",
-        ),
-    );
-  }
-
-  const errorIfClosedEarly = () => {
-    process.stdout.write("Robot failed to start\n");
-    process.exit(1);
-  };
-  robot.on("close", errorIfClosedEarly);
-  await new Promise<void>((resolve) => robot.stdout.on("data", resolve));
-  robot.removeListener("close", errorIfClosedEarly);
-
-  const exitGracefully = async () => {
-    process.stderr.write("Exiting gracefully...\n");
-    const death = new Promise((resolve) => robot.on("close", resolve));
-    const timeout = new Promise<void>((resolve) =>
-      setTimeout(() => {
-        process.stderr.write("Robot didn't die before timeout\n");
-        resolve();
-      }, 5000)
-    );
-    // Kill process group. Works only on unix
-    process.kill(-robotPid);
-    await Promise.race([death, timeout]);
-    process.stderr.write("Done.\n");
-    process.exit(0);
-  };
-  process.on("SIGINT", exitGracefully);
-  process.on("SIGTERM", exitGracefully);
+async function runTestCase(
+  tc: TestCase,
+  { engine, timeout, depth }: {
+    engine: Engine;
+    timeout: number;
+    depth?: number;
+  },
+): Promise<TestResult> {
+  await engine.position(tc.fen, []);
+  await engine.isready();
+  const { bestmove }: { bestmove: string; info: string[] } = await engine
+    .go({ movetime: timeout, depth });
 
   return {
-    robot,
-    pid: robotPid,
-    exitGracefully,
+    ok: tc.bms.includes(bestmove),
+    id: tc.id,
+    input: tc.fen,
+    expected: tc.bms.join("/"),
+    got: bestmove,
   };
 }
 
-async function killRobot({ robot, pid, exitGracefully }: RobotHandle) {
-  process.removeListener("SIGINT", exitGracefully);
-  process.removeListener("SIGTERM", exitGracefully);
+async function runTestCases(
+  tests: TestCase[],
+  { enginePath, timeout, depth, rest }: {
+    enginePath: string;
+    timeout: number;
+    rest: number;
+    depth?: number;
+  },
+) {
+  const results: TestResult[] = [];
+  const engine = new Engine(enginePath);
 
-  const death = new Promise((resolve) => robot.on("close", resolve));
-  const timeout = new Promise<void>((resolve) => setTimeout(resolve, 5000));
-  // Kill process group. Works only on unix
-  process.kill(-pid, "SIGKILL");
-  await Promise.race([death, timeout]);
+  try {
+    await engine.init();
+    await engine.isready();
+    for await (const test of tests) {
+      process.stderr.write(`⏰ ${test.id}: RUN\n`);
+
+      const result = await runTestCase(test, { engine, timeout, depth });
+
+      if (result.ok) {
+        process.stderr.write(`✅ ${test.id}: OK\n`);
+      } else {
+        process.stderr.write(`❌ ${test.id}: FAIL\n`);
+      }
+      results.push(result);
+
+      await sleep(rest);
+    }
+  } catch (err) {
+    if (err instanceof Error) {
+      process.stderr.write(`Error: ${err.message}\n`);
+    } else {
+      process.stderr.write(`Unknown error\n`);
+    }
+  } finally {
+    engine.quit();
+  }
+  return results;
 }
 
 async function main() {
-  const silent = !!process.argv.find((arg) => arg === "--silent");
-  try {
-    const results: TestResult[] = [];
-    // We really shouldn't have to reboot the robot every time, but we don't
-    // have a proper interface with communicating with the robot to reset its
-    // state yet
-    for (const tc of testCases) {
-      const rh = await startRobot(silent);
-      process.stderr.write(`⏰ RUN: ${tc.id}\n`);
-      const result = await runTestCase(tc);
-      await killRobot(rh);
-      results.push(result);
-      if (result.ok) {
-        process.stderr.write(`✅ OK\n`);
-      } else {
-        process.stderr.write(`❌ FAIL\n`);
-      }
-    }
-    process.stdout.write(generateReport(results) + "\n");
-  } catch (err) {
-    await new Promise((resolve) => setTimeout(resolve, 10000));
-    if (err instanceof Error) {
-      process.stderr.write(err.message + "\n");
-    } else {
-      process.stderr.write("Unknown error\n");
+  const opts = await yargs()
+    .scriptName("bratko-kopec")
+    .usage("$0 <cmd> [args]")
+    .option("workers", {
+      alias: "w",
+      type: "number",
+      demandOption: true,
+      default: 1,
+      describe: "number of workers",
+    })
+    .option("timeout", {
+      alias: "t",
+      type: "number",
+      default: 10000,
+      describe: "timeout (ms)",
+    })
+    .option("depth", {
+      alias: "d",
+      type: "number",
+      describe: "depth to search",
+    })
+    .option("engine", {
+      type: "string",
+      demandOption: true,
+      describe: "path to engine executable",
+    })
+    .option("match", {
+      type: "array",
+      string: true,
+      alias: "m",
+      default: [],
+      describe: "only run tests matching this regex",
+    })
+    .option("rest", {
+      type: "number",
+      default: 1000,
+      describe: "time (ms) to rest between tests",
+    })
+    .option("shuffle", {
+      type: "boolean",
+      default: false,
+      describe: "shuffle test order",
+    })
+    .option("seed", {
+      type: "number",
+      default: undefined,
+      describe: "seed for shuffling tests",
+    })
+    .parse(hideBin(process.argv));
+
+  if (opts.workers <= 0) {
+    process.stderr.write(`Bad workers: ${opts.workers}. Should be > 0\n`);
+    process.exit(1);
+  }
+
+  let testsToRun = testCases;
+  {
+    const testRegexes = opts.match.map((re) => new RegExp(re));
+
+    testsToRun = testsToRun
+      .filter(({ id }) =>
+        testRegexes.length === 0 || testRegexes.some((re) => re.test(id))
+      );
+    if (opts.shuffle) {
+      const seed = opts.seed ?? ((Math.random() * 2 ** 32) >>> 0);
+      const rand = mulberry32(seed);
+      testsToRun = testsToRun.toSorted((_a, _b) => rand() - rand());
     }
   }
+
+  const chunkSize = Math.max(Math.floor(testsToRun.length / opts.workers), 1);
+  const tasks = chunk(chunkSize, testsToRun);
+
+  const engineAbsPath = path.join(process.cwd(), opts.engine);
+
+  const results = await Promise
+    .all(
+      tasks.map((tests) =>
+        runTestCases(tests, {
+          enginePath: engineAbsPath,
+          timeout: opts.timeout,
+          depth: opts.depth,
+          rest: opts.rest,
+        })
+      ),
+    )
+    .then((xss) =>
+      xss.flat().sort((x, y) => x.id == y.id ? 0 : (x.id < y.id ? -1 : 1))
+    );
+  process.stdout.write(generateReport(results) + "\n");
+  process.exit(0);
 }
 
 main();

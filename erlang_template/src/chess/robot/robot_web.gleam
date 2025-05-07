@@ -67,7 +67,8 @@ fn create_robot_thread() -> Subject(RobotMessage) {
       let memo = search.tt_new(timestamp.system_time())
       // The search_subject will be used by searchers to update new best moves found
       let search_subject: Subject(search.SearchMessage) = process.new_subject()
-      let search_pid = search.new(game, memo, search_subject)
+      let search_pid =
+        search.new(game, memo, search_subject, search.default_search_opts)
 
       main_loop(
         RobotState(
@@ -110,18 +111,27 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
       }
     }
     // Handles any updates from the searcher
-    SearcherMessage(search.SearchUpdate(
-      best_evaluation:,
-      game:,
-      transposition: memo,
-    )) ->
-      case game.equal(game, state.game) {
-        True ->
-          RobotState(..state, best_evaluation: Some(best_evaluation), memo:)
-        False -> {
-          echo "received best move for incorrect game"
-          RobotState(..state, memo:)
-        }
+    SearcherMessage(message) ->
+      case message {
+        search.SearchUpdate(best_evaluation:, game:, transposition: memo) ->
+          case game.equal(game, state.game) {
+            True ->
+              RobotState(..state, best_evaluation: Some(best_evaluation), memo:)
+            False -> {
+              echo "received best move for incorrect game"
+              RobotState(..state, memo:)
+            }
+          }
+        // TODO: We might want to send a response early
+        search.SearchDone(best_evaluation:, game:, transposition: memo) ->
+          case game.equal(game, state.game) {
+            True ->
+              RobotState(..state, best_evaluation: Some(best_evaluation), memo:)
+            False -> {
+              echo "received best move for incorrect game"
+              RobotState(..state, memo:)
+            }
+          }
       }
   }
 
@@ -137,7 +147,8 @@ fn update_state_with_new_game(state: RobotState, game: game.Game) -> RobotState 
     process.kill(pid)
   })
 
-  let search_pid = search.new(game, state.memo, state.searcher.1)
+  let search_pid =
+    search.new(game, state.memo, state.searcher.1, search.default_search_opts)
 
   // TODO: check for collision before adding to state
   let best_evaluation = case dict.get(state.memo.dict, zobrist.hash(game)) {
