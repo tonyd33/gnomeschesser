@@ -3,12 +3,12 @@ import chess/player
 import chess/search
 import chess/uci
 import gleam/erlang/process.{type Subject}
-import gleam/float
 import gleam/function
 import gleam/io
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/time/timestamp
+import util/xint
 
 const name = "TODO: name"
 
@@ -141,7 +141,7 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
 
               option.map(best_move, fn(best_move) {
                 let info_score_list = [
-                  uci.ScoreCentipawns(n: float.truncate(score *. 200.0)),
+                  uci.ScoreCentipawns(n: xint.to_int(score) |> result.unwrap(0)),
                   ..case node_type {
                     search.PV -> []
                     search.Cut -> [uci.ScoreLowerbound]
