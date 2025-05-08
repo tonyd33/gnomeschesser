@@ -118,7 +118,7 @@ async function main() {
   ];
   const mdtable = tabulate(table, " | ");
   const md = `
-# SPRT Results
+# 🥊 SPRT Results
 
 ${mdtable}
 
