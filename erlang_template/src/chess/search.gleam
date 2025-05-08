@@ -1,5 +1,6 @@
 import chess/evaluate
 import chess/game
+import chess/move
 import chess/zobrist
 import gleam/bool
 import gleam/dict
@@ -46,7 +47,7 @@ pub type Evaluation {
   Evaluation(
     score: ExtendedInt,
     node_type: NodeType,
-    best_move: Option(game.Move),
+    best_move: Option(move.Move(move.Pseudo)),
   )
 }
 
@@ -75,7 +76,6 @@ pub fn new(
   search_subject: process.Subject(SearchMessage),
   opts: SearchOpts,
 ) -> process.Pid {
-  // Spawns a searcher thread, NOT linked so we can kill it whenever
   process.start(
     fn() {
       {
@@ -107,7 +107,7 @@ fn search(
     do: ByRecency(max_tt_recency),
   ))
   let now = timestamp.system_time()
-  use info <- state.do(tt_info_s(now))
+  use _info <- state.do(tt_info_s(now))
 
   use _ <- state.do(tt_zero(now))
   use tt <- state.do(state.get())
@@ -117,7 +117,7 @@ fn search(
     SearchUpdate(best_evaluation:, game:, transposition: tt),
   )
   // TODO: use a logging library for this
-  io.print_error(info)
+  //io.print_error(info)
 
   case opts.max_depth {
     Some(max_depth) if current_depth >= max_depth -> {
@@ -205,7 +205,7 @@ fn do_negamax_alphabeta_failsoft(
 
   use <- bool.lazy_guard(list.is_empty(move_game_list), fn() {
     // if checkmate/stalemate
-    let score = case game.is_check(game) {
+    let score = case game.is_check(game, game.turn(game)) {
       True -> xint.NegInf
       False -> xint.Finite(0)
     }
@@ -276,10 +276,10 @@ fn quiesce(
   let alpha = xint.max(alpha, score)
 
   let #(best_score, _) =
-    game.pseudolegal_moves(game)
+    game.pseudo_moves(game)
     |> list.fold_until(#(score, alpha), fn(acc, move) {
       // If game isn't capture, continue
-      use <- bool.guard(!game.move_is_capture(move), list.Continue(acc))
+      use <- bool.guard(!game.move_is_capture(move, game), list.Continue(acc))
       {
         // If game failed to apply, short circuit to continuing
         use new_game <- result.try(game.apply(game, move))
@@ -301,8 +301,8 @@ fn quiesce(
 fn sorted_moves(
   game: game.Game,
   transposition: TranspositionTable,
-) -> List(#(game.Move, game.Game)) {
-  game.pseudolegal_moves(game)
+) -> List(#(move.Move(move.Pseudo), game.Game)) {
+  game.pseudo_moves(game)
   |> list.filter_map(fn(move) {
     // retrieve the cached transposition table data
     // negate the evaluation so that it's relative to our current game

@@ -1,5 +1,5 @@
 import chess/uci
-import gleam/option.{type Option, None, Some}
+import gleam/option.{None, Some}
 import gleeunit/should
 import util/parser as p
 

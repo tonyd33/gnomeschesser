@@ -32,12 +32,12 @@ pub fn from_string(string: String) -> Result(Piece, Nil) {
 
 pub fn symbol_to_string(symbol: PieceSymbol) -> String {
   case symbol {
-    Pawn -> "p"
-    Knight -> "n"
-    Bishop -> "b"
-    Rook -> "r"
-    Queen -> "q"
-    King -> "k"
+    Pawn -> "P"
+    Knight -> "N"
+    Bishop -> "B"
+    Rook -> "R"
+    Queen -> "Q"
+    King -> "K"
   }
 }
 

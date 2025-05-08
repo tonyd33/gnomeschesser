@@ -1,15 +1,14 @@
 import chess/game
 import chess/robot/robot_uci as robot
 import chess/uci
-import gleam/bool
 import gleam/dict
 import gleam/erlang
 import gleam/erlang/process
 import gleam/io
 import gleam/list
-import gleam/option.{type Option, None, Some}
+import gleam/option
 import gleam/result
-import util/parser.{type Parser} as p
+import util/parser as p
 
 pub fn start_robot() -> Nil {
   let robot = robot.init()
@@ -18,7 +17,6 @@ pub fn start_robot() -> Nil {
 }
 
 fn handle_input(robot: robot.Robot) {
-  //serialize_gui_cmd
   let engine_cmd = uci.engine_cmd()
   case erlang.get_line("") {
     Error(erlang.Eof) -> Nil
@@ -29,14 +27,13 @@ fn handle_input(robot: robot.Robot) {
       io.print_error("received: " <> line)
       {
         let parsed = p.run(engine_cmd, line)
-        // TODO: I forgot how to do this without bool.guard
-
         case parsed {
           Ok(uci.EngCmdUCI) -> {
             process.send(robot.subject, robot.UciStart)
           }
           Ok(uci.EngCmdQuit) -> {
-            process.send(robot.subject, robot.Kill)
+            //process.kill(process.self())
+            // TODO: figure out why this won't quit
             panic as "quit"
           }
           Ok(uci.EngCmdUCINewGame) -> {
