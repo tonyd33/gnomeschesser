@@ -15,6 +15,7 @@ import gleam/result
 import gleam/time/duration
 import gleam/time/timestamp
 import util/state.{type State, State}
+import util/xint.{type ExtendedInt}
 
 pub type SearchMessage {
   SearchUpdate(
@@ -42,7 +43,11 @@ pub type Depth =
   Int
 
 pub type Evaluation {
-  Evaluation(score: Float, node_type: NodeType, best_move: Option(game.Move))
+  Evaluation(
+    score: ExtendedInt,
+    node_type: NodeType,
+    best_move: Option(game.Move),
+  )
 }
 
 // https://www.chessprogramming.org/Node_Types
@@ -61,7 +66,7 @@ fn evaluation_negate(evaluation: Evaluation) -> Evaluation {
     All -> Cut
     PV -> PV
   }
-  Evaluation(..evaluation, score: float.negate(evaluation.score), node_type:)
+  Evaluation(..evaluation, score: xint.negate(evaluation.score), node_type:)
 }
 
 pub fn new(
@@ -94,8 +99,8 @@ fn search(
   use best_evaluation <- state.do(negamax_alphabeta_failsoft(
     game,
     current_depth,
-    -1.0,
-    1.0,
+    xint.NegInf,
+    xint.PosInf,
   ))
   use _ <- state.do(tt_prune_by(
     when: LargerThan(max_tt_size),
@@ -138,8 +143,8 @@ fn search(
 fn negamax_alphabeta_failsoft(
   game: game.Game,
   depth: Depth,
-  alpha: Float,
-  beta: Float,
+  alpha: ExtendedInt,
+  beta: ExtendedInt,
 ) -> State(SearchContext, Evaluation) {
   let game_hash = zobrist.hash(game)
 
@@ -152,9 +157,16 @@ fn negamax_alphabeta_failsoft(
         use <- bool.guard(cached_depth < depth, Error(Nil))
         case evaluation {
           Evaluation(_, PV, _) -> Ok(evaluation)
-          Evaluation(score, Cut, _) if score >=. beta -> Ok(evaluation)
-          Evaluation(score, All, _) if score <=. alpha -> Ok(evaluation)
-          _ -> Error(Nil)
+          Evaluation(score, Cut, _) ->
+            case xint.gte(score, beta) {
+              True -> Ok(evaluation)
+              False -> Error(Nil)
+            }
+          Evaluation(score, All, _) ->
+            case xint.lte(score, alpha) {
+              True -> Ok(evaluation)
+              False -> Error(Nil)
+            }
         }
       }),
     ),
@@ -181,8 +193,8 @@ fn negamax_alphabeta_failsoft(
 fn do_negamax_alphabeta_failsoft(
   game: game.Game,
   depth: Depth,
-  alpha: Float,
-  beta: Float,
+  alpha: ExtendedInt,
+  beta: ExtendedInt,
 ) -> State(SearchContext, Evaluation) {
   use <- bool.lazy_guard(depth <= 0, fn() {
     let score = quiesce(game, alpha, beta)
@@ -194,64 +206,78 @@ fn do_negamax_alphabeta_failsoft(
   use <- bool.lazy_guard(list.is_empty(move_game_list), fn() {
     // if checkmate/stalemate
     let score = case game.is_check(game) {
-      True -> -1.0
-      False -> 0.0
+      True -> xint.NegInf
+      False -> xint.Finite(0)
     }
     state.return(Evaluation(score:, node_type: PV, best_move: None))
   })
 
   // We iterate through every move and perform minimax to evaluate said move
   // accumulator keeps track of best evaluation while updating the node type
-  state.fold_until_s(
-    move_game_list,
-    #(Evaluation(-1.0, PV, None), alpha),
-    fn(acc, move_game) {
-      {
-        let #(best_evaluation, alpha) = acc
-        let #(move, game) = move_game
-        use evaluation <- state.do(negamax_alphabeta_failsoft(
-          game,
-          depth - 1,
-          float.negate(beta),
-          float.negate(alpha),
-        ))
-        let evaluation =
-          Evaluation(..evaluation_negate(evaluation), best_move: Some(move))
-        let best_evaluation = case best_evaluation.score <. evaluation.score {
-          True -> evaluation
-          False -> best_evaluation
-        }
-        let alpha = float.max(alpha, evaluation.score)
-
-        state.return(#(evaluation, best_evaluation, alpha))
-      }
-      |> state.fmap(fn(x) {
-        // beta-cutoff
-        let #(evaluation, best_evaluation, alpha) = x
-        case evaluation.score >=. beta {
-          True -> {
-            let best_evaluation = Evaluation(..best_evaluation, node_type: Cut)
-            list.Stop(#(best_evaluation, alpha))
+  use #(best_evaluation, _alpha) <- state.do(
+    state.fold_until_s(
+      move_game_list,
+      #(Evaluation(xint.NegInf, PV, None), alpha),
+      fn(acc, move_game) {
+        {
+          let #(best_evaluation, alpha) = acc
+          let #(move, game) = move_game
+          use evaluation <- state.do(negamax_alphabeta_failsoft(
+            game,
+            depth - 1,
+            xint.negate(beta),
+            xint.negate(alpha),
+          ))
+          let evaluation =
+            Evaluation(..evaluation_negate(evaluation), best_move: Some(move))
+          let best_evaluation = case
+            xint.lt(best_evaluation.score, evaluation.score)
+          {
+            True -> evaluation
+            False -> best_evaluation
           }
-          False -> list.Continue(#(best_evaluation, alpha))
+          let alpha = xint.max(alpha, evaluation.score)
+
+          state.return(#(evaluation, best_evaluation, alpha))
         }
-      })
-    },
+        |> state.fmap(fn(x) {
+          // beta-cutoff
+          let #(evaluation, best_evaluation, alpha) = x
+          case xint.gte(evaluation.score, beta) {
+            True -> {
+              let best_evaluation =
+                Evaluation(..best_evaluation, node_type: Cut)
+              list.Stop(#(best_evaluation, alpha))
+            }
+            False -> list.Continue(#(best_evaluation, alpha))
+          }
+        })
+      },
+    ),
   )
-  |> state.fmap(fn(x) { x.0 })
+
+  state.return(best_evaluation)
 }
 
-// returns the score of the current game while checking
-// every capture and check
-// scores are from the perspective of the active player
-// If white's turn, +1 is white's advantage
-// If black's turn, +1 is black's advantage
-// alpha is the "best" score for active player
-// beta is the "best" score for non-active player
-fn quiesce(game: game.Game, alpha: Float, beta: Float) -> Float {
-  let score = evaluate.game(game) *. evaluate.player(game.turn(game))
-  use <- bool.guard(score >=. beta, score)
-  let alpha = float.max(alpha, score)
+/// returns the score of the current game while checking
+/// every capture and check
+/// scores are from the perspective of the active player
+/// If white's turn, +1 is white's advantage
+/// If black's turn, +1 is black's advantage
+/// alpha is the "best" score for active player
+/// beta is the "best" score for non-active player
+///
+fn quiesce(
+  game: game.Game,
+  alpha: ExtendedInt,
+  beta: ExtendedInt,
+) -> ExtendedInt {
+  let score =
+    evaluate.game(game)
+    |> xint.multiply({ evaluate.player(game.turn(game)) |> xint.from_int })
+
+  use <- bool.guard(xint.gte(score, beta), score)
+  let alpha = xint.max(alpha, score)
 
   let #(best_score, _) =
     game.pseudolegal_moves(game)
@@ -263,15 +289,11 @@ fn quiesce(game: game.Game, alpha: Float, beta: Float) -> Float {
         use new_game <- result.try(game.apply(game, move))
         let #(best_score, alpha) = acc
         let score =
-          float.negate(quiesce(
-            new_game,
-            float.negate(beta),
-            float.negate(alpha),
-          ))
+          xint.negate(quiesce(new_game, xint.negate(beta), xint.negate(alpha)))
 
-        use <- bool.guard(score >=. beta, Ok(list.Stop(#(score, alpha))))
+        use <- bool.guard(xint.gte(score, beta), Ok(list.Stop(#(score, alpha))))
         Ok(
-          list.Continue(#(float.max(best_score, score), float.max(alpha, score))),
+          list.Continue(#(xint.max(best_score, score), xint.max(alpha, score))),
         )
       }
       |> result.unwrap(list.Continue(acc))
@@ -310,7 +332,7 @@ fn sorted_moves(
           Evaluation(_, Cut, _), _ -> order.Gt
           _, Evaluation(_, Cut, _) -> order.Lt
           Evaluation(a_score, _, _), Evaluation(b_score, _, _) ->
-            float.compare(b_score, a_score)
+            xint.compare(b_score, a_score)
         }
       }
     }
