@@ -1,4 +1,5 @@
 import chess/game
+import chess/game/castle
 import chess/piece
 import chess/player
 import chess/square
@@ -35,10 +36,10 @@ pub fn hash(game: game.Game) -> Hash {
     game.castling_availability(game)
     |> list.fold(0x0, fn(acc, x) {
       let castle_type = case x {
-        #(player.White, game.KingSide) -> 0
-        #(player.White, game.QueenSide) -> 1
-        #(player.Black, game.KingSide) -> 2
-        #(player.Black, game.QueenSide) -> 3
+        #(player.White, castle.KingSide) -> 0
+        #(player.White, castle.QueenSide) -> 1
+        #(player.Black, castle.KingSide) -> 2
+        #(player.Black, castle.QueenSide) -> 3
       }
       let assert Ok(hash) = get_hash(castle_type + castle_offset)
       int.bitwise_exclusive_or(acc, hash)
@@ -46,6 +47,7 @@ pub fn hash(game: game.Game) -> Hash {
   let en_passant_hash = {
     game.en_passant_target_square(game)
     |> option.map(fn(square) {
+      let #(_, square) = square
       // TODO: make sure this isn't expensive
 
       case

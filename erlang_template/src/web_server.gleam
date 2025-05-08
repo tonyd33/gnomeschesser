@@ -1,4 +1,5 @@
 import chess/game
+import chess/move
 import chess/player
 import chess/robot/robot_web as robot
 import gleam/dynamic/decode
@@ -54,7 +55,7 @@ fn handle_move(request: Request, robot: robot.Robot) -> Response {
       // Also to avoid any surprises here
       process.sleep(4900)
       case robot.get_best_move(robot) {
-        Ok(move) -> wisp.ok() |> wisp.string_body(game.move_to_lan(move))
+        Ok(move) -> wisp.ok() |> wisp.string_body(move.to_lan(move))
         Error(Nil) ->
           wisp.internal_server_error()
           |> wisp.string_body("Didn't get a move!!!")

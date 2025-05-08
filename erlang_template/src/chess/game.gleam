@@ -1,3 +1,6 @@
+import chess/bitboard
+import chess/game/castle.{type Castle, KingSide, QueenSide}
+import chess/move
 import chess/piece
 import chess/player
 import chess/square
@@ -6,44 +9,21 @@ import gleam/dict.{type Dict}
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/order
 import gleam/pair
 import gleam/result
-import gleam/set.{type Set}
 import gleam/string
-import util/result_addons
-import util/yielder
-
-pub type Castle {
-  KingSide
-  QueenSide
-}
+import util/direction
 
 pub opaque type Game {
   Game(
     board: Dict(square.Square, piece.Piece),
-    bitboards: Bitboards,
+    bitboard: bitboard.GameBitboard,
     active_color: player.Player,
     castling_availability: List(#(player.Player, Castle)),
-    en_passant_target_square: Option(square.Square),
+    en_passant_target_square: Option(#(player.Player, square.Square)),
     halfmove_clock: Int,
     fullmove_number: Int,
-  )
-}
-
-type Bitboards {
-  Bitboards(
-    white_pawns: Int,
-    white_knights: Int,
-    white_bishops: Int,
-    white_rooks: Int,
-    white_queens: Int,
-    white_king: Int,
-    black_pawns: Int,
-    black_knights: Int,
-    black_bishops: Int,
-    black_rooks: Int,
-    black_queens: Int,
-    black_king: Int,
   )
 }
 
@@ -137,79 +117,27 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
         _ -> []
       })
     })
+
+  let active_color = case active_color {
+    "w" -> player.White
+    "b" -> player.Black
+    _ -> panic
+  }
   let en_passant_target_square =
     square.from_string(en_passant_target_square)
+    |> result.map(pair.new(active_color, _))
     |> option.from_result
-
-  Ok(Game(
-    board: board,
-    bitboards: board_to_bitboards(board),
-    active_color: case active_color {
-      "w" -> player.White
-      "b" -> player.Black
-      _ -> panic
-    },
-    castling_availability: castling_availability,
-    en_passant_target_square: en_passant_target_square,
-    halfmove_clock: halfmove_clock,
-    fullmove_number: fullmove_number,
-  ))
-}
-
-fn board_to_bitboards(board: Dict(square.Square, piece.Piece)) {
-  let empty_bitboards =
-    Bitboards(
-      white_pawns: 0,
-      white_knights: 0,
-      white_bishops: 0,
-      white_rooks: 0,
-      white_queens: 0,
-      white_king: 0,
-      black_pawns: 0,
-      black_knights: 0,
-      black_bishops: 0,
-      black_rooks: 0,
-      black_queens: 0,
-      black_king: 0,
-    )
-  board
-  |> dict.to_list
-  |> list.fold(empty_bitboards, fn(bbs, x) {
-    let #(square, piece) = x
-
-    let rank = square.rank(square)
-    let file = square.file(square)
-
-    let idx = rank * 8 + file
-    let bit = int.bitwise_shift_left(1, idx)
-
-    case piece {
-      piece.Piece(player.White, piece.Pawn) ->
-        Bitboards(..bbs, white_pawns: int.bitwise_or(bbs.white_pawns, bit))
-      piece.Piece(player.White, piece.Knight) ->
-        Bitboards(..bbs, white_knights: int.bitwise_or(bbs.white_knights, bit))
-      piece.Piece(player.White, piece.Bishop) ->
-        Bitboards(..bbs, white_bishops: int.bitwise_or(bbs.white_bishops, bit))
-      piece.Piece(player.White, piece.Rook) ->
-        Bitboards(..bbs, white_rooks: int.bitwise_or(bbs.white_rooks, bit))
-      piece.Piece(player.White, piece.Queen) ->
-        Bitboards(..bbs, white_queens: int.bitwise_or(bbs.white_queens, bit))
-      piece.Piece(player.White, piece.King) ->
-        Bitboards(..bbs, white_king: int.bitwise_or(bbs.white_king, bit))
-      piece.Piece(player.Black, piece.Pawn) ->
-        Bitboards(..bbs, black_pawns: int.bitwise_or(bbs.black_pawns, bit))
-      piece.Piece(player.Black, piece.Knight) ->
-        Bitboards(..bbs, black_knights: int.bitwise_or(bbs.black_knights, bit))
-      piece.Piece(player.Black, piece.Bishop) ->
-        Bitboards(..bbs, black_bishops: int.bitwise_or(bbs.black_bishops, bit))
-      piece.Piece(player.Black, piece.Rook) ->
-        Bitboards(..bbs, black_rooks: int.bitwise_or(bbs.black_rooks, bit))
-      piece.Piece(player.Black, piece.Queen) ->
-        Bitboards(..bbs, black_queens: int.bitwise_or(bbs.black_queens, bit))
-      piece.Piece(player.Black, piece.King) ->
-        Bitboards(..bbs, black_king: int.bitwise_or(bbs.black_king, bit))
-    }
-  })
+  let bitboard = bitboard.from_pieces(pieces)
+  Game(
+    board:,
+    bitboard:,
+    active_color:,
+    castling_availability:,
+    en_passant_target_square:,
+    halfmove_clock:,
+    fullmove_number:,
+  )
+  |> Ok
 }
 
 pub fn turn(game: Game) -> player.Player {
@@ -224,7 +152,9 @@ pub fn castling_availability(game: Game) -> List(#(player.Player, Castle)) {
   game.castling_availability
 }
 
-pub fn en_passant_target_square(game: Game) -> Option(square.Square) {
+pub fn en_passant_target_square(
+  game: Game,
+) -> Option(#(player.Player, square.Square)) {
   game.en_passant_target_square
 }
 
@@ -234,10 +164,6 @@ pub fn halfmove_clock(game: Game) -> Int {
 
 pub fn fullmove_number(game: Game) -> Int {
   game.fullmove_number
-}
-
-pub fn update_fen(game: Game, fen: String) -> Result(Game, Nil) {
-  todo
 }
 
 pub fn to_fen(game: Game) -> String {
@@ -256,7 +182,7 @@ pub fn to_fen(game: Game) -> String {
             panic as "This isn't supposed to happen"
           })
 
-        let piece_string = case dict.has_key(game.board, actual_square) {
+        let _piece_string = case dict.has_key(game.board, actual_square) {
           True -> {
             dict.get(game.board, actual_square)
             |> result.lazy_unwrap(fn() {
@@ -312,7 +238,7 @@ pub fn to_fen(game: Game) -> String {
   }
 
   let en_passant_target_string = case game.en_passant_target_square {
-    option.Some(target_square) -> square.to_string(target_square)
+    option.Some(#(_, target_square)) -> square.to_string(target_square)
     option.None -> "-"
   }
 
@@ -342,37 +268,13 @@ pub fn equal(g1: Game, g2: Game) -> Bool {
   == list.take(string.split(g2_fen, " "), 4)
 }
 
-/// Returns the number of times this game state has repeated in the game's
-/// history, where equality is determined by the equality used for threefold
-/// repetition: https://en.wikipedia.org/wiki/Threefold_repetition
-///
-pub fn repetition_count(game: Game) -> Int {
-  todo
-}
-
 pub fn piece_at(game: Game, square: square.Square) -> Result(piece.Piece, Nil) {
   game.board |> dict.get(square)
 }
 
 pub fn empty_at(game: Game, square: square.Square) -> Bool {
-  let bit =
-    int.bitwise_shift_left(1, square.rank(square) * 8 + square.file(square))
-  {
-    game.bitboards.white_pawns
-    |> int.bitwise_or(game.bitboards.white_knights)
-    |> int.bitwise_or(game.bitboards.white_bishops)
-    |> int.bitwise_or(game.bitboards.white_rooks)
-    |> int.bitwise_or(game.bitboards.white_queens)
-    |> int.bitwise_or(game.bitboards.white_king)
-    |> int.bitwise_or(game.bitboards.black_pawns)
-    |> int.bitwise_or(game.bitboards.black_knights)
-    |> int.bitwise_or(game.bitboards.black_bishops)
-    |> int.bitwise_or(game.bitboards.black_rooks)
-    |> int.bitwise_or(game.bitboards.black_queens)
-    |> int.bitwise_or(game.bitboards.black_king)
-    |> int.bitwise_and(bit)
-  }
-  == 0
+  let square = bitboard.from_square(square)
+  0 == int.bitwise_and(square, bitboard.get_bitboard_all(game.bitboard))
 }
 
 pub fn find_piece(game: Game, piece: piece.Piece) -> List(square.Square) {
@@ -380,9 +282,9 @@ pub fn find_piece(game: Game, piece: piece.Piece) -> List(square.Square) {
   |> dict.keys()
 }
 
-pub fn is_attacked(game: Game, square: square.Square, by: player.Player) -> Bool {
-  let attackers = attackers(game, square, by)
-  !list.is_empty(attackers)
+pub fn is_attacked(game: Game, at: square.Square, by: player.Player) -> Bool {
+  pseudo_moves_player(game, by)
+  |> list.any(fn(move) { move.get_to(move) == at })
 }
 
 /// Returns the position and pieces that are attacking a square.
@@ -390,90 +292,50 @@ pub fn is_attacked(game: Game, square: square.Square, by: player.Player) -> Bool
 ///
 pub fn attackers(
   game: Game,
-  square: square.Square,
+  at: square.Square,
   by: player.Player,
 ) -> List(#(square.Square, piece.Piece)) {
-  let square = square.to_ox88(square)
-
-  let pieces =
-    game.board
-    |> dict.to_list
-
-  pieces
-  |> list.filter(fn(piece) {
-    let #(from, piece) = piece
-    use <- bool.guard(piece.player != by, False)
-
-    let from = square.to_ox88(from)
-    let difference = from - square
-
-    // skip if to/from square are the same
-    use <- bool.guard(difference == 0, False)
-
-    // This index is used for `attacks` and `rays`, where a difference of 0 corresponds to the centre
-    let index = difference + 119
-
-    // `attacks` lets us index which type of piece can attack from that square
-    // if it's not the piece we currently have, we just return
-    use <- bool.guard(
-      {
-        let assert Ok(pieces_masks) = attacks(index)
-        0 == int.bitwise_and(pieces_masks, piece_masks(piece.symbol))
-      },
-      False,
-    )
-
-    case piece.symbol {
-      // Knights and Kings can't be blocked
-      piece.Knight | piece.King -> True
-      // Pawns can only attack forwards
-      piece.Pawn ->
-        case piece.player {
-          player.Black -> difference > 0
-          player.White -> difference < 0
-        }
-      // These slide, so we check if their path is empty
-      piece.Bishop | piece.Queen | piece.Rook -> {
-        let assert Ok(offset) = rays(index)
-
-        yielder.iterate(from + offset, int.add(_, offset))
-        |> yielder.take_while(fn(x) { x != square })
-        |> yielder.any(fn(x) {
-          let assert Ok(x) = square.from_ox88(x)
-          !empty_at(game, x)
-        })
-        |> bool.negate
-      }
-    }
+  // TODO: don't generate every single attacking move (because that sucks)
+  // Or we cache it as a bitboard (this would make more sense)
+  pseudo_moves_player(game, by)
+  |> list.filter(fn(move) { move.get_to(move) == at })
+  |> list.map(fn(move) {
+    let from = move.get_from(move)
+    let assert Ok(piece) = dict.get(game.board, from)
+    #(from, piece)
   })
 }
 
-pub fn is_check(game: Game) -> Bool {
-  let us = turn(game)
-  let them = player.opponent(us)
-
-  pieces(game)
-  |> list.find(fn(x) {
-    let #(_, piece) = x
-    piece.symbol == piece.King && piece.player == us
-  })
-  |> result.map(fn(x) {
-    let #(king_square, _) = x
-    is_attacked(game, king_square, them)
-  })
-  |> result.unwrap(False)
+pub fn is_check(game: Game, player: player.Player) -> Bool {
+  // TODO: once we have the attacker bitboard we can just use that instead
+  let assert [king_square] =
+    bitboard.get_bitboard_piece(game.bitboard, piece.Piece(player, piece.King))
+    |> bitboard.to_squares
+  king_square
+  |> is_attacked(game, _, player.opponent(player))
 }
 
 pub fn is_checkmate(game: Game) -> Bool {
-  is_check(game) && { moves(game) |> list.length == 0 }
+  let us = turn(game)
+  is_check(game, us)
+  && {
+    pseudo_moves(game)
+    |> list.all(fn(x) {
+      // If every new move we try still result in a check, then it's checkmate
+      apply(game, x)
+      |> result.map(is_check(_, us))
+      |> result.unwrap(True)
+    })
+  }
 }
 
 pub fn is_stalemate(game: Game) -> Bool {
-  !is_check(game) && { moves(game) |> list.length == 0 }
-}
-
-pub fn is_threefold_repetition(game: Game) -> Bool {
-  repetition_count(game) >= 3
+  !is_check(game, game.active_color)
+  && {
+    pseudo_moves(game)
+    |> list.filter(fn(x) { apply(game, x) |> result.is_ok })
+    |> list.is_empty
+  }
 }
 
 /// There are certain board configurations in which it is impossible for either
@@ -481,11 +343,11 @@ pub fn is_threefold_repetition(game: Game) -> Bool {
 /// true iff that's the case. See the same function in chess.js:
 /// https://github.com/jhlywa/chess.js/blob/dc1f397bc0195dda45e12f0ddf3322550cbee078/src/chess.ts#L1123
 ///
-pub fn is_insufficient_material(game: Game) -> Bool {
+pub fn is_insufficient_material(_game: Game) -> Bool {
   todo
 }
 
-pub fn is_draw(game: Game) -> Bool {
+pub fn is_draw(_game: Game) -> Bool {
   False
 }
 
@@ -524,1546 +386,547 @@ pub fn pieces(game: Game) -> List(#(square.Square, piece.Piece)) {
   game.board |> dict.to_list
 }
 
-// Moves
-
+// There are functions that require the game state as well as move, those will go here
 /// Standard Algebraic Notation
 /// https://en.wikipedia.org/wiki/Algebraic_notation_(chess)
 ///
 pub type SAN =
   String
 
-// TODO: use phantom types to denote whether a move is pseudolegal or plain legal
-pub opaque type Move {
-  Move(
-    player: player.Player,
-    from: square.Square,
-    to: square.Square,
-    piece: piece.PieceSymbol,
-    captured: Option(piece.PieceSymbol),
-    promotion: Option(piece.PieceSymbol),
-    castle: Option(Castle),
-    flags: Set(MoveFlags),
-  )
-}
-
-type MoveFlags {
-  EnPassant
-  // two step pawn move
-  BigPawn
-}
-
-pub fn move_piece(move: Move) {
-  move.piece
-}
-
-pub fn move_is_capture(move: Move) -> Bool {
-  option.is_some(move.captured)
-}
-
-pub fn move_is_promotion(move: Move) -> Bool {
-  option.is_some(move.promotion)
-}
-
-pub fn move_is_en_passant(move: Move) -> Bool {
-  set.contains(move.flags, EnPassant)
-}
-
-pub fn move_is_kingside_castle(move: Move) -> Bool {
-  move.castle == Some(KingSide)
-}
-
-pub fn move_is_queenside_castle(move: Move) -> Bool {
-  move.castle == Some(QueenSide)
-}
-
-pub fn move_is_big_pawn(move: Move) -> Bool {
-  set.contains(move.flags, BigPawn)
-}
-
-pub fn move_piece_to_move(move: Move) -> piece.Piece {
-  piece.Piece(move.player, move.piece)
+pub fn move_is_capture(move: move.Move(a), game: Game) -> Bool {
+  game.board |> dict.get(move.get_to(move)) |> result.is_ok
 }
 
 /// Convert a move to SAN.
 /// *This is expensive, so use it sparingly.*
 ///
-pub fn move_to_san(move: Move, game: Game) -> SAN {
-  let all_moves = moves(game)
+pub fn move_to_san(move: move.Move(a), game: Game) -> Result(SAN, Nil) {
+  let us = game.active_color
+  let them = player.opponent(us)
+  let from = move.get_from(move)
+  let to = move.get_to(move)
+  let assert Ok(us_piece) = dict.get(game.board, from)
+  use new_game <- result.try(apply(game, move))
+  // no moving into check
+  use <- bool.guard(is_check(new_game, us), Error(Nil))
 
-  let is_kingside_castle = move.castle == Some(KingSide)
-  let is_queenside_castle = move.castle == Some(QueenSide)
+  // We can assume `move` is legal from this point on
 
-  // SAN without # or +
+  // Calculate castle moves
+  let castle_san = case us_piece {
+    piece.Piece(side, piece.King) -> {
+      use <- bool.guard(
+        move.equal(move, castle.king_move(side, KingSide)),
+        Ok("O-O"),
+      )
+      use <- bool.guard(
+        move.equal(move, castle.king_move(side, QueenSide)),
+        Ok("O-O-O"),
+      )
+      Error(Nil)
+    }
+    _ -> Error(Nil)
+  }
+  use <- result.lazy_or(castle_san)
+  // use <- result.lazy_unwrap(castle_san)
+
   let undecorated_san = {
-    use <- bool.guard(is_kingside_castle, "O-O")
-    use <- bool.guard(is_queenside_castle, "O-O-O")
+    let is_capture =
+      dict.get(game.board, to)
+      |> result.map(fn(x) { x.player == them })
+      |> result.unwrap(False)
 
-    let disambiguation_level =
-      all_moves
-      |> list.fold(Unambiguous, fn(level: DisambiguationLevel, other_move) {
-        let identical_move = move == other_move
-        let same_piece = move.piece == other_move.piece
-        use <- bool.guard(identical_move || !same_piece, level)
-
-        let ambiguous = move.to == other_move.to
-        let same_file = square.file(move.from) == square.file(other_move.from)
-        let same_rank = square.rank(move.from) == square.rank(other_move.from)
-
-        case ambiguous, same_file, same_rank {
-          False, _, _ -> Unambiguous
-          True, False, False -> GenerallyAmbiguous
-          True, False, True -> Rank
-          True, True, False -> File
-          // The only way the other move matches to, from, and piece is that
-          // they're both a pawn promotion, in which case the move is unambiguous
-          // because it's identified by the file that's always added to pawn
-          // moves
-          True, True, True -> Unambiguous
+    // Calculate pawn moves
+    let pawn_san = {
+      use <- bool.guard(us_piece.symbol != piece.Pawn, Error(Nil))
+      let is_capture =
+        is_capture || Some(#(them, to)) == game.en_passant_target_square
+      Ok(
+        case is_capture {
+          True -> square.file_to_string(square.file(from)) <> "x"
+          False -> ""
         }
-        |> add_disambiguation_levels(level)
-      })
-    let is_capture = option.is_some(move.captured)
+        <> square.to_string(to)
+        <> case move.get_promotion(move) {
+          Some(piece) -> "=" <> piece.symbol_to_string(piece)
+          None -> ""
+        },
+      )
+    }
+    use <- result.lazy_unwrap(pawn_san)
 
-    let piece_san = fn(piece) {
-      case piece {
-        piece.Knight -> "N"
-        piece.Bishop -> "B"
-        piece.King -> "K"
-        piece.Pawn ->
-          // https://en.wikipedia.org/wiki/Algebraic_notation_(chess)#Captures
-          case is_capture {
-            True -> square.string_file(move.from)
-            False -> ""
-          }
-        piece.Queen -> "Q"
-        piece.Rook -> "R"
+    // calculate all other moves
+    let _other_san = {
+      let other_ambiguous_moves =
+        // find other pseudo_moves that have the same player and piece type that's targeting
+        // don't include ourselves
+        pseudo_moves(game)
+        |> list.filter(fn(other_move) {
+          move.get_to(other_move) == to
+          && !move.equal(move, other_move)
+          && { dict.get(game.board, move.get_from(other_move)) == Ok(us_piece) }
+        })
+
+      piece.symbol_to_string(us_piece.symbol)
+      <> {
+        // handle disambiguation here
+        let #(is_ambiguous, same_file, same_rank) =
+          list.fold(
+            other_ambiguous_moves,
+            #(False, False, False),
+            fn(acc, other_move) {
+              use <- bool.guard(result.is_error(apply(game, other_move)), acc)
+              let #(_, same_file, same_rank) = acc
+              let other_from = move.get_from(other_move)
+              let same_file =
+                same_file || square.file(from) == square.file(other_from)
+              let same_rank =
+                same_rank || square.rank(from) == square.rank(other_from)
+              #(True, same_file, same_rank)
+            },
+          )
+        case is_ambiguous, same_file, same_rank {
+          False, _, _ -> ""
+          True, False, _ -> square.file_to_string(square.file(from))
+          True, _, False -> square.rank_to_string(square.rank(from))
+          True, True, True -> square.to_string(from)
+        }
       }
+      <> case is_capture {
+        True -> "x"
+        False -> ""
+      }
+      <> square.to_string(to)
     }
-
-    let san = piece_san(move.piece)
-
-    let san = case disambiguation_level, move.piece {
-      Unambiguous, _ | _, piece.Pawn -> san
-      GenerallyAmbiguous, _ | Rank, _ -> san <> square.string_file(move.from)
-      File, _ -> san <> square.string_rank(move.from)
-      Both, _ -> san <> square.to_string(move.from)
-    }
-
-    let san = case is_capture {
-      True -> san <> "x"
-      False -> san
-    }
-
-    let san = san <> square.to_string(move.to)
-    let san = case move.promotion {
-      Some(promotion_piece) -> san <> "=" <> piece_san(promotion_piece)
-      None -> san
-    }
-    san
   }
-
-  // Is this check/checkmate?
-  case
-    apply(game, move)
-    |> result.map(fn(x) { #(is_check(x), is_checkmate(x)) })
-  {
-    Ok(#(_, True)) -> undecorated_san <> "#"
-    Ok(#(True, False)) -> undecorated_san <> "+"
-    _ -> undecorated_san
-  }
+  Ok(
+    undecorated_san
+    <> case is_check(new_game, them), is_checkmate(new_game) {
+      _, True -> "#"
+      True, _ -> "+"
+      _, _ -> ""
+    },
+  )
 }
 
 /// Create a move from a SAN. The SAN must be strictly valid, including
 /// disambiguation only when necessary, captures, check/checkmates, etc.
 /// TODO: Possibly allow more flexibility
 /// TODO: generate this in a way that doesn't involve generating every move
-pub fn move_from_san(san: String, game: Game) -> Result(Move, Nil) {
-  moves(game)
-  |> list.find(fn(move) { move_to_san(move, game) == san })
+/// 
+// type ParseThing {
+//   ParseRank(a: Int)
+//   ParseFile(a: Int)
+//   ParsePiece(a: piece.PieceSymbol)
+// }
+
+pub fn move_from_san(
+  san: String,
+  game: Game,
+) -> Result(move.Move(move.Pseudo), Nil) {
+  pseudo_moves(game)
+  |> list.find(fn(x) { move_to_san(x, game) == Ok(san) })
+  // let us = game.active_color
+  // let san = string.trim(san) |> string.lowercase
+
+  // use <- bool.lazy_guard(san == "o-o-o" || san == "0-0-0", fn() {
+  //   Ok(castle.king_move(us, castle.QueenSide))
+  // })
+  // use <- bool.lazy_guard(san == "o-o" || san == "0-0", fn() {
+  //   Ok(castle.king_move(us, castle.KingSide))
+  // })
+
+  // let parsed =
+  //   string.to_graphemes(san)
+  //   |> list.filter_map(fn(x) {
+  //     use <- result.replace_error(
+  //       piece.symbol_from_string(x) |> result.map(ParsePiece),
+  //     )
+  //     use <- result.replace_error(
+  //       square.file_from_string(x) |> result.map(ParseFile),
+  //     )
+  //     square.rank_from_string(x) |> result.map(ParseRank)
+  //   })
+  // // the last file-rank is the to square
+  // list.fold(list.reverse(parsed), #([], [], []), fn(acc, x) {
+  //   case x {
+  //     ParsePiece(piece) -> {
+  //       todo
+  //     }
+  //     ParseFile(piece) -> {
+  //       todo
+  //     }
+  //     ParseRank(piece) -> {
+  //       todo
+  //     }
+  //   }
+  //   acc
+  // })
+
+  // // check castles
+  // list.fold(string.to_graphemes(san), [], fn(acc, char) {
+  //   // a little janky, but we break down and 
+  //   case string.contains("abcdefghijklmnopqrstuvwxyz", string.lowercase(char)) {
+  //     True -> [[char], ..acc]
+  //     False ->
+  //       case acc {
+  //         [first, ..rest] -> [[char, ..first], ..rest]
+  //         [] -> acc
+  //       }
+  //   }
+  // })
+  // |> list.reverse
+  // |> list.map(fn(x) { list.reverse(x) |> string.join("") })
+  // //piece.symbol_from_string
+  // //pseudo_moves(game)
+  // //|> list.find(fn(move) { move_to_san(move, game) == san })
+  // Error(Nil)
 }
 
-pub fn move_to_lan(move: Move) -> String {
-  square.to_string(move.from)
-  <> square.to_string(move.to)
-  <> case move.promotion {
-    Some(symbol) -> piece.symbol_to_string(symbol)
-    None -> ""
-  }
-}
-
-// there's a specific kind of long algebraic notation used by UCI
-// TODO: generate this in a way that doesn't involve generating every move
-pub fn move_from_lan(lan: String, game: Game) -> Result(Move, Nil) {
-  let lan_from = square.from_string(string.slice(lan, 0, 2))
-  let lan_to = square.from_string(string.slice(lan, 2, 2))
-  let lan_promotion = piece.symbol_from_string(string.slice(lan, 4, 1))
-
-  case lan_from, lan_to {
-    Ok(lan_from), Ok(lan_to) -> {
-      pseudolegal_moves(game)
-      |> list.find(fn(move) {
-        case move {
-          Move(from:, to:, promotion:, ..) -> {
-            from == lan_from
-            && to == lan_to
-            && promotion == option.from_result(lan_promotion)
-          }
-        }
-      })
-    }
-    _, _ -> panic as { lan <> " is an invalid lan" }
-  }
-}
-
-/// Apply a move to a game. Moves should only be passed in with a `game` from
-/// moves created with `from_san` or `moves` with the same `game`.
-///
-pub fn apply(game: Game, move: Move) -> Result(Game, Nil) {
-  let Move(us, from, to, piece, captured, promotion, castle, flags) = move
+// PseudoMoves don't consider checks, only occupancy
+// we could return the new validated move?
+pub fn apply(game: Game, move: move.Move(a)) -> Result(Game, Nil) {
+  let from = move.get_from(move)
+  let to = move.get_to(move)
+  let Game(
+    board:,
+    bitboard:,
+    castling_availability:,
+    active_color: us,
+    en_passant_target_square:,
+    fullmove_number:,
+    halfmove_clock:,
+  ) = game
   let them = player.opponent(us)
-
-  let fullmove_number = fullmove_number(game)
-  let halfmove_clock = halfmove_clock(game)
-  let castling_availability = castling_availability(game)
-
-  // If we're debugging, we'll purposely be more strict to ensure correctness.
-  // When actually competing though, we don't want the program to crash, even
-  // if something's incorrect though.
-  // #ifdef DEV
-  // assert_move_sanity_checks(move, game)
-  // #endif
-
-  let is_kingside_castle = castle == Some(KingSide)
-  let is_queenside_castle = castle == Some(QueenSide)
-  let is_en_passant = set.contains(flags, EnPassant)
-  let is_big_pawn = set.contains(flags, BigPawn)
-  let is_capture = option.is_some(captured)
-
-  use from_piece <- result.try(piece_at(game, from))
-
-  let next_en_passant_target_square = case is_big_pawn {
-    True -> {
-      let offset = case us {
-        player.White -> 16
-        player.Black -> -16
-      }
-      let square = square.from_ox88(square.to_ox88(to) + offset)
-      option.from_result(square)
-    }
-    False -> None
-  }
-  let next_player = them
-  let next_fullmove_number = case next_player {
-    player.White -> fullmove_number + 1
-    player.Black -> fullmove_number
-  }
-
-  let next_halfmove_clock = case piece == piece.Pawn || is_capture {
-    True -> 0
-    False -> halfmove_clock + 1
-  }
-  let next_castling_availability = {
-    let castling_availability = case piece {
-      // If king moved, disable castling for us entirely
-      piece.King ->
-        castling_availability
-        |> list.filter(fn(x) { x.0 != us })
-      // If we're moving a rook from its starting position, we disable castling
-      // depending which side it was on. The correctness of this depends on the
-      // correctness of the previous `castling_availability`.
-      piece.Rook -> {
-        let position_flags =
-          rook_positions_flags(us)
-          |> list.find(fn(x) { x.0 == from })
-        case position_flags {
-          Error(_) -> castling_availability
-          Ok(#(_, side)) ->
-            castling_availability
-            // This is a bit hard to read, but we're just removing all
-            // castling rights for us on this side
-            |> list.filter(fn(x) { !{ x.0 == us && x.1 == side } })
+  use piece <- result.try(dict.get(board, from))
+  // Get capture square and potential piece
+  let captured_square = case en_passant_target_square, piece.symbol {
+    Some(#(en_passant_creator, target_square)), piece.Pawn
+      if en_passant_creator == them && target_square == to
+    -> {
+      let assert Ok(square) =
+        case us {
+          player.White -> direction.Down
+          player.Black -> direction.Up
         }
-      }
-      _ -> castling_availability
+        |> square.move(to, _, 1)
+      square
     }
-
-    // Also disable castling for opponent if we captured their rook
-    case captured {
-      Some(piece.Rook) -> {
-        let position_flags =
-          rook_positions_flags(them)
-          |> list.find(fn(x) { x.0 == to })
-        case position_flags {
-          Error(_) -> castling_availability
-          Ok(#(_, side)) ->
-            castling_availability
-            // This is a bit hard to read, but we're just removing all
-            // castling rights for them on this side
-            |> list.filter(fn(x) { !{ x.0 == them && x.1 == side } })
-        }
-      }
-      _ -> castling_availability
-    }
+    _, _ -> to
   }
+  let captured_piece = dict.get(board, captured_square)
 
-  // TODO: Apply the changes to the board immediately and validate whether
-  // this move can be applied to potentially do less work
-
-  // Apply basic to/from
-  let #(next_board, next_bitboards) = {
-    // If pawn promotion, replace with new piece
-    let become_piece = case promotion {
-      Some(promotion_piece) -> piece.Piece(us, promotion_piece)
-      None -> piece.Piece(us, piece)
-    }
-    #(
-      game.board
-        |> dict.delete(from)
-        |> dict.insert(to, become_piece),
-      case captured {
-        Some(captured) ->
-          game.bitboards
-          |> bitboards_remove(from, from_piece)
-          |> bitboards_remove(to, piece.Piece(them, captured))
-          |> bitboards_insert(to, become_piece)
-        None ->
-          game.bitboards
-          |> bitboards_remove(from, from_piece)
-          |> bitboards_insert(to, become_piece)
-      },
-    )
-  }
-  // If it's en passant, we have to kill a different square too
-  use #(next_board, next_bitboards) <- result.try(case is_en_passant {
-    True -> {
-      let offset = case us {
-        player.Black -> -16
-        player.White -> 16
-      }
-      use ep_square <- result.try(square.from_ox88(square.to_ox88(to) + offset))
-      use ep_piece <- result.try(piece_at(game, ep_square))
-
-      Ok(#(
-        dict.delete(next_board, ep_square),
-        bitboards_remove(next_bitboards, ep_square, ep_piece),
-      ))
-    }
-    False -> Ok(#(next_board, next_bitboards))
-  })
-
-  // If castling, we have to move the rook too
-  use #(next_board, next_bitboards) <- result.try(
-    case is_kingside_castle || is_queenside_castle {
-      False -> Ok(#(next_board, next_bitboards))
-      True -> {
-        let castling_to_offset = case is_kingside_castle {
-          True -> -1
-          False -> 1
-        }
-        let castling_from_offset = case is_kingside_castle {
-          True -> 1
-          False -> -2
-        }
-        use castling_to_square <- result.try(square.from_ox88(
-          square.to_ox88(to) + castling_to_offset,
-        ))
-        use castling_from_square <- result.try(square.from_ox88(
-          square.to_ox88(to) + castling_from_offset,
-        ))
-        use castling_from_piece <- result.try(piece_at(
-          game,
-          castling_from_square,
-        ))
-
-        Ok(#(
-          next_board
-            |> dict.delete(castling_from_square)
-            |> dict.insert(castling_to_square, castling_from_piece),
-          next_bitboards
-            |> bitboards_remove(castling_from_square, castling_from_piece)
-            |> bitboards_insert(castling_to_square, castling_from_piece),
-        ))
-      }
-    },
+  // If it's a pawn move that's trying to capture
+  use <- bool.guard(
+    piece.symbol == piece.Pawn
+      && move.is_x_move(move) |> result.unwrap(False)
+      && result.is_error(captured_piece),
+    Error(Nil),
   )
 
-  // We better not have moved ourselves into check! That would disqualify this
-  // move as being legal
-  let g =
-    Game(
-      board: next_board,
-      bitboards: next_bitboards,
-      active_color: next_player,
-      castling_availability: next_castling_availability,
-      en_passant_target_square: next_en_passant_target_square,
-      halfmove_clock: next_halfmove_clock,
-      fullmove_number: next_fullmove_number,
+  // castle update, the king move is handled by the regular move logic
+  use #(board, bitboard, castling_availability) <- result.try({
+    let king_from_file = square.file(from)
+    let king_to_file = square.file(to)
+    use <- bool.guard(
+      piece.symbol != piece.King
+        || int.absolute_value(king_from_file - king_to_file) <= 1,
+      // not a castle attempt
+      #(board, bitboard, castling_availability) |> Ok,
     )
 
-  // #ifdef DEV
-  // assert_board_bitboards_consistency(g)
-  // #endif
-  use #(our_king_square, _) <- result.try(find_player_king(g, us))
-  case is_attacked(g, our_king_square, them) {
-    True -> Error(Nil)
-    False -> Ok(g)
+    let castle_type = case int.compare(king_from_file, king_to_file) {
+      order.Gt -> castle.QueenSide
+      order.Lt -> castle.KingSide
+      order.Eq -> panic
+    }
+
+    // The rook's position in this game will not change whether they have a check here
+    // We'll also assume that the king's position on the board won't change the check 
+    // TODO: use the attack bitboard to check this more efficiently
+    let unattacked_squares =
+      castle.unattacked_bitboard(us, castle_type)
+      |> bitboard.to_squares
+
+    let attacked =
+      pseudo_moves_player(game, them)
+      // filter out non-capture pawn moves
+      |> list.filter(fn(move) { move.is_x_move(move) != Ok(False) })
+      |> list.any(fn(move) {
+        // pawns are awkward here, but if a pawn move would block the path,
+        // the same pawn can also attack the path
+        // this won't be a problem with the attack bitboard
+        list.contains(unattacked_squares, move.get_to(move))
+      })
+    use <- bool.guard(attacked, Error(Nil))
+
+    // Handle rook teleportation now
+    let rook_move = castle.rook_move(us, castle_type)
+    let rook_piece = piece.Piece(us, piece.Rook)
+    let board =
+      dict.delete(board, move.get_from(rook_move))
+      |> dict.insert(move.get_to(rook_move), rook_piece)
+    let bitboard =
+      bitboard.exclusive_or(
+        bitboard,
+        rook_piece,
+        int.bitwise_or(bitboard.from_square(from), bitboard.from_square(to)),
+      )
+
+    let castling_availability =
+      list.filter(castling_availability, fn(x) { x.0 != us })
+    #(board, bitboard, castling_availability) |> Ok
+  })
+
+  // update castling availibility based on game state
+  let castling_availability = {
+    let kingside_rook_file = castle.rook_from_file(castle.KingSide)
+    let queenside_rook_file = castle.rook_from_file(castle.QueenSide)
+    // if we capture a rook in their home square, remove their availability
+    let capture_removal = case captured_piece, captured_square |> square.file {
+      Ok(piece.Piece(side, piece.Rook)), file if file == kingside_rook_file -> [
+        #(side, castle.KingSide),
+      ]
+      Ok(piece.Piece(side, piece.Rook)), file if file == queenside_rook_file -> [
+        #(side, castle.QueenSide),
+      ]
+      _, _ -> []
+    }
+
+    // if we move a king or a rook, remove availablity
+    let move_removal = case piece.symbol {
+      piece.King -> [#(us, castle.KingSide), #(us, castle.QueenSide)]
+      piece.Rook -> {
+        case square.file(from) {
+          from_file if from_file == kingside_rook_file -> [
+            #(us, castle.KingSide),
+          ]
+
+          from_file if from_file == queenside_rook_file -> [
+            #(us, castle.QueenSide),
+          ]
+          _ -> []
+        }
+      }
+      _ -> []
+    }
+    let removals = list.flatten([capture_removal, move_removal])
+    list.filter(castling_availability, fn(x) { !list.contains(removals, x) })
   }
+
+  // board update
+  let board =
+    dict.delete(board, from)
+    // captured square might be different from actual square due to en passant
+    |> dict.delete(captured_square)
+    |> dict.insert(to, piece)
+
+  // bitboard update
+  let bitboard = {
+    let bitboard =
+      // mask out the captured square if it exists
+      result.map(captured_piece, bitboard.and(
+        bitboard,
+        _,
+        int.bitwise_not(bitboard.from_square(captured_square)),
+      ))
+      |> result.unwrap(bitboard)
+    // mask out the from square 
+    // mask in the to square 
+    bitboard.exclusive_or(
+      bitboard,
+      piece,
+      int.bitwise_or(bitboard.from_square(from), bitboard.from_square(to)),
+    )
+  }
+
+  // en passant target square update
+  // if it's a pawn move and it has a 2 rank difference
+  let en_passant_target_square = case piece.symbol {
+    piece.Pawn ->
+      case int.absolute_value(square.rank(from) - square.rank(to)) {
+        2 -> {
+          let assert Ok(square) =
+            case us {
+              player.White -> direction.Up
+              player.Black -> direction.Down
+            }
+            |> square.move(from, _, 1)
+          Some(#(us, square))
+        }
+        _ -> None
+      }
+    _ -> None
+  }
+
+  let fullmove_number = case us {
+    player.Black -> fullmove_number + 1
+    player.White -> fullmove_number
+  }
+  let halfmove_clock = case piece.symbol, captured_piece {
+    piece.Pawn, _ | _, Ok(_) -> 0
+    _, _ -> halfmove_clock + 1
+  }
+  Game(
+    board:,
+    bitboard:,
+    active_color: them,
+    castling_availability:,
+    en_passant_target_square:,
+    fullmove_number:,
+    halfmove_clock:,
+  )
+  |> Ok
 }
 
-pub fn pseudolegal_moves(game: Game) -> List(Move) {
-  maybe_pseudolegal_moves(game, True)
+// Generate moves that don't care about checks
+// It only ensures that moves are moving into unoccupied space (or a capture)
+// And also that castles aren't occupied by pieces
+// but it does not check if there's an attack in the way
+pub fn pseudo_moves(game: Game) -> List(move.Move(move.Pseudo)) {
+  pseudo_moves_player(game, game.active_color)
 }
 
-pub fn moves(game: Game) -> List(Move) {
-  maybe_pseudolegal_moves(game, False)
-}
-
-fn find_player_king(
+pub fn pseudo_moves_player(
   game: Game,
   player: player.Player,
-) -> Result(#(square.Square, piece.Piece), Nil) {
-  pieces(game)
-  |> list.find(fn(x) {
-    let #(_, piece) = x
-    piece.symbol == piece.King && piece.player == player
-  })
-}
+) -> List(move.Move(move.Pseudo)) {
+  let us = player
+  let us_bitboard = bitboard.get_bitboard_player(game.bitboard, us)
+  let all_bitboard = bitboard.get_bitboard_all(game.bitboard)
+  let us_pieces_list =
+    game.board
+    |> dict.to_list
+    |> list.filter(fn(square_piece) { { square_piece.1 }.player == us })
 
-/// Assert that the board matches the bitboard.
-/// For debugging only!! We want to noisily fail if we detect an inconsistency.
-///
-fn assert_board_bitboards_consistency(game: Game) {
-  let bbs_board = board_to_bitboards(game.board)
-  let assert True = bbs_board == game.bitboards
-  Nil
-}
+  let #(pawn_moves_one, pawn_moves_two, pawn_moves_captures) = {
+    let pawn_bb =
+      bitboard.get_bitboard_piece(game.bitboard, piece.Piece(us, piece.Pawn))
 
-/// Validate a move is internally consistent. If it's not, the program will
-/// crash. Use this only when debugging.
-///
-fn assert_move_sanity_checks(move: Move, game: Game) -> Nil {
-  let Move(player, from, to, piece, captured, _, _, flags) = move
-  let opponent = player.opponent(player)
-
-  // It should be our turn
-  let assert True = player == turn(game)
-
-  // Piece should match what was stated in move
-  let assert Ok(_) =
-    piece_at(game, from)
-    |> result_addons.expect_or(
-      fn(actual_piece) {
-        actual_piece.symbol == piece && actual_piece.player == player
-      },
-      fn(_) { Nil },
-    )
-
-  // Capture must match actual piece
-  let assert True = case captured {
-    Some(captured_piece) -> {
-      let assert Ok(real_piece) = case set.contains(flags, EnPassant) {
-        True -> {
-          let offset = case player {
-            player.Black -> -16
-            player.White -> 16
-          }
-          square.add(to, offset)
-          |> result.try(piece_at(game, _))
-        }
-        False -> piece_at(game, to)
-      }
-      real_piece.symbol == captured_piece && real_piece.player == opponent
+    // The direction that our pawns travel
+    let us_direction = case us {
+      player.White -> direction.Up
+      player.Black -> direction.Down
     }
-    None -> True
-  }
+    let their_direction = direction.opposite(us_direction)
 
-  // is_en_passant implies is_capture
-  let assert True = !set.contains(flags, EnPassant) || option.is_some(captured)
+    let promotions = fn(to: square.Square) {
+      case square.rank(to) == square.pawn_promotion_rank(us) {
+        True -> [
+          Some(piece.Rook),
+          Some(piece.Bishop),
+          Some(piece.Knight),
+          Some(piece.Queen),
+        ]
+        False -> [None]
+      }
+    }
+    let one_move =
+      pawn_bb
+      // advance the entire bitboard according to pawn direction
+      |> bitboard.move(us_direction, 1)
+      // we mask the positions that we're trying to move to that also
+      // doesn't have a piece there
+      |> int.bitwise_and(int.bitwise_not(all_bitboard))
+      |> bitboard.to_squares
+      |> list.flat_map(fn(to) {
+        // move backwards to find our previous position
+        let assert Ok(from) = square.move(to, their_direction, 1)
+        list.map(promotions(to), fn(promotion) {
+          let pawn_context = move.PawnContext(promotion:, x_move: False)
+          move.new_pseudomove_pawn(from:, to:, pawn_context:)
+        })
+      })
 
-  Nil
-}
+    let big_move =
+      pawn_bb
+      // mask only the pawns in our starting rank
+      |> int.bitwise_and(bitboard.pawn_start_rank(us))
+      |> bitboard.move(us_direction, 1)
+      |> int.bitwise_and(int.bitwise_not(all_bitboard))
+      |> bitboard.move(us_direction, 1)
+      |> int.bitwise_and(int.bitwise_not(all_bitboard))
+      |> bitboard.to_squares
+      |> list.flat_map(fn(to) {
+        let assert Ok(from) = square.move(to, their_direction, 2)
 
-fn maybe_pseudolegal_moves(game: Game, pseudolegal: Bool) -> List(Move) {
-  let us = turn(game)
-  let castle_moves: List(Move) = king_castle_moves(game)
+        list.map(promotions(to), fn(promotion) {
+          let pawn_context = move.PawnContext(promotion:, x_move: False)
+          move.new_pseudomove_pawn(from:, to:, pawn_context:)
+        })
+      })
 
-  let pseudolegal_moves =
-    game
-    |> pieces
-    |> list.fold([], fn(moves, x) {
-      let #(square, piece) = x
-      // Not our piece
-      use <- bool.guard(piece.player != us, moves)
+    let capture_move = {
+      list.flat_map([direction.Left, direction.Right], fn(side) {
+        pawn_bb
+        |> bitboard.move(us_direction, 1)
+        |> bitboard.move(side, 1)
+        // for captures, we only don't include our own pieces
+        |> int.bitwise_and(int.bitwise_not(us_bitboard))
+        |> bitboard.to_squares
+        |> list.flat_map(fn(to) {
+          let assert Ok(from) =
+            square.move(to, direction.opposite(side), 1)
+            |> result.try(square.move(_, their_direction, 1))
 
-      let standard_moves = case piece.symbol {
-        piece.Pawn -> pawn_moves(game, square)
-        _ -> {
-          piece_offsets(piece)
-          |> list.flat_map(fn(offset) {
-            let max_depth = case piece.symbol {
-              piece.King | piece.Knight -> 1
-              _ -> 8
-            }
-            collect_ray_moves(game, piece.symbol, square, offset, max_depth)
+          list.map(promotions(to), fn(promotion) {
+            let pawn_context = move.PawnContext(promotion:, x_move: True)
+            move.new_pseudomove_pawn(from:, to:, pawn_context:)
           })
-        }
-      }
-      moves |> list.append(standard_moves)
-    })
-    |> list.append(castle_moves)
-
-  use <- bool.guard(pseudolegal, pseudolegal_moves)
-
-  pseudolegal_moves
-  |> list.filter(fn(move) {
-    // Failed to apply? Because it wasn't legal, fool!
-    case apply(game, move) {
-      Ok(_) -> True
-      _ -> False
+        })
+      })
     }
-  })
-}
 
-fn king_castle_moves(game: Game) {
-  let us = turn(game)
-  let them = player.opponent(us)
-
-  let king = find_player_king(game, us)
-  use king_piece: #(square.Square, piece.Piece) <-
-    fn(fun) { king |> result.map(fun) |> result.unwrap([]) }
-
-  let castling_availability = set.from_list(game.castling_availability)
-
-  let kingside = {
-    use <- bool.guard(
-      !set.contains(castling_availability, #(us, KingSide)),
-      Error(Nil),
-    )
-    let castling_from_square = square.to_ox88(king_piece.0)
-    let castling_to_square = castling_from_square + 2
-
-    let should_be_empty_squares = [castling_from_square + 1, castling_to_square]
-    let should_be_safe_squares = [
-      castling_from_square,
-      castling_from_square + 1,
-    ]
-    use _ <- result.try(
-      result.all(
-        should_be_empty_squares
-        |> list.map(fn(x) {
-          square.from_ox88(x)
-          |> result.map(empty_at(game, _))
-        }),
-      )
-      |> result.map(list.all(_, fn(x) { x }))
-      |> result_addons.expect_or(fn(x) { x }, fn(_) { Nil }),
-    )
-
-    use _ <- result.try(
-      result.all(
-        should_be_safe_squares
-        |> list.map(fn(x) {
-          square.from_ox88(x)
-          |> result.map(is_attacked(game, _, them))
-          |> result.map(fn(x) { !x })
-        }),
-      )
-      |> result.map(list.all(_, fn(x) { x }))
-      |> result_addons.expect_or(fn(x) { x }, fn(_) { Nil }),
-    )
-
-    let assert Ok(castling_to_square) = square.from_ox88(castling_to_square)
-    let assert Ok(castling_from_square) = square.from_ox88(castling_from_square)
-
-    Ok(Move(
-      player: us,
-      to: castling_to_square,
-      from: castling_from_square,
-      piece: piece.King,
-      captured: None,
-      promotion: None,
-      castle: Some(KingSide),
-      flags: set.from_list([]),
-    ))
-  }
-  let queenside = {
-    use <- bool.guard(
-      !set.contains(castling_availability, #(us, QueenSide)),
-      Error(Nil),
-    )
-    let castling_from_square = king_piece.0
-    let assert Ok(castling_to_square) = square.add(castling_from_square, -2)
-
-    let should_be_empty_squares = [
-      square.add(castling_from_square, -1),
-      square.add(castling_from_square, -2),
-      square.add(castling_from_square, -3),
-    ]
-    let should_be_safe_squares = [
-      Ok(castling_from_square),
-      square.add(castling_from_square, -1),
-      square.add(castling_from_square, -2),
-    ]
-
-    use _ <- result.try(
-      result.all(
-        should_be_empty_squares
-        |> list.map(fn(x) { result.map(x, empty_at(game, _)) }),
-      )
-      |> result.map(list.all(_, fn(x) { x }))
-      |> result_addons.expect_or(fn(x) { x }, fn(_) { Nil }),
-    )
-
-    use _ <- result.try(
-      result.all(
-        should_be_safe_squares
-        |> list.map(fn(x) {
-          result.map(x, is_attacked(game, _, them))
-          |> result.map(fn(x) { !x })
-        }),
-      )
-      |> result.map(list.all(_, fn(x) { x }))
-      |> result_addons.expect_or(fn(x) { x }, fn(_) { Nil }),
-    )
-    Ok(Move(
-      player: us,
-      to: castling_to_square,
-      from: castling_from_square,
-      piece: piece.King,
-      captured: None,
-      promotion: None,
-      castle: Some(QueenSide),
-      flags: set.new(),
-    ))
+    #(one_move, big_move, capture_move)
   }
 
-  [kingside, queenside] |> list.filter_map(fn(x) { x })
-}
+  // We consider all moves that also count as captures (basically no pawns)
+  let capturable_moves =
+    us_pieces_list
+    |> list.filter(fn(square_piece) { { square_piece.1 }.symbol != piece.Pawn })
+    |> list.flat_map(fn(square_piece) {
+      let #(from, piece) = square_piece
 
-fn pawn_moves(game: Game, from: square.Square) {
-  let us = turn(game)
-  let offsets: List(Int) = pawn_offsets(us)
-  let assert [single, double, x1, x2] = offsets
-
-  let single_jump_move = {
-    // Only create move if square is empty
-    square.add(from, single)
-    |> result.try(fn(to) {
-      case empty_at(game, to) {
-        True ->
-          Ok(Move(
-            player: us,
-            from: from,
-            to: to,
-            piece: piece.Pawn,
-            captured: None,
-            promotion: None,
-            castle: None,
-            flags: set.new(),
-          ))
-        False -> Error(Nil)
-      }
-    })
-  }
-
-  let double_jump_move = {
-    let to = square.add(from, double)
-    // When double jumping, the square directly ahead must be empty.
-    use square_ahead_empty <- result.try(
-      square.add(from, single)
-      |> result.map(empty_at(game, _)),
-    )
-    use <- bool.guard(!square_ahead_empty, Error(Nil))
-
-    to
-    |> result.try(fn(to) {
-      // Ensure this square our second rank
-      // Only create move if square is empty
-      case { square.rank(from) + 1 } == second_rank(us) && empty_at(game, to) {
-        True ->
-          Ok(Move(
-            player: us,
-            from: from,
-            to: to,
-            piece: piece.Pawn,
-            captured: None,
-            promotion: None,
-            castle: None,
-            flags: set.from_list([BigPawn]),
-          ))
-        False -> Error(Nil)
-      }
-    })
-  }
-
-  let make_x_moves = fn(jump) {
-    let to = square.add(from, jump)
-    let standard_x_move =
-      result.try(to, fn(to) {
-        case piece_at(game, to) {
-          Ok(piece) if piece.player != us -> {
-            Ok(Move(
-              player: us,
-              from: from,
-              to: to,
-              piece: piece.Pawn,
-              captured: Some(piece.symbol),
-              promotion: None,
-              castle: None,
-              flags: set.new(),
-            ))
+      // This is probably the most expensive section...
+      // we just operate on squares, although we might be able to
+      // switch this to bitboards at some point?
+      // there's not much of a point though since we need it in square form
+      // eventually
+      square.piece_moves(from, piece)
+      |> list.flat_map(fn(path) {
+        // we check for collisions against pieces
+        // if it's our own piece we stop
+        // if it's opponent's piece we include it then stop
+        list.fold_until(path, [], fn(acc, to) {
+          case dict.get(game.board, to) {
+            Ok(piece.Piece(player, _)) if player == us -> list.Stop(acc)
+            Ok(piece.Piece(player, _)) if player != us -> list.Stop([to, ..acc])
+            _ -> list.Continue([to, ..acc])
           }
-          _ -> Error(Nil)
-        }
+        })
       })
-
-    let ep_move =
-      result.try(to, fn(to) {
-        {
-          use ep_square <- result.try(
-            en_passant_target_square(game)
-            |> option.to_result(Nil),
-          )
-          use <- bool.guard(ep_square != to, Error(Nil))
-          let ep_rank = square.rank(ep_square)
-          case us {
-            player.White if ep_rank == 6 -> Ok(ep_square)
-            player.Black if ep_rank == 3 -> Ok(ep_square)
-            _ -> Error(Nil)
-          }
-        }
-        |> result.replace(Move(
-          player: us,
-          from: from,
-          to: to,
-          piece: piece.Pawn,
-          captured: Some(piece.Pawn),
-          promotion: None,
-          castle: None,
-          flags: set.from_list([EnPassant]),
-        ))
-      })
-
-    [standard_x_move, ep_move]
-  }
-
-  // Some of the moves might hit an end square, but we don't account for
-  // it until we use this function. If the move leads to a promotion,
-  // "fan" out the moves to all the promotion moves.
-  let fan_promotion_moves = fn(move: Move) -> List(Move) {
-    // If the pawn isn't moving to the last rank, then it's not a
-    // promotion move. This condition works for both white and black
-    // because pawns can't move backwards
-    let rank = square.rank(move.to)
-    use <- bool.guard(rank != 0 && rank != 7, [move])
-
-    // We have to promote the pawn then
-    let promotion_candidates = [
-      piece.Queen,
-      piece.Rook,
-      piece.Bishop,
-      piece.Knight,
-    ]
-
-    promotion_candidates
-    |> list.map(fn(candidate) {
-      Move(
-        player: move.player,
-        to: move.to,
-        from: move.from,
-        piece: move.piece,
-        captured: move.captured,
-        promotion: Some(candidate),
-        castle: move.castle,
-        flags: move.flags,
-      )
+      |> list.map(move.new_pseudomove(from:, to: _))
     })
-  }
 
-  let x1_moves = make_x_moves(x1)
-  let x2_moves = make_x_moves(x2)
+  let castle_moves =
+    game.castling_availability
+    |> list.filter(fn(castle_available) {
+      let #(player, castle) = castle_available
+      player == us
+      && castle.occupancy_bitboard(player, castle)
+      |> int.bitwise_and(all_bitboard)
+      == 0
+    })
+    |> list.map(fn(castle_available) {
+      let #(player, castle) = castle_available
+      castle.king_move(player, castle)
+    })
 
-  let pawn_moves =
-    list.flatten([[single_jump_move], [double_jump_move], x1_moves, x2_moves])
-    |> list.filter_map(fn(x) { x })
-    |> list.flat_map(fan_promotion_moves)
-
-  pawn_moves
+  list.flatten([
+    pawn_moves_one,
+    pawn_moves_two,
+    pawn_moves_captures,
+    capturable_moves,
+    castle_moves,
+  ])
 }
-
-/// Cast a "ray" from `from` in the `offset` direction and collect positions.
-/// Execution terminates when:
-/// - We hit a piece
-/// - We are no longer on the board
-/// - We have travelled more than `max_depth` times
-///
-fn collect_ray_moves(
-  game: Game,
-  from_piece: piece.PieceSymbol,
-  from: square.Square,
-  offset: Int,
-  max_depth: Int,
-) -> List(Move) {
-  collect_ray_moves_inner(game, from_piece, from, offset, 1, max_depth, [])
-}
-
-fn collect_ray_moves_inner(
-  game: Game,
-  from_piece: piece.PieceSymbol,
-  from: square.Square,
-  offset: Int,
-  depth: Int,
-  max_depth: Int,
-  moves: List(Move),
-) -> List(Move) {
-  let us = turn(game)
-
-  use <- bool.guard(depth > max_depth, moves)
-
-  let to = square.add(from, offset * depth)
-  case to {
-    Error(_) -> moves
-    Ok(to) ->
-      case piece_at(game, to) {
-        // Nothing. Then keep going
-        Error(_) ->
-          collect_ray_moves_inner(
-            game,
-            from_piece,
-            from,
-            offset,
-            depth + 1,
-            max_depth,
-            moves
-              |> list.append([
-                Move(
-                  player: us,
-                  from: from,
-                  to: to,
-                  piece: from_piece,
-                  captured: None,
-                  promotion: None,
-                  castle: None,
-                  flags: set.new(),
-                ),
-              ]),
-          )
-        Ok(piece) ->
-          case piece.player == us {
-            // If it's us, then we stop immediately and don't append
-            True -> moves
-            // Otherwise, it's their piece, and we'd be able to take it
-            False ->
-              moves
-              |> list.append([
-                Move(
-                  player: us,
-                  from: from,
-                  to: to,
-                  piece: from_piece,
-                  captured: Some(piece.symbol),
-                  promotion: None,
-                  castle: None,
-                  flags: set.new(),
-                ),
-              ])
-          }
-      }
-  }
-}
-
-/// How ambiguous a move is. Used when converting to SAN.
-/// https://en.wikipedia.org/wiki/Algebraic_notation_(chess)#Disambiguating_moves
-///
-type DisambiguationLevel {
-  // There is only one move to a position with a fixed piece
-  Unambiguous
-  // There is a move with the same piece moving to the same square. While
-  // GenerallyAmbiguous will end up disambiguating to include the file like
-  // Rank does, we need this extra enum member for the
-  // `add_disambiguation_levels` algebra to work out correctly
-  GenerallyAmbiguous
-  // There is a move with the piece on the same rank moving to the same
-  // square
-  Rank
-  // There is a move with the same piece on the same file moving to the same
-  // square
-  File
-  // There is a move with the same piece on the same file and another move with
-  // the same piece on the same rank moving to the same square
-  Both
-}
-
-fn add_disambiguation_levels(l1: DisambiguationLevel, l2: DisambiguationLevel) {
-  use <- bool.guard(l1 == l2, l1)
-
-  case l1, l2 {
-    Both, _ -> Both
-    _, Both -> Both
-
-    Unambiguous, other -> other
-
-    GenerallyAmbiguous, File -> File
-    GenerallyAmbiguous, Rank -> Rank
-
-    Rank, File -> Both
-
-    _, _ -> add_disambiguation_levels(l2, l1)
-  }
-}
-
-fn bitboards_insert(bbs: Bitboards, square: square.Square, piece: piece.Piece) {
-  let rank = square.rank(square)
-  let file = square.file(square)
-
-  let idx = rank * 8 + file
-  let bit = int.bitwise_shift_left(1, idx)
-  case piece {
-    piece.Piece(player.White, piece.Pawn) ->
-      Bitboards(..bbs, white_pawns: int.bitwise_or(bbs.white_pawns, bit))
-    piece.Piece(player.White, piece.Knight) ->
-      Bitboards(..bbs, white_knights: int.bitwise_or(bbs.white_knights, bit))
-    piece.Piece(player.White, piece.Bishop) ->
-      Bitboards(..bbs, white_bishops: int.bitwise_or(bbs.white_bishops, bit))
-    piece.Piece(player.White, piece.Rook) ->
-      Bitboards(..bbs, white_rooks: int.bitwise_or(bbs.white_rooks, bit))
-    piece.Piece(player.White, piece.Queen) ->
-      Bitboards(..bbs, white_queens: int.bitwise_or(bbs.white_queens, bit))
-    piece.Piece(player.White, piece.King) ->
-      Bitboards(..bbs, white_king: int.bitwise_or(bbs.white_king, bit))
-    piece.Piece(player.Black, piece.Pawn) ->
-      Bitboards(..bbs, black_pawns: int.bitwise_or(bbs.black_pawns, bit))
-    piece.Piece(player.Black, piece.Knight) ->
-      Bitboards(..bbs, black_knights: int.bitwise_or(bbs.black_knights, bit))
-    piece.Piece(player.Black, piece.Bishop) ->
-      Bitboards(..bbs, black_bishops: int.bitwise_or(bbs.black_bishops, bit))
-    piece.Piece(player.Black, piece.Rook) ->
-      Bitboards(..bbs, black_rooks: int.bitwise_or(bbs.black_rooks, bit))
-    piece.Piece(player.Black, piece.Queen) ->
-      Bitboards(..bbs, black_queens: int.bitwise_or(bbs.black_queens, bit))
-    piece.Piece(player.Black, piece.King) ->
-      Bitboards(..bbs, black_king: int.bitwise_or(bbs.black_king, bit))
-  }
-}
-
-fn bitboards_remove(bbs: Bitboards, square: square.Square, piece: piece.Piece) {
-  let bit =
-    int.bitwise_shift_left(1, square.rank(square) * 8 + square.file(square))
-    |> int.bitwise_not
-  case piece {
-    piece.Piece(player.White, piece.Pawn) ->
-      Bitboards(..bbs, white_pawns: int.bitwise_and(bbs.white_pawns, bit))
-    piece.Piece(player.White, piece.Knight) ->
-      Bitboards(..bbs, white_knights: int.bitwise_and(bbs.white_knights, bit))
-    piece.Piece(player.White, piece.Bishop) ->
-      Bitboards(..bbs, white_bishops: int.bitwise_and(bbs.white_bishops, bit))
-    piece.Piece(player.White, piece.Rook) ->
-      Bitboards(..bbs, white_rooks: int.bitwise_and(bbs.white_rooks, bit))
-    piece.Piece(player.White, piece.Queen) ->
-      Bitboards(..bbs, white_queens: int.bitwise_and(bbs.white_queens, bit))
-    piece.Piece(player.White, piece.King) ->
-      Bitboards(..bbs, white_king: int.bitwise_and(bbs.white_king, bit))
-    piece.Piece(player.Black, piece.Pawn) ->
-      Bitboards(..bbs, black_pawns: int.bitwise_and(bbs.black_pawns, bit))
-    piece.Piece(player.Black, piece.Knight) ->
-      Bitboards(..bbs, black_knights: int.bitwise_and(bbs.black_knights, bit))
-    piece.Piece(player.Black, piece.Bishop) ->
-      Bitboards(..bbs, black_bishops: int.bitwise_and(bbs.black_bishops, bit))
-    piece.Piece(player.Black, piece.Rook) ->
-      Bitboards(..bbs, black_rooks: int.bitwise_and(bbs.black_rooks, bit))
-    piece.Piece(player.Black, piece.Queen) ->
-      Bitboards(..bbs, black_queens: int.bitwise_and(bbs.black_queens, bit))
-    piece.Piece(player.Black, piece.King) ->
-      Bitboards(..bbs, black_king: int.bitwise_and(bbs.black_king, bit))
-  }
-}
-
-/// Don't use this! Try to use bitboards_remove instead. This is inefficient,
-/// but I'm leaving it in as a quick-n-dirty way of getting things done if we
-/// need to.
-///
-fn bitboards_remove_indiscriminately(bbs: Bitboards, square: square.Square) {
-  bbs
-  |> bitboards_remove(square, piece.Piece(player.White, piece.Pawn))
-  |> bitboards_remove(square, piece.Piece(player.White, piece.Knight))
-  |> bitboards_remove(square, piece.Piece(player.White, piece.Bishop))
-  |> bitboards_remove(square, piece.Piece(player.White, piece.Rook))
-  |> bitboards_remove(square, piece.Piece(player.White, piece.Queen))
-  |> bitboards_remove(square, piece.Piece(player.White, piece.King))
-  |> bitboards_remove(square, piece.Piece(player.Black, piece.Pawn))
-  |> bitboards_remove(square, piece.Piece(player.Black, piece.Knight))
-  |> bitboards_remove(square, piece.Piece(player.Black, piece.Bishop))
-  |> bitboards_remove(square, piece.Piece(player.Black, piece.Rook))
-  |> bitboards_remove(square, piece.Piece(player.Black, piece.Queen))
-  |> bitboards_remove(square, piece.Piece(player.Black, piece.King))
-}
-
-// BEGIN: Constants
-
-fn second_rank(player: player.Player) {
-  case player {
-    player.Black -> 7
-    player.White -> 2
-  }
-}
-
-fn pawn_offsets(player: player.Player) {
-  case player {
-    player.Black -> [-16, -32, -17, -15]
-    player.White -> [16, 32, 17, 15]
-  }
-}
-
-fn piece_offsets(piece: piece.Piece) {
-  case piece.symbol {
-    piece.Knight -> [-18, -33, -31, -14, 18, 33, 31, 14]
-    piece.Bishop -> [-17, -15, 17, 15]
-    piece.King -> [-17, -16, -15, 1, 17, 16, 15, -1]
-    piece.Pawn -> pawn_offsets(piece.player)
-    piece.Queen -> [-17, -16, -15, 1, 17, 16, 15, -1]
-    piece.Rook -> [-16, 1, 16, -1]
-  }
-}
-
-fn rook_positions_flags(player: player.Player) {
-  let assert Ok(a1) = square.from_string("a1")
-  let assert Ok(h1) = square.from_string("h1")
-  let assert Ok(a8) = square.from_string("a8")
-  let assert Ok(h8) = square.from_string("h8")
-  case player {
-    player.White -> [#(a1, QueenSide), #(h1, KingSide)]
-    player.Black -> [#(a8, QueenSide), #(h8, KingSide)]
-  }
-}
-
-fn piece_masks(piece: piece.PieceSymbol) {
-  case piece {
-    piece.Pawn -> 0x1
-    piece.Knight -> 0x2
-    piece.Bishop -> 0x4
-    piece.Rook -> 0x8
-    piece.Queen -> 0x10
-    piece.King -> 0x20
-  }
-}
-
-/// 20, 0, 0, 0, 0, 0, 0, 24,  0, 0, 0, 0, 0, 0,20, 0,
-///  0,20, 0, 0, 0, 0, 0, 24,  0, 0, 0, 0, 0,20, 0, 0,
-///  0, 0,20, 0, 0, 0, 0, 24,  0, 0, 0, 0,20, 0, 0, 0,
-///  0, 0, 0,20, 0, 0, 0, 24,  0, 0, 0,20, 0, 0, 0, 0,
-///  0, 0, 0, 0,20, 0, 0, 24,  0, 0,20, 0, 0, 0, 0, 0,
-///  0, 0, 0, 0, 0,20, 2, 24,  2,20, 0, 0, 0, 0, 0, 0,
-///  0, 0, 0, 0, 0, 2,53, 56, 53, 2, 0, 0, 0, 0, 0, 0,
-/// 24,24,24,24,24,24,56,  0, 56,24,24,24,24,24,24, 0,
-///  0, 0, 0, 0, 0, 2,53, 56, 53, 2, 0, 0, 0, 0, 0, 0,
-///  0, 0, 0, 0, 0,20, 2, 24,  2,20, 0, 0, 0, 0, 0, 0,
-///  0, 0, 0, 0,20, 0, 0, 24,  0, 0,20, 0, 0, 0, 0, 0,
-///  0, 0, 0,20, 0, 0, 0, 24,  0, 0, 0,20, 0, 0, 0, 0,
-///  0, 0,20, 0, 0, 0, 0, 24,  0, 0, 0, 0,20, 0, 0, 0,
-///  0,20, 0, 0, 0, 0, 0, 24,  0, 0, 0, 0, 0,20, 0, 0,
-/// 20, 0, 0, 0, 0, 0, 0, 24,  0, 0, 0, 0, 0, 0,20
-fn attacks(i: Int) {
-  case i {
-    0 -> Ok(20)
-    1 -> Ok(0)
-    2 -> Ok(0)
-    3 -> Ok(0)
-    4 -> Ok(0)
-    5 -> Ok(0)
-    6 -> Ok(0)
-    7 -> Ok(24)
-    8 -> Ok(0)
-    9 -> Ok(0)
-    10 -> Ok(0)
-    11 -> Ok(0)
-    12 -> Ok(0)
-    13 -> Ok(0)
-    14 -> Ok(20)
-    15 -> Ok(0)
-    16 -> Ok(0)
-    17 -> Ok(20)
-    18 -> Ok(0)
-    19 -> Ok(0)
-    20 -> Ok(0)
-    21 -> Ok(0)
-    22 -> Ok(0)
-    23 -> Ok(24)
-    24 -> Ok(0)
-    25 -> Ok(0)
-    26 -> Ok(0)
-    27 -> Ok(0)
-    28 -> Ok(0)
-    29 -> Ok(20)
-    30 -> Ok(0)
-    31 -> Ok(0)
-    32 -> Ok(0)
-    33 -> Ok(0)
-    34 -> Ok(20)
-    35 -> Ok(0)
-    36 -> Ok(0)
-    37 -> Ok(0)
-    38 -> Ok(0)
-    39 -> Ok(24)
-    40 -> Ok(0)
-    41 -> Ok(0)
-    42 -> Ok(0)
-    43 -> Ok(0)
-    44 -> Ok(20)
-    45 -> Ok(0)
-    46 -> Ok(0)
-    47 -> Ok(0)
-    48 -> Ok(0)
-    49 -> Ok(0)
-    50 -> Ok(0)
-    51 -> Ok(20)
-    52 -> Ok(0)
-    53 -> Ok(0)
-    54 -> Ok(0)
-    55 -> Ok(24)
-    56 -> Ok(0)
-    57 -> Ok(0)
-    58 -> Ok(0)
-    59 -> Ok(20)
-    60 -> Ok(0)
-    61 -> Ok(0)
-    62 -> Ok(0)
-    63 -> Ok(0)
-    64 -> Ok(0)
-    65 -> Ok(0)
-    66 -> Ok(0)
-    67 -> Ok(0)
-    68 -> Ok(20)
-    69 -> Ok(0)
-    70 -> Ok(0)
-    71 -> Ok(24)
-    72 -> Ok(0)
-    73 -> Ok(0)
-    74 -> Ok(20)
-    75 -> Ok(0)
-    76 -> Ok(0)
-    77 -> Ok(0)
-    78 -> Ok(0)
-    79 -> Ok(0)
-    80 -> Ok(0)
-    81 -> Ok(0)
-    82 -> Ok(0)
-    83 -> Ok(0)
-    84 -> Ok(0)
-    85 -> Ok(20)
-    86 -> Ok(2)
-    87 -> Ok(24)
-    88 -> Ok(2)
-    89 -> Ok(20)
-    90 -> Ok(0)
-    91 -> Ok(0)
-    92 -> Ok(0)
-    93 -> Ok(0)
-    94 -> Ok(0)
-    95 -> Ok(0)
-    96 -> Ok(0)
-    97 -> Ok(0)
-    98 -> Ok(0)
-    99 -> Ok(0)
-    100 -> Ok(0)
-    101 -> Ok(2)
-    102 -> Ok(53)
-    103 -> Ok(56)
-    104 -> Ok(53)
-    105 -> Ok(2)
-    106 -> Ok(0)
-    107 -> Ok(0)
-    108 -> Ok(0)
-    109 -> Ok(0)
-    110 -> Ok(0)
-    111 -> Ok(0)
-    112 -> Ok(24)
-    113 -> Ok(24)
-    114 -> Ok(24)
-    115 -> Ok(24)
-    116 -> Ok(24)
-    117 -> Ok(24)
-    118 -> Ok(56)
-    119 -> Ok(0)
-    120 -> Ok(56)
-    121 -> Ok(24)
-    122 -> Ok(24)
-    123 -> Ok(24)
-    124 -> Ok(24)
-    125 -> Ok(24)
-    126 -> Ok(24)
-    127 -> Ok(0)
-    128 -> Ok(0)
-    129 -> Ok(0)
-    130 -> Ok(0)
-    131 -> Ok(0)
-    132 -> Ok(0)
-    133 -> Ok(2)
-    134 -> Ok(53)
-    135 -> Ok(56)
-    136 -> Ok(53)
-    137 -> Ok(2)
-    138 -> Ok(0)
-    139 -> Ok(0)
-    140 -> Ok(0)
-    141 -> Ok(0)
-    142 -> Ok(0)
-    143 -> Ok(0)
-    144 -> Ok(0)
-    145 -> Ok(0)
-    146 -> Ok(0)
-    147 -> Ok(0)
-    148 -> Ok(0)
-    149 -> Ok(20)
-    150 -> Ok(2)
-    151 -> Ok(24)
-    152 -> Ok(2)
-    153 -> Ok(20)
-    154 -> Ok(0)
-    155 -> Ok(0)
-    156 -> Ok(0)
-    157 -> Ok(0)
-    158 -> Ok(0)
-    159 -> Ok(0)
-    160 -> Ok(0)
-    161 -> Ok(0)
-    162 -> Ok(0)
-    163 -> Ok(0)
-    164 -> Ok(20)
-    165 -> Ok(0)
-    166 -> Ok(0)
-    167 -> Ok(24)
-    168 -> Ok(0)
-    169 -> Ok(0)
-    170 -> Ok(20)
-    171 -> Ok(0)
-    172 -> Ok(0)
-    173 -> Ok(0)
-    174 -> Ok(0)
-    175 -> Ok(0)
-    176 -> Ok(0)
-    177 -> Ok(0)
-    178 -> Ok(0)
-    179 -> Ok(20)
-    180 -> Ok(0)
-    181 -> Ok(0)
-    182 -> Ok(0)
-    183 -> Ok(24)
-    184 -> Ok(0)
-    185 -> Ok(0)
-    186 -> Ok(0)
-    187 -> Ok(20)
-    188 -> Ok(0)
-    189 -> Ok(0)
-    190 -> Ok(0)
-    191 -> Ok(0)
-    192 -> Ok(0)
-    193 -> Ok(0)
-    194 -> Ok(20)
-    195 -> Ok(0)
-    196 -> Ok(0)
-    197 -> Ok(0)
-    198 -> Ok(0)
-    199 -> Ok(24)
-    200 -> Ok(0)
-    201 -> Ok(0)
-    202 -> Ok(0)
-    203 -> Ok(0)
-    204 -> Ok(20)
-    205 -> Ok(0)
-    206 -> Ok(0)
-    207 -> Ok(0)
-    208 -> Ok(0)
-    209 -> Ok(20)
-    210 -> Ok(0)
-    211 -> Ok(0)
-    212 -> Ok(0)
-    213 -> Ok(0)
-    214 -> Ok(0)
-    215 -> Ok(24)
-    216 -> Ok(0)
-    217 -> Ok(0)
-    218 -> Ok(0)
-    219 -> Ok(0)
-    220 -> Ok(0)
-    221 -> Ok(20)
-    222 -> Ok(0)
-    223 -> Ok(0)
-    224 -> Ok(20)
-    225 -> Ok(0)
-    226 -> Ok(0)
-    227 -> Ok(0)
-    228 -> Ok(0)
-    229 -> Ok(0)
-    230 -> Ok(0)
-    231 -> Ok(24)
-    232 -> Ok(0)
-    233 -> Ok(0)
-    234 -> Ok(0)
-    235 -> Ok(0)
-    236 -> Ok(0)
-    237 -> Ok(0)
-    238 -> Ok(20)
-    _ -> Error(Nil)
-  }
-}
-
-///  17,  0,  0,  0,  0,  0,  0, 16,  0,  0,  0,  0,  0,  0, 15, 0,
-///   0, 17,  0,  0,  0,  0,  0, 16,  0,  0,  0,  0,  0, 15,  0, 0,
-///   0,  0, 17,  0,  0,  0,  0, 16,  0,  0,  0,  0, 15,  0,  0, 0,
-///   0,  0,  0, 17,  0,  0,  0, 16,  0,  0,  0, 15,  0,  0,  0, 0,
-///   0,  0,  0,  0, 17,  0,  0, 16,  0,  0, 15,  0,  0,  0,  0, 0,
-///   0,  0,  0,  0,  0, 17,  0, 16,  0, 15,  0,  0,  0,  0,  0, 0,
-///   0,  0,  0,  0,  0,  0, 17, 16, 15,  0,  0,  0,  0,  0,  0, 0,
-///   1,  1,  1,  1,  1,  1,  1,  0, -1, -1,  -1,-1, -1, -1, -1, 0,
-///   0,  0,  0,  0,  0,  0,-15,-16,-17,  0,  0,  0,  0,  0,  0, 0,
-///   0,  0,  0,  0,  0,-15,  0,-16,  0,-17,  0,  0,  0,  0,  0, 0,
-///   0,  0,  0,  0,-15,  0,  0,-16,  0,  0,-17,  0,  0,  0,  0, 0,
-///   0,  0,  0,-15,  0,  0,  0,-16,  0,  0,  0,-17,  0,  0,  0, 0,
-///   0,  0,-15,  0,  0,  0,  0,-16,  0,  0,  0,  0,-17,  0,  0, 0,
-///   0,-15,  0,  0,  0,  0,  0,-16,  0,  0,  0,  0,  0,-17,  0, 0,
-/// -15,  0,  0,  0,  0,  0,  0,-16,  0,  0,  0,  0,  0,  0,-17
-fn rays(i: Int) {
-  case i {
-    0 -> Ok(17)
-    1 -> Ok(0)
-    2 -> Ok(0)
-    3 -> Ok(0)
-    4 -> Ok(0)
-    5 -> Ok(0)
-    6 -> Ok(0)
-    7 -> Ok(16)
-    8 -> Ok(0)
-    9 -> Ok(0)
-    10 -> Ok(0)
-    11 -> Ok(0)
-    12 -> Ok(0)
-    13 -> Ok(0)
-    14 -> Ok(15)
-    15 -> Ok(0)
-    16 -> Ok(0)
-    17 -> Ok(17)
-    18 -> Ok(0)
-    19 -> Ok(0)
-    20 -> Ok(0)
-    21 -> Ok(0)
-    22 -> Ok(0)
-    23 -> Ok(16)
-    24 -> Ok(0)
-    25 -> Ok(0)
-    26 -> Ok(0)
-    27 -> Ok(0)
-    28 -> Ok(0)
-    29 -> Ok(15)
-    30 -> Ok(0)
-    31 -> Ok(0)
-    32 -> Ok(0)
-    33 -> Ok(0)
-    34 -> Ok(17)
-    35 -> Ok(0)
-    36 -> Ok(0)
-    37 -> Ok(0)
-    38 -> Ok(0)
-    39 -> Ok(16)
-    40 -> Ok(0)
-    41 -> Ok(0)
-    42 -> Ok(0)
-    43 -> Ok(0)
-    44 -> Ok(15)
-    45 -> Ok(0)
-    46 -> Ok(0)
-    47 -> Ok(0)
-    48 -> Ok(0)
-    49 -> Ok(0)
-    50 -> Ok(0)
-    51 -> Ok(17)
-    52 -> Ok(0)
-    53 -> Ok(0)
-    54 -> Ok(0)
-    55 -> Ok(16)
-    56 -> Ok(0)
-    57 -> Ok(0)
-    58 -> Ok(0)
-    59 -> Ok(15)
-    60 -> Ok(0)
-    61 -> Ok(0)
-    62 -> Ok(0)
-    63 -> Ok(0)
-    64 -> Ok(0)
-    65 -> Ok(0)
-    66 -> Ok(0)
-    67 -> Ok(0)
-    68 -> Ok(17)
-    69 -> Ok(0)
-    70 -> Ok(0)
-    71 -> Ok(16)
-    72 -> Ok(0)
-    73 -> Ok(0)
-    74 -> Ok(15)
-    75 -> Ok(0)
-    76 -> Ok(0)
-    77 -> Ok(0)
-    78 -> Ok(0)
-    79 -> Ok(0)
-    80 -> Ok(0)
-    81 -> Ok(0)
-    82 -> Ok(0)
-    83 -> Ok(0)
-    84 -> Ok(0)
-    85 -> Ok(17)
-    86 -> Ok(0)
-    87 -> Ok(16)
-    88 -> Ok(0)
-    89 -> Ok(15)
-    90 -> Ok(0)
-    91 -> Ok(0)
-    92 -> Ok(0)
-    93 -> Ok(0)
-    94 -> Ok(0)
-    95 -> Ok(0)
-    96 -> Ok(0)
-    97 -> Ok(0)
-    98 -> Ok(0)
-    99 -> Ok(0)
-    100 -> Ok(0)
-    101 -> Ok(0)
-    102 -> Ok(17)
-    103 -> Ok(16)
-    104 -> Ok(15)
-    105 -> Ok(0)
-    106 -> Ok(0)
-    107 -> Ok(0)
-    108 -> Ok(0)
-    109 -> Ok(0)
-    110 -> Ok(0)
-    111 -> Ok(0)
-    112 -> Ok(1)
-    113 -> Ok(1)
-    114 -> Ok(1)
-    115 -> Ok(1)
-    116 -> Ok(1)
-    117 -> Ok(1)
-    118 -> Ok(1)
-    119 -> Ok(0)
-    120 -> Ok(-1)
-    121 -> Ok(-1)
-    122 -> Ok(-1)
-    123 -> Ok(-1)
-    124 -> Ok(-1)
-    125 -> Ok(-1)
-    126 -> Ok(-1)
-    127 -> Ok(0)
-    128 -> Ok(0)
-    129 -> Ok(0)
-    130 -> Ok(0)
-    131 -> Ok(0)
-    132 -> Ok(0)
-    133 -> Ok(0)
-    134 -> Ok(-15)
-    135 -> Ok(-16)
-    136 -> Ok(-17)
-    137 -> Ok(0)
-    138 -> Ok(0)
-    139 -> Ok(0)
-    140 -> Ok(0)
-    141 -> Ok(0)
-    142 -> Ok(0)
-    143 -> Ok(0)
-    144 -> Ok(0)
-    145 -> Ok(0)
-    146 -> Ok(0)
-    147 -> Ok(0)
-    148 -> Ok(0)
-    149 -> Ok(-15)
-    150 -> Ok(0)
-    151 -> Ok(-16)
-    152 -> Ok(0)
-    153 -> Ok(-17)
-    154 -> Ok(0)
-    155 -> Ok(0)
-    156 -> Ok(0)
-    157 -> Ok(0)
-    158 -> Ok(0)
-    159 -> Ok(0)
-    160 -> Ok(0)
-    161 -> Ok(0)
-    162 -> Ok(0)
-    163 -> Ok(0)
-    164 -> Ok(-15)
-    165 -> Ok(0)
-    166 -> Ok(0)
-    167 -> Ok(-16)
-    168 -> Ok(0)
-    169 -> Ok(0)
-    170 -> Ok(-17)
-    171 -> Ok(0)
-    172 -> Ok(0)
-    173 -> Ok(0)
-    174 -> Ok(0)
-    175 -> Ok(0)
-    176 -> Ok(0)
-    177 -> Ok(0)
-    178 -> Ok(0)
-    179 -> Ok(-15)
-    180 -> Ok(0)
-    181 -> Ok(0)
-    182 -> Ok(0)
-    183 -> Ok(-16)
-    184 -> Ok(0)
-    185 -> Ok(0)
-    186 -> Ok(0)
-    187 -> Ok(-17)
-    188 -> Ok(0)
-    189 -> Ok(0)
-    190 -> Ok(0)
-    191 -> Ok(0)
-    192 -> Ok(0)
-    193 -> Ok(0)
-    194 -> Ok(-15)
-    195 -> Ok(0)
-    196 -> Ok(0)
-    197 -> Ok(0)
-    198 -> Ok(0)
-    199 -> Ok(-16)
-    200 -> Ok(0)
-    201 -> Ok(0)
-    202 -> Ok(0)
-    203 -> Ok(0)
-    204 -> Ok(-17)
-    205 -> Ok(0)
-    206 -> Ok(0)
-    207 -> Ok(0)
-    208 -> Ok(0)
-    209 -> Ok(-15)
-    210 -> Ok(0)
-    211 -> Ok(0)
-    212 -> Ok(0)
-    213 -> Ok(0)
-    214 -> Ok(0)
-    215 -> Ok(-16)
-    216 -> Ok(0)
-    217 -> Ok(0)
-    218 -> Ok(0)
-    219 -> Ok(0)
-    220 -> Ok(0)
-    221 -> Ok(-17)
-    222 -> Ok(0)
-    223 -> Ok(0)
-    224 -> Ok(-15)
-    225 -> Ok(0)
-    226 -> Ok(0)
-    227 -> Ok(0)
-    228 -> Ok(0)
-    229 -> Ok(0)
-    230 -> Ok(0)
-    231 -> Ok(-16)
-    232 -> Ok(0)
-    233 -> Ok(0)
-    234 -> Ok(0)
-    235 -> Ok(0)
-    236 -> Ok(0)
-    237 -> Ok(0)
-    238 -> Ok(-17)
-    _ -> Error(Nil)
-  }
-}
-// END: Constants

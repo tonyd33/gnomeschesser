@@ -1,4 +1,5 @@
 import chess/game
+import chess/move
 import chess/search
 import chess/zobrist
 import gleam/bool
@@ -44,7 +45,7 @@ pub fn update_fen(
 }
 
 // Then requests the best move
-pub fn get_best_move(robot: Robot) -> Result(game.Move, Nil) {
+pub fn get_best_move(robot: Robot) -> Result(move.Move(move.Pseudo), Nil) {
   use evaluation <- result.then(process.call_forever(
     robot.main_subject,
     GetBestEvaluation,

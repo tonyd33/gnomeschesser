@@ -1,11 +1,11 @@
 import chess/game
+import chess/move
 import chess/piece
 import chess/player
 import chess/psqt
-import gleam/float
+import gleam/dict
 import gleam/int
 import gleam/list
-import gleam_community/maths
 import util/xint.{type ExtendedInt}
 
 /// Evaluates the score of the game position
@@ -39,11 +39,8 @@ pub fn game(game: game.Game) -> ExtendedInt {
     |> int.multiply(2000)
   }
 
-  // TODO: DON'T CALL MOVES HERE! IT'S (relatively) EXPENSIVE STILL!
-  //       We may have the callee pass in the moves since the callee is likely
-  //       to calculate this anyway. Or, we may create another function in
-  //       `game` to optimize for our use case
-  let moves = game.pseudolegal_moves(game)
+  // TODO: use a cached moves in game
+  let moves = game.pseudo_moves(game)
 
   // Calculate a [mobility score](https://www.chessprogramming.org/Mobility).
   //
@@ -52,16 +49,18 @@ pub fn game(game: game.Game) -> ExtendedInt {
   //
   // This is implemented in a similar fashion: for every move, it counts
   // positively towards the mobility score and is weighted by the piece.
+  // TODO: change these based on the state of the game
   let mobility_score =
     moves
     |> list.fold(0, fn(mobility_score, move) {
-      let s = case game.move_piece(move) {
-        piece.Pawn -> 0
-        piece.Knight -> 0
-        piece.Bishop -> 458_758
-        piece.Rook -> 262_147
-        piece.Queen -> 196_611
-        piece.King -> -10
+      let s = case game.board(game) |> dict.get(move.get_from(move)) {
+        Ok(piece.Piece(_, piece.Pawn)) -> 0
+        Ok(piece.Piece(_, piece.Knight)) -> 0
+        Ok(piece.Piece(_, piece.Bishop)) -> 458_758
+        Ok(piece.Piece(_, piece.Rook)) -> 262_147
+        Ok(piece.Piece(_, piece.Queen)) -> 196_611
+        Ok(piece.Piece(_, piece.King)) -> -10
+        Error(Nil) -> panic
       }
       mobility_score + s
     })
