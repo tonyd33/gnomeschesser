@@ -214,49 +214,45 @@ fn do_negamax_alphabeta_failsoft(
 
   // We iterate through every move and perform minimax to evaluate said move
   // accumulator keeps track of best evaluation while updating the node type
-  use #(best_evaluation, _alpha) <- state.do(
-    state.fold_until_s(
-      move_game_list,
-      #(Evaluation(xint.NegInf, PV, None), alpha),
-      fn(acc, move_game) {
+  state.fold_until_s(
+    move_game_list,
+    #(Evaluation(xint.NegInf, PV, None), alpha),
+    fn(acc, move_game) {
+      {
+        let #(best_evaluation, alpha) = acc
+        let #(move, game) = move_game
+        use evaluation <- state.do(negamax_alphabeta_failsoft(
+          game,
+          depth - 1,
+          xint.negate(beta),
+          xint.negate(alpha),
+        ))
+        let evaluation =
+          Evaluation(..evaluation_negate(evaluation), best_move: Some(move))
+        let best_evaluation = case
+          xint.lt(best_evaluation.score, evaluation.score)
         {
-          let #(best_evaluation, alpha) = acc
-          let #(move, game) = move_game
-          use evaluation <- state.do(negamax_alphabeta_failsoft(
-            game,
-            depth - 1,
-            xint.negate(beta),
-            xint.negate(alpha),
-          ))
-          let evaluation =
-            Evaluation(..evaluation_negate(evaluation), best_move: Some(move))
-          let best_evaluation = case
-            xint.lt(best_evaluation.score, evaluation.score)
-          {
-            True -> evaluation
-            False -> best_evaluation
-          }
-          let alpha = xint.max(alpha, evaluation.score)
-
-          state.return(#(evaluation, best_evaluation, alpha))
+          True -> evaluation
+          False -> best_evaluation
         }
-        |> state.fmap(fn(x) {
-          // beta-cutoff
-          let #(evaluation, best_evaluation, alpha) = x
-          case xint.gte(evaluation.score, beta) {
-            True -> {
-              let best_evaluation =
-                Evaluation(..best_evaluation, node_type: Cut)
-              list.Stop(#(best_evaluation, alpha))
-            }
-            False -> list.Continue(#(best_evaluation, alpha))
-          }
-        })
-      },
-    ),
-  )
+        let alpha = xint.max(alpha, evaluation.score)
 
-  state.return(best_evaluation)
+        state.return(#(evaluation, best_evaluation, alpha))
+      }
+      |> state.fmap(fn(x) {
+        // beta-cutoff
+        let #(evaluation, best_evaluation, alpha) = x
+        case xint.gte(evaluation.score, beta) {
+          True -> {
+            let best_evaluation = Evaluation(..best_evaluation, node_type: Cut)
+            list.Stop(#(best_evaluation, alpha))
+          }
+          False -> list.Continue(#(best_evaluation, alpha))
+        }
+      })
+    },
+  )
+  |> state.fmap(fn(x) { x.0 })
 }
 
 /// returns the score of the current game while checking
