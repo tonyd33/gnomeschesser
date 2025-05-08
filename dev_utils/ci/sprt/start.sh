@@ -37,7 +37,6 @@ run_stockfish="$repo_root_path/stockfish/stockfish-ubuntu-x86-64"
 run_fastchess="$repo_root_path/fastchess/fastchess-ubuntu-22.04"
 
 # Run fastchess
-# TODO: Tune stockfish options
 mkdir -p "$repo_root_path/results"
 "$run_fastchess" \
     -engine cmd="$start_uci" name=gnomes \
@@ -46,9 +45,3 @@ mkdir -p "$repo_root_path/results"
     -rounds 2 -repeat -concurrency 1 \
     -pgnout file="$repo_root_path/results/sprt.pgn" \
     -log file="$repo_root_path/results/fastchess.log" level=trace
-
-echo "Log:"
-cat "$repo_root_path/results/fastchess.log"
-
-echo "PGN:"
-cat "$repo_root_path/results/sprt.pgn"

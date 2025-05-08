@@ -84,39 +84,68 @@ jobs:
           body-file: results/bratko-kopec.md
           comment-id: ${{ steps.find-comment.outputs.comment-id }}
 
-  # TODO: Enable when ready
-  #
-  # sprt:
-  #   runs-on: [self-hosted, linux, x64, fast]
-  #   env:
-  #     ImageOS: ubuntu24
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #       with:
-  #         submodules: true
-  #
-  #     - uses: erlef/setup-beam@v1
-  #       with:
-  #         otp-version: "27.1.2"
-  #         gleam-version: "1.9.1"
-  #         rebar3-version: "3"
-  #
-  #     - run: gleam deps download
-  #       working-directory: erlang_template
-  #
-  #     - run: gleam build
-  #       working-directory: erlang_template
-  #
-  #     - name: Install Deno
-  #       uses: denoland/setup-deno@v2
-  #       with:
-  #         deno-version: v2.x
-  #
-  #     - name: Run SPRT
-  #       run: dev_utils/ci/sprt/start.sh
-  #
-  #     - name: Upload artifacts
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: sprt
-  #         path: results/
+  sprt:
+    runs-on: [self-hosted, linux, x64, fast]
+    env:
+      ImageOS: ubuntu24
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.1.2"
+          gleam-version: "1.9.1"
+          rebar3-version: "3"
+
+      - run: gleam deps download
+        working-directory: erlang_template
+
+      - run: gleam build
+        working-directory: erlang_template
+
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Install Deno dependencies
+        run: deno install
+        working-directory: dev_utils/ci/sprt
+
+      - name: Run SPRT
+        run: dev_utils/ci/sprt/start.sh
+
+      - name: Upload results
+        env:
+          LICHESS_KEY: ${{ secrets.LICHESS_KEY }}
+        run: >-
+          deno run -A upload-report.ts \
+            --pgn "${{ github.workspace }}/results/sprt.pgn" > "${{ github.workspace }}/results/report.md"
+        working-directory: dev_utils/ci/sprt
+
+      - name: Find existing PR comment
+        if: github.event_name == 'pull_request'
+        id: find-comment
+        uses: peter-evans/find-comment@v3
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: 'SPRT Results'
+
+      - name: Post or update PR comment
+        if: github.event_name == 'pull_request'
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          edit-mode: replace
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body-file: results/report.md
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sprt
+          path: results/
