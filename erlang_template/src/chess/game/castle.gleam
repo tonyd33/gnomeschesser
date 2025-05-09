@@ -3,6 +3,7 @@ import chess/move
 import chess/player
 import chess/square
 import gleam/int
+import gleam/option
 
 pub type Castle {
   KingSide
@@ -56,7 +57,7 @@ pub fn rook_move(
   }
   let assert Ok(from) = square.from_rank_file(rank, from_file)
   let assert Ok(to) = square.from_rank_file(rank, to_file)
-  move.new_pseudomove(from:, to:)
+  move.new_pseudo(from:, to:, promotion: option.None)
 }
 
 pub fn king_move(
@@ -72,5 +73,5 @@ pub fn king_move(
 
   let assert Ok(from) = square.from_rank_file(rank, square.king_file)
   let assert Ok(to) = square.from_rank_file(rank, to_file)
-  move.new_pseudomove(from:, to:)
+  move.new_pseudo(from:, to:, promotion: option.None)
 }
