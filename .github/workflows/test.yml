@@ -60,7 +60,7 @@ jobs:
         run: |-
           deno task test \
             --engine ../../scripts/start-uci.sh \
-            --workers 4 \
+            --workers 2 \
             --timeout 30000 \
             --depth 5 > ${{ github.workspace }}/results/bratko-kopec.md
         working-directory: dev_utils/ci/bratko-kopec
