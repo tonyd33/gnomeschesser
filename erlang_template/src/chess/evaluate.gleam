@@ -6,12 +6,15 @@ import chess/psqt
 import gleam/dict
 import gleam/int
 import gleam/list
+import chess/square
+import gleam/bool
+import gleam/result
+import util/result_addons
 import util/xint.{type ExtendedInt}
 
 /// Evaluates the score of the game position
 /// > 0 means white is winning
 /// < 0 means black is winning
-/// Scaled from -1 to +1
 ///
 pub fn game(game: game.Game) -> ExtendedInt {
   let us = game.turn(game)
@@ -55,18 +58,106 @@ pub fn game(game: game.Game) -> ExtendedInt {
       let move_context = move.get_context(move)
       case move_context.piece.symbol {
         piece.Pawn | piece.Knight -> 0
-        piece.Bishop -> 458_758
-        piece.Rook -> 262_147
-        piece.Queen -> 196_611
+        piece.Bishop -> 125_000
+        piece.Rook -> 60_000
+        piece.Queen -> 50_000
         piece.King -> -10
       }
       + mobility_score
     })
     |> int.multiply(player(us))
 
+  let king_safety_score = king_safety(game)
+
   // combine scores with weight
-  { material_score * 900 + mobility_score * 50 + pqst_score * 50 }
+  {
+    { material_score * 850 }
+    + { mobility_score * 50 }
+    + { pqst_score * 50 }
+    + { king_safety_score * 1000 }
+  }
   |> xint.from_int
+}
+
+/// Evaluate king safety score
+/// Exported for testing
+///
+pub fn king_safety(game: game.Game) -> Int {
+  let us = game.turn(game)
+  let assert Ok(#(king_square, _)) = game.find_player_king(game, us)
+
+  // Pawn shield: When the king has castled, it is important to preserve
+  // pawns next to it, in order to protect it against the assault. Generally
+  // speaking, it is best to keep the pawns unmoved or possibly moved up one
+  // square. The lack of a shielding pawn deserves a penalty, even more so if
+  // there is an open file next to the king.
+  let pawn_shield_score = {
+    // If we haven't even castled, no bonus or penalty will be applied for
+    // the pawn shield score
+    use <- bool.guard(!game.has_castled(game, us), 0)
+    let king_rank = square.rank(king_square)
+    let king_file = square.file(king_square)
+    let rank_offset = case us {
+      player.Black -> 1
+      player.White -> -1
+    }
+    let our_pawn = piece.Piece(us, piece.Pawn)
+
+    // TODO: Consider doing a smarter bitboard mask for these
+
+    // This is the number of pawns that are 1 square away vertically
+    let num_pawns_around_king_close =
+      [
+        square.from_rank_file(king_rank + rank_offset, king_file - 1),
+        square.from_rank_file(king_rank + rank_offset, king_file),
+        square.from_rank_file(king_rank + rank_offset, king_file + 1),
+      ]
+      |> list.filter_map(fn(rs) {
+        result.map(rs, game.piece_exists_at(game, our_pawn, _))
+        |> result_addons.expect_or(fn(x) { x }, fn(_) { Nil })
+      })
+      |> list.length
+    // This is the number of pawns that are 2 squares away vertically
+    // We start to give small penalties at this point
+    let num_pawns_around_king_far =
+      [
+        square.from_rank_file(king_rank + rank_offset + 1, king_file - 1),
+        square.from_rank_file(king_rank + rank_offset + 1, king_file),
+        square.from_rank_file(king_rank + rank_offset + 1, king_file + 1),
+      ]
+      |> list.filter_map(fn(rs) {
+        result.map(rs, game.piece_exists_at(game, our_pawn, _))
+        |> result_addons.expect_or(fn(x) { x }, fn(_) { Nil })
+      })
+      |> list.length
+    let num_pawns_around_king =
+      num_pawns_around_king_close + num_pawns_around_king_far
+
+    // TODO: Simplify math
+    let penalty = case num_pawns_around_king_close {
+      // If all three pawns are hugging the king closely, then no penalty is
+      // incurred
+      3 -> 0
+      _ ->
+        case num_pawns_around_king {
+          // If all three pawns are still around the king, then some penalty is
+          // incurred for the pawns that are far
+          3 -> num_pawns_around_king_far
+          // This means there are pawns that are very distant from the king!
+          // For each pawn very distant from the king, apply a *harsh* penalty.
+          _ -> {
+            let num_pawns_distant = 3 - num_pawns_around_king
+
+            { num_pawns_distant * 10 } + num_pawns_around_king_far
+          }
+        }
+    }
+
+    // Score is -penalty
+    int.negate(penalty)
+  }
+
+  pawn_shield_score
 }
 
 /// Piece score based on player side

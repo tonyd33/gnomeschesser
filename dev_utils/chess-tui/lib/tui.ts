@@ -1,5 +1,6 @@
 // don't care about unnecessary async in handlers.
 // deno-lint-ignore-file require-await
+import fs from "node:fs";
 import * as process from "node:process";
 import { Chess } from "chess.js";
 import { Result } from "./types.ts";
@@ -15,6 +16,8 @@ export type Command =
   | { _sig: "move"; move: string }
   | { _sig: "fen" }
   | { _sig: "load"; fen: string }
+  | { _sig: "loadpgn"; pgn: string }
+  | { _sig: "loadpgnfile"; pgnfile: string }
   | { _sig: "undo" }
   | { _sig: "moves" }
   | { _sig: "history" }
@@ -162,6 +165,31 @@ export const commands: {
       args.length === 0 ? ["err", "need fen"] : ["ok", { fen: args.join(" ") }],
     handler: async (ctx, { fen }) => {
       ctx.chess.load(fen);
+      return ["ok", ctx];
+    },
+  },
+  loadpgn: {
+    args: ["pgn"],
+    summary: "load a pgn",
+    aliases: ["lp"],
+    print: true,
+    parser: (args) =>
+      args.length === 0 ? ["err", "need pgn"] : ["ok", { pgn: args.join(" ") }],
+    handler: async (ctx, { pgn }) => {
+      ctx.chess.loadPgn(pgn);
+      return ["ok", ctx];
+    },
+  },
+  loadpgnfile: {
+    args: ["pgnfile"],
+    summary: "load a pgn file",
+    aliases: ["lpf"],
+    print: true,
+    parser: (args) =>
+      args.length === 0 ? ["err", "need pgn file"] : ["ok", { pgnfile: args.join(" ") }],
+    handler: async (ctx, { pgnfile }) => {
+      const pgn = await fs.promises.readFile(pgnfile, "utf8");
+      ctx.chess.loadPgn(pgn);
       return ["ok", ctx];
     },
   },
