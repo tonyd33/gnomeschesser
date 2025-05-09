@@ -60,9 +60,9 @@ jobs:
         run: |-
           deno task test \
             --engine ../../scripts/start-uci.sh \
-            --workers 2 \
+            --workers 4 \
             --timeout 30000 \
-            --depth 4 > ${{ github.workspace }}/results/bratko-kopec.md
+            --depth 5 > ${{ github.workspace }}/results/bratko-kopec.md
         working-directory: dev_utils/ci/bratko-kopec
 
       - name: Find existing PR comment

@@ -72,7 +72,7 @@ pub fn game(game: game.Game) -> ExtendedInt {
   // combine scores with weight
   {
     { material_score * 850 }
-    + { mobility_score * 50 }
+    + { mobility_score * 10 }
     + { pqst_score * 50 }
     + { king_safety_score * 1000 }
   }
