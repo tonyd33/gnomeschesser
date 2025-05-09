@@ -1,6 +1,7 @@
 import chess/bitboard
 import chess/game/castle.{type Castle, KingSide, QueenSide}
 import chess/move
+import chess/move/disambiguation
 import chess/piece
 import chess/player
 import chess/square
@@ -473,26 +474,39 @@ pub fn move_to_san(move: move.Move(a), game: Game) -> Result(SAN, Nil) {
       piece.symbol_to_string(us_piece.symbol)
       <> {
         // handle disambiguation here
-        let #(is_ambiguous, same_file, same_rank) =
+        let ambiguity =
           list.fold(
             other_ambiguous_moves,
-            #(False, False, False),
-            fn(acc, other_move) {
-              use <- bool.guard(result.is_error(apply(game, other_move)), acc)
-              let #(_, same_file, same_rank) = acc
+            disambiguation.Unambiguous,
+            fn(ambiguity, other_move) {
               let other_from = move.get_from(other_move)
-              let same_file =
-                same_file || square.file(from) == square.file(other_from)
-              let same_rank =
-                same_rank || square.rank(from) == square.rank(other_from)
-              #(True, same_file, same_rank)
+              // Skip invalid moves here
+              // check if it's the same type of piece
+              // check if the move is even valid
+              use <- bool.guard(
+                move.get_to(other_move) != to
+                  || move.equal(move, other_move)
+                  || piece_at(game, other_from) != Ok(us_piece)
+                  || result.is_error(apply(game, other_move)),
+                ambiguity,
+              )
+              let same_file = square.file(from) == square.file(other_from)
+              let same_rank = square.rank(from) == square.rank(other_from)
+              case same_file, same_rank {
+                False, False -> disambiguation.GenerallyAmbiguous
+                False, True -> disambiguation.Rank
+                True, False -> disambiguation.File
+                True, True -> disambiguation.Unambiguous
+              }
+              |> disambiguation.add(ambiguity)
             },
           )
-        case is_ambiguous, same_file, same_rank {
-          False, _, _ -> ""
-          True, False, _ -> square.file_to_string(square.file(from))
-          True, _, False -> square.rank_to_string(square.rank(from))
-          True, True, True -> square.to_string(from)
+        case ambiguity {
+          disambiguation.Unambiguous -> ""
+          disambiguation.Rank | disambiguation.GenerallyAmbiguous ->
+            square.file_to_string(square.file(from))
+          disambiguation.File -> square.rank_to_string(square.rank(from))
+          disambiguation.Both -> square.to_string(from)
         }
       }
       <> case is_capture {
