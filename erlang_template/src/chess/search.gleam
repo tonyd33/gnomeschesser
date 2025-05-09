@@ -51,7 +51,7 @@ pub type Evaluation {
   )
 }
 
-// https://www.chessprogramming.org/Node_Types
+/// https://www.chessprogramming.org/Node_Types
 pub type NodeType {
   // Exact Score
   PV
@@ -297,7 +297,7 @@ fn quiesce(
   best_score
 }
 
-// sort moves from best to worse, which improves alphabeta pruning
+/// sort moves from best to worse, which improves alphabeta pruning
 fn sorted_moves(
   game: game.Game,
   transposition: TranspositionTable,

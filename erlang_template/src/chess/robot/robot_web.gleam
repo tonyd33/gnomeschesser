@@ -34,7 +34,7 @@ pub fn init() -> Robot {
   Robot(main_subject: create_robot_thread())
 }
 
-// This updates the robot with a new FEN (which will start a search)
+/// This updates the robot with a new FEN (which will start a search)
 pub fn update_fen(
   robot: Robot,
   fen: String,
@@ -44,7 +44,7 @@ pub fn update_fen(
   process.send(robot.main_subject, UpdateGame(game))
 }
 
-// Then requests the best move
+/// Then requests the best move
 pub fn get_best_move(robot: Robot) -> Result(move.Move(move.Pseudo), Nil) {
   use evaluation <- result.then(process.call_forever(
     robot.main_subject,
@@ -53,7 +53,7 @@ pub fn get_best_move(robot: Robot) -> Result(move.Move(move.Pseudo), Nil) {
   option.to_result(evaluation.best_move, Nil)
 }
 
-// Spawn a robot thread with the default initial game and also a searcher
+/// Spawn a robot thread with the default initial game and also a searcher
 fn create_robot_thread() -> Subject(RobotMessage) {
   // The reply_subject is only to receive the robot's subject and return it
   let reply_subject = process.new_subject()
@@ -89,7 +89,7 @@ fn create_robot_thread() -> Subject(RobotMessage) {
   process.receive_forever(reply_subject)
 }
 
-// The main robot loop that checks for messages and updates the state
+/// The main robot loop that checks for messages and updates the state
 fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
   let message = process.select_forever(update)
   let state = case message {

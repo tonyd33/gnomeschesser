@@ -71,7 +71,7 @@ pub fn game(game: game.Game) -> ExtendedInt {
   |> xint.from_int
 }
 
-// Piece score based on player side
+/// Piece score based on player side
 fn piece(piece: piece.Piece) -> Int {
   case piece.symbol {
     piece.Pawn -> 1
@@ -84,7 +84,7 @@ fn piece(piece: piece.Piece) -> Int {
   * player(piece.player)
 }
 
-// The sign of each player in evaluations
+/// The sign of each player in evaluations
 pub fn player(player: player.Player) -> Int {
   case player {
     player.White -> 1
