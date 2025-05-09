@@ -133,7 +133,7 @@ pub fn add(square: Square, increment: Int) -> Result(Square, Nil) {
 }
 
 fn is_valid(ox88: Int) -> Bool {
-  0 == int.bitwise_and(ox88, 0x88)
+  0 == int.bitwise_and(ox88, int.bitwise_not(0x77))
 }
 
 pub fn pawn_start_rank(player: player.Player) -> Int {

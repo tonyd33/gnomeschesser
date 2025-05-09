@@ -62,6 +62,11 @@ pub fn get_promotion(move: Move(a)) {
   move.promotion
 }
 
+pub fn get_context(move: Move(ValidInContext)) {
+  let assert Some(context) = move.context
+  context
+}
+
 pub fn to_lan(move: Move(a)) {
   square.to_string(move.from)
   <> square.to_string(move.to)
