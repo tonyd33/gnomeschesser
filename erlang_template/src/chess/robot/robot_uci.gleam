@@ -117,13 +117,14 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
           )
         }
         ApplyMove(lan:) -> {
-          state.game
-          |> option.then(fn(game) {
-            move.from_lan(lan)
-            |> game.apply(game, _)
-            |> option.from_result
-          })
-          |> fn(game) { RobotState(..state, game:) }
+          let game =
+            option.then(state.game, fn(game) {
+              case game.apply(game, move.from_lan(lan)) {
+                Ok(#(game, _valid_move)) -> Some(game)
+                Error(Nil) -> None
+              }
+            })
+          RobotState(..state, game:)
         }
         IsReady -> {
           io.println(uci.serialize_gui_cmd(uci.GUICmdReadyOk))

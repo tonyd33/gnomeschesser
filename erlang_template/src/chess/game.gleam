@@ -7,6 +7,7 @@ import chess/player
 import chess/square
 import gleam/bool
 import gleam/dict.{type Dict}
+import gleam/function
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -326,9 +327,10 @@ pub fn is_checkmate(game: Game) -> Bool {
     pseudo_moves(game)
     |> list.all(fn(x) {
       // If every new move we try still result in a check, then it's checkmate
-      apply(game, x)
-      |> result.map(is_check(_, us))
-      |> result.unwrap(True)
+      case apply(game, x) {
+        Ok(#(game, _move)) -> is_check(game, us)
+        Error(Nil) -> True
+      }
     })
   }
 }
@@ -410,7 +412,7 @@ pub fn move_to_san(move: move.Move(a), game: Game) -> Result(SAN, Nil) {
   let from = move.get_from(move)
   let to = move.get_to(move)
   let assert Ok(us_piece) = dict.get(game.board, from)
-  use new_game <- result.try(apply(game, move))
+  use #(new_game, move) <- result.try(apply(game, move))
   // no moving into check
   use <- bool.guard(is_check(new_game, us), Error(Nil))
 
@@ -540,12 +542,15 @@ pub fn move_from_san(
 }
 
 /// Applies a move to a game, takes either pseudo or validated moves
-/// The process of applying checks if the move is valid
-/// PseudoMoves don't consider checks, only occupancy
+/// Returns a validated version of the move
 /// TODO: we could return the new validated move?
-pub fn apply(game: Game, move: move.Move(a)) -> Result(Game, Nil) {
+pub fn apply(
+  game: Game,
+  move: move.Move(a),
+) -> Result(#(Game, move.Move(move.ValidInContext)), Nil) {
   let from = move.get_from(move)
   let to = move.get_to(move)
+  let promotion = move.get_promotion(move)
   let Game(
     board:,
     bitboard:,
@@ -557,6 +562,10 @@ pub fn apply(game: Game, move: move.Move(a)) -> Result(Game, Nil) {
   ) = game
   let them = player.opponent(us)
   use piece <- result.try(dict.get(board, from))
+
+  // Return early if trying to move non-active player
+  use <- bool.guard(piece.player != us, Error(Nil))
+
   // Get capture square and potential piece
   let captured_square = case en_passant_target_square, piece.symbol {
     Some(#(en_passant_creator, target_square)), piece.Pawn
@@ -575,9 +584,11 @@ pub fn apply(game: Game, move: move.Move(a)) -> Result(Game, Nil) {
   let captured_piece = dict.get(board, captured_square)
 
   // If it's a pawn move that's trying to capture
+  // there needs to be a piece actually there or it can't move
+  // (unlike all other pieces)
   use <- bool.guard(
     piece.symbol == piece.Pawn
-      && move.is_x_move(move) |> result.unwrap(False)
+      && square.file(from) != square.file(to)
       && result.is_error(captured_piece),
     Error(Nil),
   )
@@ -609,11 +620,18 @@ pub fn apply(game: Game, move: move.Move(a)) -> Result(Game, Nil) {
     let attacked =
       pseudo_moves_player(game, them)
       // filter out non-capture pawn moves
-      |> list.filter(fn(move) { move.is_x_move(move) != Ok(False) })
       |> list.any(fn(move) {
-        // pawns are awkward here, but if a pawn move would block the path,
-        // the same pawn can also attack the path
-        // this won't be a problem with the attack bitboard
+        let from = move.get_from(move)
+        let to = move.get_to(move)
+        let piece = piece_at(game, from)
+        // Pawns can only attack diagonally, so we want to filter out non-attacks
+        // Ideally if we already have an "attack" bitboard
+        // We wouldn't need to do this 
+        use <- bool.guard(
+          piece == Ok(piece.Piece(them, piece.Pawn))
+            && square.rank(from) == square.rank(to),
+          False,
+        )
         list.contains(unattacked_squares, move.get_to(move))
       })
     use <- bool.guard(attacked, Error(Nil))
@@ -636,7 +654,7 @@ pub fn apply(game: Game, move: move.Move(a)) -> Result(Game, Nil) {
     #(board, bitboard, castling_availability) |> Ok
   })
 
-  // update castling availibility based on game state
+  // update castling availibility based on new game state
   let castling_availability = {
     let kingside_rook_file = castle.rook_from_file(castle.KingSide)
     let queenside_rook_file = castle.rook_from_file(castle.QueenSide)
@@ -672,32 +690,6 @@ pub fn apply(game: Game, move: move.Move(a)) -> Result(Game, Nil) {
     list.filter(castling_availability, fn(x) { !list.contains(removals, x) })
   }
 
-  // board update
-  let board =
-    dict.delete(board, from)
-    // captured square might be different from actual square due to en passant
-    |> dict.delete(captured_square)
-    |> dict.insert(to, piece)
-
-  // bitboard update
-  let bitboard = {
-    let bitboard =
-      // mask out the captured square if it exists
-      result.map(captured_piece, bitboard.and(
-        bitboard,
-        _,
-        int.bitwise_not(bitboard.from_square(captured_square)),
-      ))
-      |> result.unwrap(bitboard)
-    // mask out the from square 
-    // mask in the to square 
-    bitboard.exclusive_or(
-      bitboard,
-      piece,
-      int.bitwise_or(bitboard.from_square(from), bitboard.from_square(to)),
-    )
-  }
-
   // en passant target square update
   // if it's a pawn move and it has a 2 rank difference
   let en_passant_target_square = case piece.symbol {
@@ -717,6 +709,33 @@ pub fn apply(game: Game, move: move.Move(a)) -> Result(Game, Nil) {
     _ -> None
   }
 
+  // update the piece if it's a promotion
+  let new_piece =
+    promotion |> option.map(piece.Piece(us, _)) |> option.unwrap(piece)
+  // board update
+  let board =
+    dict.delete(board, from)
+    // captured square might be different from actual square due to en passant
+    |> dict.delete(captured_square)
+    |> dict.insert(to, new_piece)
+
+  // bitboard update
+  let bitboard =
+    bitboard
+    // mask out the from square
+    |> bitboard.and(piece, int.bitwise_not(bitboard.from_square(from)))
+    // mask in the to square 
+    |> bitboard.or(new_piece, bitboard.from_square(to))
+    // mask out the captured square if it exists
+    |> case captured_piece {
+      Ok(captured_piece) -> bitboard.and(
+        _,
+        captured_piece,
+        int.bitwise_not(bitboard.from_square(captured_square)),
+      )
+      Error(Nil) -> function.identity
+    }
+
   let fullmove_number = case us {
     player.Black -> fullmove_number + 1
     player.White -> fullmove_number
@@ -725,15 +744,31 @@ pub fn apply(game: Game, move: move.Move(a)) -> Result(Game, Nil) {
     piece.Pawn, _ | _, Ok(_) -> 0
     _, _ -> halfmove_clock + 1
   }
-  Game(
-    board:,
-    bitboard:,
-    active_color: them,
-    castling_availability:,
-    en_passant_target_square:,
-    fullmove_number:,
-    halfmove_clock:,
-  )
+
+  let game =
+    Game(
+      board:,
+      bitboard:,
+      active_color: them,
+      castling_availability:,
+      en_passant_target_square:,
+      fullmove_number:,
+      halfmove_clock:,
+    )
+  let validated_move = {
+    let capture = result.is_ok(captured_piece)
+
+    let context =
+      move.Context(
+        capture:,
+        player: piece.player,
+        // Make sure we're using the pre-promotion piece!
+        piece: piece.symbol,
+      )
+      |> Some
+    move.new_valid(from:, to:, promotion:, context:)
+  }
+  #(game, validated_move)
   |> Ok
 }
 
@@ -790,10 +825,8 @@ pub fn pseudo_moves_player(
       |> list.flat_map(fn(to) {
         // move backwards to find our previous position
         let assert Ok(from) = square.move(to, their_direction, 1)
-        list.map(promotions(to), fn(promotion) {
-          let pawn_context = move.PawnContext(promotion:, x_move: False)
-          move.new_pseudomove_pawn(from:, to:, pawn_context:)
-        })
+        promotions(to)
+        |> list.map(move.new_pseudo(from:, to:, promotion: _))
       })
 
     let big_move =
@@ -807,11 +840,8 @@ pub fn pseudo_moves_player(
       |> bitboard.to_squares
       |> list.flat_map(fn(to) {
         let assert Ok(from) = square.move(to, their_direction, 2)
-
-        list.map(promotions(to), fn(promotion) {
-          let pawn_context = move.PawnContext(promotion:, x_move: False)
-          move.new_pseudomove_pawn(from:, to:, pawn_context:)
-        })
+        promotions(to)
+        |> list.map(move.new_pseudo(from:, to:, promotion: _))
       })
 
     let capture_move = {
@@ -827,10 +857,8 @@ pub fn pseudo_moves_player(
             square.move(to, direction.opposite(side), 1)
             |> result.try(square.move(_, their_direction, 1))
 
-          list.map(promotions(to), fn(promotion) {
-            let pawn_context = move.PawnContext(promotion:, x_move: True)
-            move.new_pseudomove_pawn(from:, to:, pawn_context:)
-          })
+          promotions(to)
+          |> list.map(move.new_pseudo(from:, to:, promotion: _))
         })
       })
     }
@@ -863,7 +891,7 @@ pub fn pseudo_moves_player(
           }
         })
       })
-      |> list.map(move.new_pseudomove(from:, to: _))
+      |> list.map(move.new_pseudo(from:, to: _, promotion: None))
     })
 
   let castle_moves =

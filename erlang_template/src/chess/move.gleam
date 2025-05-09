@@ -1,47 +1,53 @@
 import chess/piece
+import chess/player
 import chess/square
 import gleam/option.{type Option, None, Some}
 import gleam/string
 
+/// Validated from a game
 pub type ValidInContext
 
+/// PseudoMoves don't consider checks, only occupancy
 pub type Pseudo
 
 pub opaque type Move(context) {
   Move(
     // The minimum amount of information to disambiguate between moves
-    // from and to is the source of truth
+    // The source of truth is from, to, promotion
     // Castles are represented by king moves
     from: square.Square,
     to: square.Square,
+    promotion: Option(piece.PieceSymbol),
     // extra context for calculations
-    pawn_context: Option(PawnContext),
-    context: Option(MoveContext),
+    context: Option(Context),
   )
 }
 
-pub type PawnContext {
-  PawnContext(promotion: Option(piece.PieceSymbol), x_move: Bool)
-}
-
 // we don't current actually use this yet
-pub type MoveContext {
-  MoveContext(capture: Bool)
+pub type Context {
+  Context(
+    capture: Bool,
+    player: player.Player,
+    piece: piece.PieceSymbol,
+    // game hash? there might be collisions though
+  )
 }
 
-pub fn new_pseudomove_pawn(
+pub fn new_pseudo(
   from from: square.Square,
   to to: square.Square,
-  pawn_context pawn_context: PawnContext,
-) {
-  Move(from:, to:, pawn_context: Some(pawn_context), context: None)
-}
-
-pub fn new_pseudomove(
-  from from: square.Square,
-  to to: square.Square,
+  promotion promotion: Option(piece.PieceSymbol),
 ) -> Move(Pseudo) {
-  Move(from:, to:, pawn_context: None, context: None)
+  Move(from:, to:, promotion:, context: None)
+}
+
+pub fn new_valid(
+  from from: square.Square,
+  to to: square.Square,
+  promotion promotion: Option(piece.PieceSymbol),
+  context context: Option(Context),
+) -> Move(ValidInContext) {
+  Move(from:, to:, promotion:, context:)
 }
 
 pub fn get_from(move: Move(a)) {
@@ -52,15 +58,8 @@ pub fn get_to(move: Move(a)) {
   move.to
 }
 
-/// TODO: ensure a way that moves that are not pawns don't have access to invalid values of this
 pub fn get_promotion(move: Move(a)) {
-  option.then(move.pawn_context, fn(pawn_context) { pawn_context.promotion })
-}
-
-pub fn is_x_move(move: Move(a)) -> Result(Bool, Nil) {
-  move.pawn_context
-  |> option.map(fn(pawn_context) { pawn_context.x_move })
-  |> option.to_result(Nil)
+  move.promotion
 }
 
 pub fn to_lan(move: Move(a)) {
@@ -74,27 +73,22 @@ pub fn to_lan(move: Move(a)) {
 
 /// Generates a pseudo move from LAN string
 /// there's a specific kind of long algebraic notation used by UCI
-/// TODO: avoid adding pawn context to non-pawn moves (if possible)
 pub fn from_lan(lan: String) -> Move(Pseudo) {
-  let from = square.from_string(string.slice(lan, 0, 2))
-  let to = square.from_string(string.slice(lan, 2, 2))
-  let promotion = piece.symbol_from_string(string.slice(lan, 4, 1))
-
+  let from = string.slice(lan, 0, 2) |> square.from_string
+  let to = string.slice(lan, 2, 2) |> square.from_string
+  let promotion =
+    string.slice(lan, 4, 1)
+    |> piece.symbol_from_string
+    |> option.from_result
   case from, to {
-    Ok(from), Ok(to) -> {
-      // we'll generate the pawn context assuming it's a pawn
-      // If it's not a pawn, we just won't make use of it
-      let x_move = square.file(from) != square.file(to)
-      let promotion = option.from_result(promotion)
-      let pawn_context = PawnContext(promotion:, x_move:)
-      new_pseudomove_pawn(from:, to:, pawn_context:)
-    }
+    Ok(from), Ok(to) -> new_pseudo(from:, to:, promotion:)
     _, _ -> panic as { lan <> " is an invalid lan" }
   }
 }
 
+/// Compares equality but don't compare the context
 pub fn equal(move_1: Move(a), move_2: Move(b)) {
   move_1.from == move_2.from
   && move_1.to == move_2.to
-  && { move_1 |> get_promotion == move_2 |> get_promotion }
+  && move_1.promotion == move_2.promotion
 }

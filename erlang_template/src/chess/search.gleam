@@ -47,7 +47,7 @@ pub type Evaluation {
   Evaluation(
     score: ExtendedInt,
     node_type: NodeType,
-    best_move: Option(move.Move(move.Pseudo)),
+    best_move: Option(move.Move(move.ValidInContext)),
   )
 }
 
@@ -282,7 +282,7 @@ fn quiesce(
       use <- bool.guard(!game.move_is_capture(move, game), list.Continue(acc))
       {
         // If game failed to apply, short circuit to continuing
-        use new_game <- result.try(game.apply(game, move))
+        use #(new_game, _valid_move) <- result.try(game.apply(game, move))
         let #(best_score, alpha) = acc
         let score =
           xint.negate(quiesce(new_game, xint.negate(beta), xint.negate(alpha)))
@@ -301,16 +301,18 @@ fn quiesce(
 fn sorted_moves(
   game: game.Game,
   transposition: TranspositionTable,
-) -> List(#(move.Move(move.Pseudo), game.Game)) {
+) -> List(#(move.Move(move.ValidInContext), game.Game)) {
+  // retrieve the cached transposition table data
   game.pseudo_moves(game)
   |> list.filter_map(fn(move) {
-    // retrieve the cached transposition table data
-    // negate the evaluation so that it's relative to our current game
-    use new_game <- result.try(game.apply(game, move))
+    // Also validates the move here
+    use #(new_game, move) <- result.try(game.apply(game, move))
     // TODO: Make this stateful and update the transposition table
+    // - Why does this need to update the transposition table? This part is read-only right?
     let evaluation = case dict.get(transposition.dict, zobrist.hash(new_game)) {
       Ok(TranspositionEntry(_, evaluation, _)) ->
-        Some(evaluation_negate(evaluation))
+        // negate the evaluation so that it's relative to our current game
+        evaluation_negate(evaluation) |> Some
       Error(Nil) -> None
     }
     Ok(#(#(move, new_game), evaluation))

@@ -45,7 +45,9 @@ pub fn update_fen(
 }
 
 /// Then requests the best move
-pub fn get_best_move(robot: Robot) -> Result(move.Move(move.Pseudo), Nil) {
+pub fn get_best_move(
+  robot: Robot,
+) -> Result(move.Move(move.ValidInContext), Nil) {
   use evaluation <- result.then(process.call_forever(
     robot.main_subject,
     GetBestEvaluation,
@@ -105,7 +107,8 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
       // We should do any cleanup or extra calculations while the opponent has their turn
       case state.best_evaluation {
         Some(search.Evaluation(_, _, Some(best_move))) -> {
-          let assert Ok(new_game) = game.apply(state.game, best_move)
+          let assert Ok(#(new_game, _valid_move)) =
+            game.apply(state.game, best_move)
           update_state_with_new_game(state, new_game)
         }
         _ -> state
