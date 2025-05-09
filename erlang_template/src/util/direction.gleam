@@ -1,4 +1,5 @@
-// For diagonals simply use a combination of these
+/// Denotes a direction on the chess board, from white's sitting perspective
+/// For diagonals simply use a combination of these
 pub type Direction {
   Up
   Down

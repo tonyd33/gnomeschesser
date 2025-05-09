@@ -26,7 +26,7 @@ pub type GameBitboard {
   )
 }
 
-// TODO: we should consider pre-calculating these
+/// TODO: we should consider pre-calculating these
 pub fn get_bitboard_all(game_bitboard: GameBitboard) -> BitBoard {
   game_bitboard.white_pawns
   |> int.bitwise_or(game_bitboard.white_rooks)
@@ -176,15 +176,20 @@ pub fn move(
 
 pub fn to_squares(bitboard: BitBoard) -> List(square.Square) {
   // This tries every bit, not sure if there's a better and cheaper way
-  list.range(0, 63)
-  |> list.filter(fn(bit_digit) {
-    0 != int.bitwise_and(bitboard, int.bitwise_shift_left(0b1, bit_digit))
-  })
-  |> list.map(fn(bit_digit) {
+  [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+    22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+    41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59,
+    60, 61, 62, 63,
+  ]
+  |> list.filter_map(fn(bit_digit) {
+    use <- bool.guard(
+      0 == int.bitwise_and(bitboard, int.bitwise_shift_left(0b1, bit_digit)),
+      Error(Nil),
+    )
     let rank = bit_digit / 8
     let file = bit_digit % 8
-    let assert Ok(square) = square.from_rank_file(rank, file)
-    square
+    square.from_rank_file(rank, file)
   })
 }
 

@@ -158,7 +158,7 @@ fn p_int() -> Parser(Int) {
   }
 }
 
-// TODO: what's this function for?
+/// TODO: what's this function for?
 fn floating() -> Parser(Float) {
   use left <- p.do(p_int())
   use dot <- p.do(p.char("."))

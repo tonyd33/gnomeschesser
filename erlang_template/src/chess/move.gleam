@@ -52,7 +52,7 @@ pub fn get_to(move: Move(a)) {
   move.to
 }
 
-// TODO: ensure a way that moves that are not pawns don't have access to invalid values of this
+/// TODO: ensure a way that moves that are not pawns don't have access to invalid values of this
 pub fn get_promotion(move: Move(a)) {
   option.then(move.pawn_context, fn(pawn_context) { pawn_context.promotion })
 }
@@ -72,7 +72,9 @@ pub fn to_lan(move: Move(a)) {
   }
 }
 
-// there's a specific kind of long algebraic notation used by UCI
+/// Generates a pseudo move from LAN string
+/// there's a specific kind of long algebraic notation used by UCI
+/// TODO: avoid adding pawn context to non-pawn moves (if possible)
 pub fn from_lan(lan: String) -> Move(Pseudo) {
   let from = square.from_string(string.slice(lan, 0, 2))
   let to = square.from_string(string.slice(lan, 2, 2))

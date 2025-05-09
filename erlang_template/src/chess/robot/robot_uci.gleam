@@ -53,7 +53,7 @@ type RobotState {
   )
 }
 
-// Spawn a robot thread with the default initial game and also a searcher
+/// Spawn a robot thread with the default initial game and also a searcher
 fn create_robot_thread() -> Subject(RobotMessage) {
   // The reply_subject is only to receive the robot's subject and return it
   let reply_subject = process.new_subject()
@@ -85,7 +85,7 @@ fn create_robot_thread() -> Subject(RobotMessage) {
   process.receive_forever(reply_subject)
 }
 
-// The main robot loop that checks for messages and updates the state
+/// The main robot loop that checks for messages and updates the state
 fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
   let message = process.select(update, 1000)
   let state =

@@ -157,8 +157,8 @@ pub fn player_rank(player: player.Player) -> Int {
   }
 }
 
-// This does not consider any obstacles
-// List of lists of squares being "paths" a piece can travel down
+/// List of lists of squares being "paths" a piece can travel down
+/// This does not consider any obstacles
 pub fn piece_moves(from: Square, piece: piece.Piece) -> List(List(Square)) {
   let depths = case piece.symbol {
     piece.Knight | piece.King -> [1]
@@ -172,7 +172,7 @@ pub fn piece_moves(from: Square, piece: piece.Piece) -> List(List(Square)) {
   })
 }
 
-// ox88 offsets that each unit can move as
+/// Gets the ox88 offsets of each piece's "one space" moves
 fn piece_offsets(piece: piece.Piece) {
   case piece.symbol {
     piece.Knight -> [-18, -33, -31, -14, 18, 33, 31, 14]

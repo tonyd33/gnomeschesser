@@ -263,8 +263,7 @@ pub fn to_fen(game: Game) -> String {
 /// equality used for threefold repetition:
 /// https://en.wikipedia.org/wiki/Threefold_repetition
 ///
-// TODO: use zobrist once we generate it for every game
-
+/// TODO: use zobrist once we generate it for every game
 pub fn equal(g1: Game, g2: Game) -> Bool {
   let g1_fen = to_fen(g1)
   let g2_fen = to_fen(g2)
@@ -302,11 +301,11 @@ pub fn attackers(
   // TODO: don't generate every single attacking move (because that sucks)
   // Or we cache it as a bitboard (this would make more sense)
   pseudo_moves_player(game, by)
-  |> list.filter(fn(move) { move.get_to(move) == at })
-  |> list.map(fn(move) {
+  |> list.filter_map(fn(move) {
+    use <- bool.guard(move.get_to(move) != at, Error(Nil))
     let from = move.get_from(move)
     let assert Ok(piece) = dict.get(game.board, from)
-    #(from, piece)
+    Ok(#(from, piece))
   })
 }
 
@@ -518,77 +517,18 @@ pub fn move_to_san(move: move.Move(a), game: Game) -> Result(SAN, Nil) {
 /// TODO: Possibly allow more flexibility
 /// TODO: generate this in a way that doesn't involve generating every move
 /// 
-// type ParseThing {
-//   ParseRank(a: Int)
-//   ParseFile(a: Int)
-//   ParsePiece(a: piece.PieceSymbol)
-// }
-
 pub fn move_from_san(
   san: String,
   game: Game,
 ) -> Result(move.Move(move.Pseudo), Nil) {
   pseudo_moves(game)
   |> list.find(fn(x) { move_to_san(x, game) == Ok(san) })
-  // let us = game.active_color
-  // let san = string.trim(san) |> string.lowercase
-
-  // use <- bool.lazy_guard(san == "o-o-o" || san == "0-0-0", fn() {
-  //   Ok(castle.king_move(us, castle.QueenSide))
-  // })
-  // use <- bool.lazy_guard(san == "o-o" || san == "0-0", fn() {
-  //   Ok(castle.king_move(us, castle.KingSide))
-  // })
-
-  // let parsed =
-  //   string.to_graphemes(san)
-  //   |> list.filter_map(fn(x) {
-  //     use <- result.replace_error(
-  //       piece.symbol_from_string(x) |> result.map(ParsePiece),
-  //     )
-  //     use <- result.replace_error(
-  //       square.file_from_string(x) |> result.map(ParseFile),
-  //     )
-  //     square.rank_from_string(x) |> result.map(ParseRank)
-  //   })
-  // // the last file-rank is the to square
-  // list.fold(list.reverse(parsed), #([], [], []), fn(acc, x) {
-  //   case x {
-  //     ParsePiece(piece) -> {
-  //       todo
-  //     }
-  //     ParseFile(piece) -> {
-  //       todo
-  //     }
-  //     ParseRank(piece) -> {
-  //       todo
-  //     }
-  //   }
-  //   acc
-  // })
-
-  // // check castles
-  // list.fold(string.to_graphemes(san), [], fn(acc, char) {
-  //   // a little janky, but we break down and 
-  //   case string.contains("abcdefghijklmnopqrstuvwxyz", string.lowercase(char)) {
-  //     True -> [[char], ..acc]
-  //     False ->
-  //       case acc {
-  //         [first, ..rest] -> [[char, ..first], ..rest]
-  //         [] -> acc
-  //       }
-  //   }
-  // })
-  // |> list.reverse
-  // |> list.map(fn(x) { list.reverse(x) |> string.join("") })
-  // //piece.symbol_from_string
-  // //pseudo_moves(game)
-  // //|> list.find(fn(move) { move_to_san(move, game) == san })
-  // Error(Nil)
 }
 
-// PseudoMoves don't consider checks, only occupancy
-// we could return the new validated move?
+/// Applies a move to a game, takes either pseudo or validated moves
+/// The process of applying checks if the move is valid
+/// PseudoMoves don't consider checks, only occupancy
+/// TODO: we could return the new validated move?
 pub fn apply(game: Game, move: move.Move(a)) -> Result(Game, Nil) {
   let from = move.get_from(move)
   let to = move.get_to(move)
@@ -783,10 +723,10 @@ pub fn apply(game: Game, move: move.Move(a)) -> Result(Game, Nil) {
   |> Ok
 }
 
-// Generate moves that don't care about checks
-// It only ensures that moves are moving into unoccupied space (or a capture)
-// And also that castles aren't occupied by pieces
-// but it does not check if there's an attack in the way
+/// Generate moves that don't care about checks
+/// It only ensures that moves are moving into unoccupied space (or a capture)
+/// And also that castles aren't occupied by pieces
+/// but it does not check if there's an attack in the way
 pub fn pseudo_moves(game: Game) -> List(move.Move(move.Pseudo)) {
   pseudo_moves_player(game, game.active_color)
 }
