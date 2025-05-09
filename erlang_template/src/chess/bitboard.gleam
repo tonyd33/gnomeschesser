@@ -151,12 +151,10 @@ pub fn move(
       }
     }
     case direction {
-      direction.Left -> right_mask(8 - amount) |> int.negate
+      direction.Left -> right_mask(8 - amount) |> int.bitwise_not
       direction.Right -> right_mask(amount)
-      _ -> -1
+      _ -> 0xFFFF_FFFF_FFFF_FFFF
     }
-    // truncates it to 64 bits
-    |> int.bitwise_and(0xFFFF_FFFF_FFFF_FFFF)
   }
   case direction {
     direction.Up -> int.bitwise_shift_left(bitboard, 8 * amount)

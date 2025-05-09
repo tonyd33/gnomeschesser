@@ -40,7 +40,8 @@ pub fn game(game: game.Game) -> ExtendedInt {
   }
 
   // TODO: use a cached moves in game
-  let moves = game.pseudo_moves(game)
+  let pseudo_moves = game.pseudo_moves(game)
+  let valid_moves = list.filter_map(pseudo_moves, game.apply(game, _))
 
   // Calculate a [mobility score](https://www.chessprogramming.org/Mobility).
   //
@@ -51,18 +52,18 @@ pub fn game(game: game.Game) -> ExtendedInt {
   // positively towards the mobility score and is weighted by the piece.
   // TODO: change these based on the state of the game
   let mobility_score =
-    moves
-    |> list.fold(0, fn(mobility_score, move) {
-      let s = case game.board(game) |> dict.get(move.get_from(move)) {
-        Ok(piece.Piece(_, piece.Pawn)) -> 0
-        Ok(piece.Piece(_, piece.Knight)) -> 0
-        Ok(piece.Piece(_, piece.Bishop)) -> 458_758
-        Ok(piece.Piece(_, piece.Rook)) -> 262_147
-        Ok(piece.Piece(_, piece.Queen)) -> 196_611
-        Ok(piece.Piece(_, piece.King)) -> -10
-        Error(Nil) -> panic
+    valid_moves
+    |> list.fold(0, fn(mobility_score, move_game) {
+      let #(_new_game, move) = move_game
+      let move_context = move.get_context(move)
+      case move_context.piece {
+        piece.Pawn | piece.Knight -> 0
+        piece.Bishop -> 458_758
+        piece.Rook -> 262_147
+        piece.Queen -> 196_611
+        piece.King -> -10
       }
-      mobility_score + s
+      + mobility_score
     })
     |> int.multiply(player(us))
 

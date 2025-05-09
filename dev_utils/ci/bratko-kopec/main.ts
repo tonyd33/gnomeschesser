@@ -250,6 +250,7 @@ async function runTestCases(
     } else {
       process.stderr.write(`Unknown error\n`);
     }
+    process.exit(1);
   } finally {
     engine.quit();
   }
