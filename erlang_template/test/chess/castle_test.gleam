@@ -18,34 +18,34 @@ pub fn castle_king_move_test() {
 pub fn castle_bitboards_test() {
   should.equal(
     castle.occupancy_bitboard(player.Black, castle.KingSide),
-    0b_00000110_00000000_00000000_00000000_00000000_00000000_00000000_00000000,
+    0b_01100000_00000000_00000000_00000000_00000000_00000000_00000000_00000000,
   )
   should.equal(
     castle.occupancy_bitboard(player.Black, castle.QueenSide),
-    0b_01110000_00000000_00000000_00000000_00000000_00000000_00000000_00000000,
-  )
-  should.equal(
-    castle.occupancy_bitboard(player.White, castle.KingSide),
-    0b_00000000_00000000_00000000_00000000_00000000_00000000_00000000_00000110,
-  )
-  should.equal(
-    castle.occupancy_bitboard(player.White, castle.QueenSide),
-    0b_00000000_00000000_00000000_00000000_00000000_00000000_00000000_01110000,
-  )
-  should.equal(
-    castle.unattacked_bitboard(player.Black, castle.KingSide),
     0b_00001110_00000000_00000000_00000000_00000000_00000000_00000000_00000000,
   )
   should.equal(
-    castle.unattacked_bitboard(player.Black, castle.QueenSide),
-    0b_0111000_00000000_00000000_00000000_00000000_00000000_00000000_00000000,
+    castle.occupancy_bitboard(player.White, castle.KingSide),
+    0b_00000000_00000000_00000000_00000000_00000000_00000000_00000000_01100000,
   )
   should.equal(
-    castle.unattacked_bitboard(player.White, castle.KingSide),
+    castle.occupancy_bitboard(player.White, castle.QueenSide),
     0b_00000000_00000000_00000000_00000000_00000000_00000000_00000000_00001110,
   )
   should.equal(
+    castle.unattacked_bitboard(player.Black, castle.KingSide),
+    0b_01110000_00000000_00000000_00000000_00000000_00000000_00000000_00000000,
+  )
+  should.equal(
+    castle.unattacked_bitboard(player.Black, castle.QueenSide),
+    0b_00011100_00000000_00000000_00000000_00000000_00000000_00000000_00000000,
+  )
+  should.equal(
+    castle.unattacked_bitboard(player.White, castle.KingSide),
+    0b_00000000_00000000_00000000_00000000_00000000_00000000_00000000_01110000,
+  )
+  should.equal(
     castle.unattacked_bitboard(player.White, castle.QueenSide),
-    0b_00000000_00000000_00000000_00000000_00000000_00000000_00000000_00111000,
+    0b_00000000_00000000_00000000_00000000_00000000_00000000_00000000_00011100,
   )
 }

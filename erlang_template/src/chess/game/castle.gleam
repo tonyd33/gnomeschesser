@@ -18,8 +18,8 @@ pub fn occupancy_bitboard(
   castle: Castle,
 ) -> bitboard.BitBoard {
   let row = case castle {
-    KingSide -> 0b_0000_0110
-    QueenSide -> 0b_0111_0000
+    KingSide -> 0b_0110_0000
+    QueenSide -> 0b_0000_1110
   }
   let rank = square.player_rank(player)
   int.bitwise_shift_left(row, rank * 8)
@@ -30,8 +30,8 @@ pub fn unattacked_bitboard(
   castle: Castle,
 ) -> bitboard.BitBoard {
   let row = case castle {
-    KingSide -> 0b00001110
-    QueenSide -> 0b00111000
+    KingSide -> 0b01110000
+    QueenSide -> 0b00011100
   }
   let rank = square.player_rank(player)
   int.bitwise_shift_left(row, rank * 8)

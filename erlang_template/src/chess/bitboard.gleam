@@ -1,6 +1,7 @@
 import chess/piece
 import chess/player
 import chess/square
+import gleam/bool
 import gleam/int
 import gleam/list
 import util/direction
@@ -123,40 +124,54 @@ pub fn move(
   direction: direction.Direction,
   amount: Int,
 ) -> BitBoard {
+  let assert True = amount >= 0
+  use <- bool.guard(amount == 0, bitboard)
+  use <- bool.guard(amount > 8, 0x00)
+
+  // We use a mask for the leftward/rightward shifting
+  // As well as truncating any extra digits
+  let mask = {
+    let right_mask = fn(x) {
+      case x {
+        1 ->
+          0b11111110_11111110_11111110_11111110_11111110_11111110_11111110_11111110
+        2 ->
+          0b11111100_11111100_11111100_11111100_11111100_11111100_11111100_11111100
+        3 ->
+          0b11111000_11111000_11111000_11111000_11111000_11111000_11111000_11111000
+        4 ->
+          0b11110000_11110000_11110000_11110000_11110000_11110000_11110000_11110000
+        5 ->
+          0b11100000_11100000_11100000_11100000_11100000_11100000_11100000_11100000
+        6 ->
+          0b11000000_11000000_11000000_11000000_11000000_11000000_11000000_11000000
+        7 ->
+          0b10000000_10000000_10000000_10000000_10000000_10000000_10000000_10000000
+        _ -> panic
+      }
+    }
+    case direction {
+      direction.Left -> right_mask(8 - amount) |> int.negate
+      direction.Right -> right_mask(amount)
+      _ -> -1
+    }
+    // truncates it to 64 bits
+    |> int.bitwise_and(0xFFFF_FFFF_FFFF_FFFF)
+  }
   case direction {
     direction.Up -> int.bitwise_shift_left(bitboard, 8 * amount)
     direction.Down -> int.bitwise_shift_right(bitboard, 8 * amount)
-    direction.Left | direction.Right -> {
-      let shift = case direction {
-        direction.Left -> int.bitwise_shift_left(_, 1 * amount)
-        direction.Right -> int.bitwise_shift_right(_, 1 * amount)
-        _ -> panic
-      }
-      let assert <<
-        row_1:size(8),
-        row_2:size(8),
-        row_3:size(8),
-        row_4:size(8),
-        row_5:size(8),
-        row_6:size(8),
-        row_7:size(8),
-        row_8:size(8),
-      >> = <<bitboard:size(64)>>
-      let assert <<bitboard:size(64)>> = <<
-        shift(row_1):size(8),
-        shift(row_2):size(8),
-        shift(row_3):size(8),
-        shift(row_4):size(8),
-        shift(row_5):size(8),
-        shift(row_6):size(8),
-        shift(row_7):size(8),
-        shift(row_8):size(8),
-      >>
-      bitboard
-    }
+    direction.Left ->
+      // We shift right, since the board starts at the bottom left then to the right
+      // So shift_right means it moves towards the least significant digit
+      int.bitwise_shift_right(bitboard, amount)
+    direction.Right ->
+      // We shift right, since the board starts at the bottom left then to the right
+      // So shift_left means it moves away the least significant digit
+      int.bitwise_shift_left(bitboard, amount)
   }
   // Some guaranteed (and hopefully cheap) truncation
-  |> int.bitwise_and(0xFFFFFFFFFFFFFFFF)
+  |> int.bitwise_and(mask)
 }
 
 pub fn to_squares(bitboard: BitBoard) -> List(square.Square) {
@@ -167,7 +182,7 @@ pub fn to_squares(bitboard: BitBoard) -> List(square.Square) {
   })
   |> list.map(fn(bit_digit) {
     let rank = bit_digit / 8
-    let file = 7 - bit_digit % 8
+    let file = bit_digit % 8
     let assert Ok(square) = square.from_rank_file(rank, file)
     square
   })
@@ -177,7 +192,7 @@ pub fn from_square(square: square.Square) -> BitBoard {
   let rank = square.rank(square)
   let file = square.file(square)
 
-  let bit = int.bitwise_shift_left(1, { rank * 8 } + { 7 - file })
+  let bit = int.bitwise_shift_left(1, rank * 8 + file)
   bit
 }
 
