@@ -15,6 +15,8 @@ import gleam/result
 import gleam/string
 import util/direction
 
+pub const start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
 pub opaque type Game {
   Game(
     board: Dict(square.Square, piece.Piece),
@@ -27,7 +29,9 @@ pub opaque type Game {
   )
 }
 
-pub const start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+pub fn get_game_bitboard(game: Game) {
+  game.bitboard
+}
 
 pub fn load_fen(fen: String) -> Result(Game, Nil) {
   use
