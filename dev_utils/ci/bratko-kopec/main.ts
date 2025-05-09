@@ -13,7 +13,7 @@ type TestResult = {
   got: string;
 };
 
-const testCases: TestCase[] = [
+const bkTests: TestCase[] = [
   {
     fen: "1k1r4/pp1b1R2/3q2pp/4p3/2B5/4Q3/PPP2B2/2K5 b - - 0 1",
     bms: ["d6d1"],
@@ -135,6 +135,69 @@ const testCases: TestCase[] = [
     bms: ["f2f4"],
     id: "BK.24",
   },
+];
+
+const hangingTests: TestCase[] = [
+  {
+    fen: "3k4/8/4q3/8/3N4/8/1R4R1/3K4 w - - 0 1",
+    bms: ["d4e6"],
+    id: "HG.01",
+  },
+  {
+    fen: "rnb1kbnr/ppp1pppp/8/3p4/4P3/4q3/PPPP1PPP/RNBQKBNR w KQkq - 0 1",
+    bms: ["d2e3", "f2e3"],
+    id: "HG.02",
+  },
+  {
+    fen: "rnb1kbnr/ppp1pppp/8/1q1p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1",
+    bms: ["f1b5"],
+    id: "HG.03",
+  },
+];
+
+const advantageTests: TestCase[] = [
+  {
+    // Win the Queen for a Rook
+    // https://lichess.org/training/jIJhw
+    fen: "1r1r2k1/6pp/3pq3/3Rp3/2Q1P3/1p3P2/PPP3PP/1K1R4 b - - 0 26",
+    bms: ["d8c8"],
+    id: "AV.01",
+  },
+];
+
+const mateTests: TestCase[] = [
+  {
+    fen: "6k1/P6p/5Kp1/2p5/1P3P2/2r5/8/8 w - - 0 1",
+    bms: ["a7a8q", "a7a8r"],
+    id: "MT.01",
+  },
+  {
+    // Mate in 4
+    // https://lichess.org/training/VL81U
+    fen: "4rn1k/1r2q1bp/3pB1p1/p2Pp1P1/Np2PP1R/1Pp1Q3/P1P5/1K5R b - - 0 28",
+    bms: ["e5f4"],
+    id: "MT.02",
+  },
+  {
+    // Mate in 3
+    // https://lichess.org/training/YqcxF
+    fen: "8/5k2/1PR2p2/5ppp/8/4PKPP/1r6/8 b - - 8 41",
+    bms: ["g5g4"],
+    id: "MT.03",
+  },
+  // Mate in 1
+  {
+    fen: "8/5k2/1PR2p2/5p2/5Kp1/4P1P1/1r6/8 b - - 1 43",
+    bms: ["b2f2"],
+    id: "MT.04"
+  }
+];
+
+const testCases: TestCase[] = [
+  ...bkTests,
+  ...hangingTests,
+  ...mateTests,
+  ...advantageTests,
 ];
 
 function chunk<A>(n: number, xs: A[]): A[][] {
