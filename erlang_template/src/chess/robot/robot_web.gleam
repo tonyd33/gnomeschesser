@@ -1,7 +1,6 @@
 import chess/game
 import chess/move
 import chess/search
-import chess/zobrist
 import gleam/bool
 import gleam/dict
 import gleam/erlang/process.{type Subject}
@@ -156,7 +155,7 @@ fn update_state_with_new_game(state: RobotState, game: game.Game) -> RobotState 
     search.new(game, state.memo, state.searcher.1, search.default_search_opts)
 
   // TODO: check for collision before adding to state
-  let best_evaluation = case dict.get(state.memo.dict, zobrist.hash(game)) {
+  let best_evaluation = case dict.get(state.memo.dict, game.hash(game)) {
     Ok(search.TranspositionEntry(_, best_evaluation, _)) ->
       Some(best_evaluation)
     Error(Nil) -> None

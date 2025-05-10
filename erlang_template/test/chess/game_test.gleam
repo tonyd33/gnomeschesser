@@ -621,7 +621,7 @@ pub fn moves_real_world_2_test() {
 
 // BEGIN: move.apply tests
 
-pub fn apply_basic_test() {
+pub fn apply_basic_test_1() {
   let assert Ok(game) =
     load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
@@ -631,6 +631,71 @@ pub fn apply_basic_test() {
   game.to_fen(game)
   |> should.equal("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1")
   game.turn(game) |> should.equal(player.Black)
+  game.hash(game) |> should.equal(game.compute_zobrist_hash(game))
+}
+
+pub fn apply_basic_test_2() {
+  let assert Ok(game) =
+    load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+
+  let assert Ok(move) = game.move_from_san("Nc3", game)
+  let game = game.apply(game, move)
+
+  game.to_fen(game)
+  |> should.equal("rnbqkbnr/pppppppp/8/8/8/2N5/PPPPPPPP/R1BQKBNR b KQkq - 1 1")
+  game.turn(game) |> should.equal(player.Black)
+  game.hash(game) |> should.equal(game.compute_zobrist_hash(game))
+
+  let assert Ok(move) = game.move_from_san("Nc6", game)
+  let game = game.apply(game, move)
+  game.to_fen(game)
+  |> should.equal(
+    "r1bqkbnr/pppppppp/2n5/8/8/2N5/PPPPPPPP/R1BQKBNR w KQkq - 2 1",
+  )
+  game.turn(game) |> should.equal(player.White)
+  game.hash(game) |> should.equal(game.compute_zobrist_hash(game))
+}
+
+pub fn apply_basic_test_3() {
+  let assert Ok(game) =
+    load_fen("rnbqkbnr/ppp1pppp/8/3pP3/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 2")
+
+  let assert Ok(move) = game.move_from_san("f5", game)
+  let game = game.apply(game, move)
+  game.to_fen(game)
+  |> should.equal(
+    "rnbqkbnr/ppp1p1pp/8/3pPp2/8/8/PPPP1PPP/RNBQKBNR w KQkq f6 0 3",
+  )
+  game.turn(game) |> should.equal(player.White)
+  game.hash(game) |> should.equal(game.compute_zobrist_hash(game))
+
+  let assert Ok(move) = game.move_from_san("exf6", game)
+  let game = game.apply(game, move)
+  game.to_fen(game)
+  |> should.equal(
+    "rnbqkbnr/ppp1p1pp/5P2/3p4/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 3",
+  )
+  game.turn(game) |> should.equal(player.Black)
+  game.hash(game) |> should.equal(game.compute_zobrist_hash(game))
+}
+
+pub fn apply_capture_test() {
+  let assert Ok(game) =
+    load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPP1PPPP/RNBQKBNR w KQkq - 0 1")
+
+  let assert Ok(move) = game.move_from_san("Qxd7+", game)
+  let game = game.apply(game, move)
+  game.to_fen(game)
+  |> should.equal("rnbqkbnr/pppQpppp/8/8/8/8/PPP1PPPP/RNB1KBNR b KQkq - 0 1")
+  game.turn(game) |> should.equal(player.Black)
+  game.hash(game) |> should.equal(game.compute_zobrist_hash(game))
+
+  let assert Ok(move) = game.move_from_san("Qxd7", game)
+  let game = game.apply(game, move)
+  game.to_fen(game)
+  |> should.equal("rnb1kbnr/pppqpppp/8/8/8/8/PPP1PPPP/RNB1KBNR w KQkq - 0 2")
+  game.turn(game) |> should.equal(player.White)
+  game.hash(game) |> should.equal(game.compute_zobrist_hash(game))
 }
 
 /// We should move rooks when castling
@@ -653,6 +718,7 @@ pub fn apply_castling_test() {
   let game = game.apply(game, move)
   game.to_fen(game)
   |> should.equal("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/2KR3R b - - 1 1")
+  game.hash(game) |> should.equal(game.compute_zobrist_hash(game))
 
   // White short castle
   let assert Ok(game) =
@@ -661,6 +727,7 @@ pub fn apply_castling_test() {
   let game = game.apply(game, move)
   game.to_fen(game)
   |> should.equal("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R4RK1 b - - 1 1")
+  game.hash(game) |> should.equal(game.compute_zobrist_hash(game))
 
   // Black long castle
   let assert Ok(game) =
@@ -669,6 +736,7 @@ pub fn apply_castling_test() {
   let game = game.apply(game, move)
   game.to_fen(game)
   |> should.equal("2kr3r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w - - 1 2")
+  game.hash(game) |> should.equal(game.compute_zobrist_hash(game))
 
   // Black short castle
   let assert Ok(game) =
@@ -677,6 +745,7 @@ pub fn apply_castling_test() {
   let game = game.apply(game, move)
   game.to_fen(game)
   |> should.equal("r4rk1/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w - - 1 2")
+  game.hash(game) |> should.equal(game.compute_zobrist_hash(game))
 }
 
 /// White should revoke its castling availability after moving king
@@ -698,6 +767,7 @@ pub fn apply_castling_availability_move_king_test() {
   let assert Ok(move) = game.move_from_san("Kd1", game)
   let game = game.apply(game, move)
   game.castling_availability(game) |> should.equal([])
+  game.hash(game) |> should.equal(game.compute_zobrist_hash(game))
 
   // Long castle
   let assert Ok(game) =
@@ -705,6 +775,7 @@ pub fn apply_castling_availability_move_king_test() {
   let assert Ok(move) = game.move_from_san("O-O-O", game)
   let game = game.apply(game, move)
   game.castling_availability(game) |> should.equal([])
+  game.hash(game) |> should.equal(game.compute_zobrist_hash(game))
 
   // Short castle
   let assert Ok(game) =
@@ -712,6 +783,7 @@ pub fn apply_castling_availability_move_king_test() {
   let assert Ok(move) = game.move_from_san("O-O", game)
   let game = game.apply(game, move)
   game.castling_availability(game) |> should.equal([])
+  game.hash(game) |> should.equal(game.compute_zobrist_hash(game))
 }
 
 /// White should revoke its castling availability after moving rook on each
@@ -735,6 +807,7 @@ pub fn apply_castling_availability_move_rook_test() {
   let game = game.apply(game, move)
   game.castling_availability(game)
   |> should.equal([#(player.White, castle.KingSide)])
+  game.hash(game) |> should.equal(game.compute_zobrist_hash(game))
 
   let assert Ok(game) =
     load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQ - 0 1")
@@ -742,6 +815,7 @@ pub fn apply_castling_availability_move_rook_test() {
   let game = game.apply(game, move)
   game.castling_availability(game)
   |> should.equal([#(player.White, castle.QueenSide)])
+  game.hash(game) |> should.equal(game.compute_zobrist_hash(game))
 }
 
 /// Black should revoke its castling availability after having its rook
@@ -765,6 +839,7 @@ pub fn apply_castling_availability_move_rook_capture_test() {
   let game = game.apply(game, move)
   game.castling_availability(game)
   |> should.equal([#(player.Black, castle.KingSide)])
+  game.hash(game) |> should.equal(game.compute_zobrist_hash(game))
 
   let assert Ok(game) =
     load_fen("r3k2r/1pppppp1/8/8/8/8/1PPPPPP1/R3K2R w KQ - 0 1")
@@ -772,6 +847,7 @@ pub fn apply_castling_availability_move_rook_capture_test() {
   let game = game.apply(game, move)
   game.castling_availability(game)
   |> should.equal([#(player.White, castle.QueenSide)])
+  game.hash(game) |> should.equal(game.compute_zobrist_hash(game))
 }
 
 pub fn ascii_test() {
