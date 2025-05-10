@@ -131,9 +131,11 @@ pub fn to_int(ea) {
 pub fn compare(ea, eb) {
   case ea, eb {
     Finite(a), Finite(b) -> int.compare(a, b)
-    NegInf, Finite(_) -> order.Lt
-    PosInf, Finite(_) -> order.Gt
+    NegInf, NegInf -> order.Eq
+    NegInf, _ -> order.Lt
     _, NegInf -> order.Gt
+    PosInf, PosInf -> order.Eq
+    PosInf, _ -> order.Gt
     _, PosInf -> order.Lt
   }
 }

@@ -6,6 +6,7 @@ import chess/player
 import chess/square
 import gleam/dict
 import gleam/list
+import gleam/pair
 import gleam/string
 import gleeunit/should
 
@@ -850,4 +851,22 @@ pub fn move_from_lan_castle_test() {
   |> should.equal(
     "r1bqk2r/ppppbppp/2n2n2/4p3/2B1P3/3P1N2/PPP2PPP/RNBQ1RK1 b kq - 2 5",
   )
+}
+
+pub fn pinning_test() {
+  let assert Ok(game) = load_fen("7k/8/8/8/3b4/8/8/B5QK b - - 0 1")
+  let pseudo = game.pseudo_moves(game)
+  pseudo
+  |> list.map(move.to_lan)
+  |> list.sort(string.compare)
+  |> should.equal([
+    "d4a1", "d4a7", "d4b2", "d4b6", "d4c3", "d4c5", "d4e3", "d4e5", "d4f2",
+    "d4f6", "d4g1", "d4g7", "h8g7", "h8g8", "h8h7",
+  ])
+
+  pseudo
+  |> list.filter_map(game.apply(game, _))
+  |> list.map(pair.second)
+  |> list.map(move.to_lan)
+  |> should.equal(["d4a1", "d4b2", "d4c3", "d4g7", "d4f6", "d4e5", "h8h7"])
 }
