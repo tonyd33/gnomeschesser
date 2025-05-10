@@ -1,3 +1,4 @@
+import chess/bitboard
 import chess/game
 import chess/game/castle
 import chess/piece
@@ -48,18 +49,19 @@ pub fn hash(game: game.Game) -> Hash {
     game.en_passant_target_square(game)
     |> option.map(fn(square) {
       let #(_, square) = square
-      // TODO: make sure this isn't expensive
-
+      // For this specific spec, we also need to see if
+      // There's a valid pawn that *could* en passant
       case
-        game.attackers(game, square, game.turn(game))
-        |> list.any(fn(x) { { x.1 }.symbol == piece.Pawn })
+        game.get_attacking_bitboard(game)
+        |> bitboard.get_bitboard_piece(piece.Piece(game.turn(game), piece.Pawn))
+        |> int.bitwise_and(bitboard.from_square(square))
       {
-        True -> {
+        0 -> 0x0
+        _ -> {
           let assert Ok(hash) =
             get_hash(en_passant_offset + square.file(square))
           hash
         }
-        False -> 0x0
       }
     })
     |> option.unwrap(0x0)

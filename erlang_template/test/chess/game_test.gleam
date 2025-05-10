@@ -154,33 +154,6 @@ pub fn load_fen_fail_test() {
     load_fen("p/rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1")
 }
 
-///   +------------------------+
-/// 8 | R  .  .  .  .  .  r  k |
-/// 7 | .  .  B  .  .  .  p  p |
-/// 6 | .  .  .  .  .  .  .  . |
-/// 5 | .  .  .  Q  .  .  .  . |
-/// 4 | .  P  .  .  .  .  .  . |
-/// 3 | .  N  .  .  .  .  .  . |
-/// 2 | .  .  .  .  .  .  .  . |
-/// 1 | R  .  .  .  B  .  .  K |
-///   +------------------------+
-///     a  b  c  d  e  f  g  h
-pub fn attackers_basic_test() {
-  let assert Ok(game) = load_fen("R5rk/2B3pp/8/3Q4/1P6/1N6/8/R3B2K w - - 0 1")
-
-  game
-  |> game.attackers(
-    {
-      let assert Ok(square) = square.from_string("a5")
-      square
-    },
-    player.White,
-  )
-  |> list.map(fn(x) { square.to_string(x.0) })
-  |> list.sort(string.compare)
-  |> should.equal(["a1", "a8", "b3", "b4", "c7", "d5"])
-}
-
 // All of these test boards include kings on both sides because
 // it's necessary for a board to be valid. We want to remain agnostic
 // to whether our FEN loader accepts valid boards.

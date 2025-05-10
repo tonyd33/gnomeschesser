@@ -23,6 +23,7 @@ pub opaque type Game {
   Game(
     board: Dict(square.Square, piece.Piece),
     bitboard: bitboard.GameBitboard,
+    attacking: bitboard.GameBitboard,
     active_color: player.Player,
     castling_availability: List(#(player.Player, Castle)),
     en_passant_target_square: Option(#(player.Player, square.Square)),
@@ -33,6 +34,10 @@ pub opaque type Game {
 
 pub fn get_game_bitboard(game: Game) {
   game.bitboard
+}
+
+pub fn get_attacking_bitboard(game: Game) {
+  game.attacking
 }
 
 pub fn load_fen(fen: String) -> Result(Game, Nil) {
@@ -134,15 +139,18 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
     |> result.map(pair.new(active_color, _))
     |> option.from_result
   let bitboard = bitboard.from_pieces(pieces)
-  Game(
-    board:,
-    bitboard:,
-    active_color:,
-    castling_availability:,
-    en_passant_target_square:,
-    halfmove_clock:,
-    fullmove_number:,
-  )
+  let game =
+    Game(
+      board:,
+      bitboard:,
+      attacking: bitboard.GameBitboard(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+      active_color:,
+      castling_availability:,
+      en_passant_target_square:,
+      halfmove_clock:,
+      fullmove_number:,
+    )
+  Game(..game, attacking: generate_attacking_bitboard(game))
   |> Ok
 }
 
@@ -287,36 +295,65 @@ pub fn find_piece(game: Game, piece: piece.Piece) -> List(square.Square) {
   |> dict.keys()
 }
 
-pub fn is_attacked(game: Game, at: square.Square, by: player.Player) -> Bool {
-  pseudo_moves_player(game, by)
-  |> list.any(fn(move) { move.get_to(move) == at })
+pub fn is_attacked(
+  game: Game,
+  bitboard: bitboard.BitBoard,
+  by by: player.Player,
+) -> Bool {
+  int.bitwise_and(bitboard.get_bitboard_player(game.attacking, by), bitboard)
+  != 0
 }
 
-/// Returns the position and pieces that are attacking a square.
-/// `by` is the color that is *attacking*.
-///
-pub fn attackers(
+/// Gets the actual captured square (if there's a valid source)
+/// checks the en-passant square + pawn moves
+/// Does NOT check if the game's side is valid
+fn move_capture_square(
+  move: move.Move(a),
   game: Game,
-  at: square.Square,
-  by: player.Player,
-) -> List(#(square.Square, piece.Piece)) {
-  // TODO: don't generate every single attacking move (because that sucks)
-  // Or we cache it as a bitboard (this would make more sense)
-  pseudo_moves_player(game, by)
-  |> list.filter_map(fn(move) {
-    use <- bool.guard(move.get_to(move) != at, Error(Nil))
+) -> Result(square.Square, Nil) {
+  let from = move.get_from(move)
+  let to = move.get_to(move)
+  use piece <- result.try(piece_at(game, from))
+  case piece {
+    piece.Piece(side, piece.Pawn) -> {
+      // return error if pawn move isn't a diagonal
+      use <- bool.guard(square.file(from) == square.file(to), Error(Nil))
+      let other_side = player.opponent(side)
+      // If it's not an en-passant move, just return the target square
+      use <- bool.guard(
+        game.en_passant_target_square != Some(#(other_side, to)),
+        Ok(to),
+      )
+      // if it is an en passant move, the capture square is backwards one
+      let assert Ok(square) =
+        player.direction(side)
+        |> direction.opposite
+        |> square.move(to, _, 1)
+      Ok(square)
+    }
+    _ -> Ok(to)
+  }
+}
+
+fn generate_attacking_bitboard(game: Game) -> bitboard.GameBitboard {
+  let to_square_pieces = fn(move) {
+    use capture_square <- result.map(move_capture_square(move, game))
     let from = move.get_from(move)
-    let assert Ok(piece) = dict.get(game.board, from)
-    Ok(#(from, piece))
-  })
+    let assert Ok(piece) = piece_at(game, from)
+    #(capture_square, piece)
+  }
+  let white_moves =
+    pseudo_moves_player(game, player.White)
+    |> list.filter_map(to_square_pieces)
+  let black_moves =
+    pseudo_moves_player(game, player.Black)
+    |> list.filter_map(to_square_pieces)
+
+  bitboard.from_pieces(list.flatten([white_moves, black_moves]))
 }
 
 pub fn is_check(game: Game, player: player.Player) -> Bool {
-  // TODO: once we have the attacker bitboard we can just use that instead
-  let assert [king_square] =
-    bitboard.get_bitboard_piece(game.bitboard, piece.Piece(player, piece.King))
-    |> bitboard.to_squares
-  king_square
+  bitboard.get_bitboard_piece(game.bitboard, piece.Piece(player, piece.King))
   |> is_attacked(game, _, player.opponent(player))
 }
 
@@ -398,10 +435,6 @@ pub fn pieces(game: Game) -> List(#(square.Square, piece.Piece)) {
 ///
 pub type SAN =
   String
-
-pub fn move_is_capture(move: move.Move(a), game: Game) -> Bool {
-  game.board |> dict.get(move.get_to(move)) |> result.is_ok
-}
 
 /// Convert a move to SAN.
 /// *This is expensive, so use it sparingly.*
@@ -554,9 +587,10 @@ pub fn apply(
   let Game(
     board:,
     bitboard:,
+    attacking:,
     castling_availability:,
     active_color: us,
-    en_passant_target_square:,
+    en_passant_target_square: _,
     fullmove_number:,
     halfmove_clock:,
   ) = game
@@ -567,21 +601,8 @@ pub fn apply(
   use <- bool.guard(piece.player != us, Error(Nil))
 
   // Get capture square and potential piece
-  let captured_square = case en_passant_target_square, piece.symbol {
-    Some(#(en_passant_creator, target_square)), piece.Pawn
-      if en_passant_creator == them && target_square == to
-    -> {
-      let assert Ok(square) =
-        case us {
-          player.White -> direction.Down
-          player.Black -> direction.Up
-        }
-        |> square.move(to, _, 1)
-      square
-    }
-    _, _ -> to
-  }
-  let captured_piece = dict.get(board, captured_square)
+  let captured_square = move_capture_square(move, game)
+  let captured_piece = result.try(captured_square, dict.get(board, _))
 
   // If it's a pawn move that's trying to capture
   // there needs to be a piece actually there or it can't move
@@ -612,28 +633,9 @@ pub fn apply(
 
     // The rook's position in this game will not change whether they have a check here
     // We'll also assume that the king's position on the board won't change the check 
-    // TODO: use the attack bitboard to check this more efficiently
-    let unattacked_squares =
-      castle.unattacked_bitboard(us, castle_type)
-      |> bitboard.to_squares
-
     let attacked =
-      pseudo_moves_player(game, them)
-      // filter out non-capture pawn moves
-      |> list.any(fn(move) {
-        let from = move.get_from(move)
-        let to = move.get_to(move)
-        let piece = piece_at(game, from)
-        // Pawns can only attack diagonally, so we want to filter out non-attacks
-        // Ideally if we already have an "attack" bitboard
-        // We wouldn't need to do this 
-        use <- bool.guard(
-          piece == Ok(piece.Piece(them, piece.Pawn))
-            && square.rank(from) == square.rank(to),
-          False,
-        )
-        list.contains(unattacked_squares, move.get_to(move))
-      })
+      castle.unattacked_bitboard(us, castle_type)
+      |> is_attacked(game, _, by: them)
     use <- bool.guard(attacked, Error(Nil))
 
     // Handle rook teleportation now
@@ -659,16 +661,22 @@ pub fn apply(
     let kingside_rook_file = castle.rook_from_file(castle.KingSide)
     let queenside_rook_file = castle.rook_from_file(castle.QueenSide)
     // if we capture a rook in their home square, remove their availability
-    let capture_removal = case captured_piece, captured_square |> square.file {
-      Ok(piece.Piece(side, piece.Rook)), file if file == kingside_rook_file -> [
-        #(side, castle.KingSide),
-      ]
-      Ok(piece.Piece(side, piece.Rook)), file if file == queenside_rook_file -> [
-        #(side, castle.QueenSide),
-      ]
-      _, _ -> []
-    }
+    let capture_removal =
+      {
+        use captured_piece <- result.map(captured_piece)
+        let assert Ok(captured_square) = captured_square
 
+        case captured_piece, captured_square |> square.file {
+          piece.Piece(side, piece.Rook), file if file == kingside_rook_file -> [
+            #(side, castle.KingSide),
+          ]
+          piece.Piece(side, piece.Rook), file if file == queenside_rook_file -> [
+            #(side, castle.QueenSide),
+          ]
+          _, _ -> []
+        }
+      }
+      |> result.unwrap([])
     // if we move a king or a rook, remove availablity
     let move_removal = case piece.symbol {
       piece.King -> [#(us, castle.KingSide), #(us, castle.QueenSide)]
@@ -716,7 +724,10 @@ pub fn apply(
   let board =
     dict.delete(board, from)
     // captured square might be different from actual square due to en passant
-    |> dict.delete(captured_square)
+    |> case captured_square {
+      Ok(captured_square) -> dict.delete(_, captured_square)
+      _ -> function.identity
+    }
     |> dict.insert(to, new_piece)
 
   // bitboard update
@@ -727,13 +738,13 @@ pub fn apply(
     // mask in the to square 
     |> bitboard.or(new_piece, bitboard.from_square(to))
     // mask out the captured square if it exists
-    |> case captured_piece {
-      Ok(captured_piece) -> bitboard.and(
+    |> case captured_piece, captured_square {
+      Ok(captured_piece), Ok(captured_square) -> bitboard.and(
         _,
         captured_piece,
         int.bitwise_not(bitboard.from_square(captured_square)),
       )
-      Error(Nil) -> function.identity
+      _, _ -> function.identity
     }
 
   let fullmove_number = case us {
@@ -749,13 +760,14 @@ pub fn apply(
     Game(
       board:,
       bitboard:,
+      attacking:,
       active_color: them,
       castling_availability:,
       en_passant_target_square:,
       fullmove_number:,
       halfmove_clock:,
     )
-  // TODO: generate attacker bitboard here
+  let game = Game(..game, attacking: generate_attacking_bitboard(game))
 
   // We need to verify that we're not in check here
   use <- bool.guard(is_check(game, us), Error(Nil))

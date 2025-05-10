@@ -312,3 +312,20 @@ pub fn or(
   |> int.bitwise_or(bitboard)
   |> set_bitboard_piece(game_bitboard, _, piece)
 }
+
+pub fn map(game_bitboard: GameBitboard, func: fn(BitBoard) -> BitBoard) {
+  GameBitboard(
+    white_pawns: func(game_bitboard.white_pawns),
+    white_knights: func(game_bitboard.white_knights),
+    white_bishops: func(game_bitboard.white_bishops),
+    white_rooks: func(game_bitboard.white_rooks),
+    white_queens: func(game_bitboard.white_queens),
+    white_king: func(game_bitboard.white_king),
+    black_pawns: func(game_bitboard.black_pawns),
+    black_knights: func(game_bitboard.black_knights),
+    black_bishops: func(game_bitboard.black_bishops),
+    black_rooks: func(game_bitboard.black_rooks),
+    black_queens: func(game_bitboard.black_queens),
+    black_king: func(game_bitboard.black_king),
+  )
+}
