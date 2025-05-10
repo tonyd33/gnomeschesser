@@ -120,8 +120,8 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
         ApplyMove(lan:) -> {
           let game =
             option.then(state.game, fn(game) {
-              case game.apply(game, move.from_lan(lan)) {
-                Ok(#(game, _valid_move)) -> Some(game)
+              case game.validate_move(move.from_lan(lan), game) {
+                Ok(valid_move) -> Some(game.apply(game, valid_move))
                 Error(Nil) -> None
               }
             })

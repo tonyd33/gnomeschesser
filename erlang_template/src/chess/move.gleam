@@ -1,3 +1,4 @@
+import chess/game/castle
 import chess/piece
 import chess/player
 import chess/square
@@ -26,9 +27,9 @@ pub opaque type Move(context) {
 // we don't current actually use this yet
 pub type Context {
   Context(
-    capture: Bool,
-    player: player.Player,
-    piece: piece.PieceSymbol,
+    capture: Option(#(square.Square, piece.Piece)),
+    piece: piece.Piece,
+    castling: Option(castle.Castle),
     // game hash? there might be collisions though
   )
 }
@@ -96,4 +97,29 @@ pub fn equal(move_1: Move(a), move_2: Move(b)) {
   move_1.from == move_2.from
   && move_1.to == move_2.to
   && move_1.promotion == move_2.promotion
+}
+
+pub fn rook_castle(player: player.Player, castle: castle.Castle) -> Move(Pseudo) {
+  let rank = square.player_rank(player)
+  let from_file = castle.rook_from_file(castle)
+  let to_file = case castle {
+    castle.KingSide -> 5
+    castle.QueenSide -> 3
+  }
+  let assert Ok(from) = square.from_rank_file(rank, from_file)
+  let assert Ok(to) = square.from_rank_file(rank, to_file)
+  new_pseudo(from:, to:, promotion: option.None)
+}
+
+pub fn king_castle(player: player.Player, castle: castle.Castle) -> Move(Pseudo) {
+  let rank = square.player_rank(player)
+
+  let to_file = case castle {
+    castle.KingSide -> 6
+    castle.QueenSide -> 2
+  }
+
+  let assert Ok(from) = square.from_rank_file(rank, square.king_file)
+  let assert Ok(to) = square.from_rank_file(rank, to_file)
+  new_pseudo(from:, to:, promotion: option.None)
 }

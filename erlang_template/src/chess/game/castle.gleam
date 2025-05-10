@@ -1,9 +1,8 @@
 import chess/bitboard
-import chess/move
 import chess/player
 import chess/square
 import gleam/int
-import gleam/option
+import gleam/list
 
 pub type Castle {
   KingSide
@@ -14,28 +13,31 @@ pub const kingside_file = 6
 
 pub const queenside_file = 1
 
-pub fn occupancy_bitboard(
-  player: player.Player,
-  castle: Castle,
-) -> bitboard.BitBoard {
-  let row = case castle {
-    KingSide -> 0b_0110_0000
-    QueenSide -> 0b_0000_1110
-  }
+pub fn occupancy_squares(player: player.Player, castle: Castle) {
   let rank = square.player_rank(player)
-  int.bitwise_shift_left(row, rank * 8)
+  let files = case castle {
+    KingSide -> [5, 6]
+    QueenSide -> [1, 2, 3]
+  }
+  files
+  |> list.map(fn(file) {
+    let assert Ok(square) = square.from_rank_file(rank, file)
+    square
+  })
 }
 
-pub fn unattacked_bitboard(
-  player: player.Player,
-  castle: Castle,
-) -> bitboard.BitBoard {
-  let row = case castle {
-    KingSide -> 0b01110000
-    QueenSide -> 0b00011100
-  }
+/// not including the king itself
+pub fn unattacked_squares(player: player.Player, castle: Castle) {
   let rank = square.player_rank(player)
-  int.bitwise_shift_left(row, rank * 8)
+  let files = case castle {
+    KingSide -> [5, 6]
+    QueenSide -> [2, 3]
+  }
+  files
+  |> list.map(fn(file) {
+    let assert Ok(square) = square.from_rank_file(rank, file)
+    square
+  })
 }
 
 pub fn rook_from_file(castle: Castle) {
@@ -45,33 +47,14 @@ pub fn rook_from_file(castle: Castle) {
   }
 }
 
-pub fn rook_move(
-  player: player.Player,
-  castle: Castle,
-) -> move.Move(move.Pseudo) {
-  let rank = square.player_rank(player)
-  let from_file = rook_from_file(castle)
-  let to_file = case castle {
-    KingSide -> 5
-    QueenSide -> 3
-  }
-  let assert Ok(from) = square.from_rank_file(rank, from_file)
-  let assert Ok(to) = square.from_rank_file(rank, to_file)
-  move.new_pseudo(from:, to:, promotion: option.None)
-}
-
-pub fn king_move(
-  player: player.Player,
-  castle: Castle,
-) -> move.Move(move.Pseudo) {
-  let rank = square.player_rank(player)
-
-  let to_file = case castle {
-    KingSide -> 6
-    QueenSide -> 2
-  }
-
-  let assert Ok(from) = square.from_rank_file(rank, square.king_file)
-  let assert Ok(to) = square.from_rank_file(rank, to_file)
-  move.new_pseudo(from:, to:, promotion: option.None)
+pub fn rook_start_position(side: player.Player, castle: Castle) {
+  let assert Ok(square) =
+    case side, castle {
+      player.White, KingSide -> 0x07
+      player.White, QueenSide -> 0x00
+      player.Black, KingSide -> 0x77
+      player.Black, QueenSide -> 0x70
+    }
+    |> square.from_ox88
+  square
 }
