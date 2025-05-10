@@ -48,6 +48,7 @@ pub type Evaluation {
     score: ExtendedInt,
     node_type: NodeType,
     best_move: Option(move.Move(move.ValidInContext)),
+    best_line: List(move.Move(move.ValidInContext)),
   )
 }
 
@@ -156,13 +157,13 @@ fn negamax_alphabeta_failsoft(
         let TranspositionEntry(cached_depth, evaluation, _) = x
         use <- bool.guard(cached_depth < depth, Error(Nil))
         case evaluation {
-          Evaluation(_, PV, _) -> Ok(evaluation)
-          Evaluation(score, Cut, _) ->
+          Evaluation(_, PV, _, _) -> Ok(evaluation)
+          Evaluation(score, Cut, _, _) ->
             case xint.gte(score, beta) {
               True -> Ok(evaluation)
               False -> Error(Nil)
             }
-          Evaluation(score, All, _) ->
+          Evaluation(score, All, _, _) ->
             case xint.lte(score, alpha) {
               True -> Ok(evaluation)
               False -> Error(Nil)
@@ -198,7 +199,9 @@ fn do_negamax_alphabeta_failsoft(
 ) -> State(SearchContext, Evaluation) {
   use <- bool.lazy_guard(depth <= 0, fn() {
     let score = quiesce(game, alpha, beta)
-    state.return(Evaluation(score:, node_type: PV, best_move: None))
+    state.return(
+      Evaluation(score:, node_type: PV, best_move: None, best_line: []),
+    )
   })
 
   use move_game_list <- state.do(state.gets(sorted_moves(game, _)))
@@ -209,14 +212,16 @@ fn do_negamax_alphabeta_failsoft(
       True -> xint.NegInf
       False -> xint.Finite(0)
     }
-    state.return(Evaluation(score:, node_type: PV, best_move: None))
+    state.return(
+      Evaluation(score:, node_type: PV, best_move: None, best_line: []),
+    )
   })
 
   // We iterate through every move and perform minimax to evaluate said move
   // accumulator keeps track of best evaluation while updating the node type
   state.fold_until_s(
     move_game_list,
-    #(Evaluation(xint.NegInf, PV, None), alpha),
+    #(Evaluation(xint.NegInf, PV, None, []), alpha),
     fn(acc, move_game) {
       {
         let #(best_evaluation, alpha) = acc
@@ -228,7 +233,11 @@ fn do_negamax_alphabeta_failsoft(
           xint.negate(alpha),
         ))
         let evaluation =
-          Evaluation(..evaluation_negate(evaluation), best_move: Some(move))
+          Evaluation(
+            ..evaluation_negate(evaluation),
+            best_move: Some(move),
+            best_line: [move, ..evaluation.best_line],
+          )
         let best_evaluation = case
           xint.lt(best_evaluation.score, evaluation.score)
         {
@@ -327,9 +336,9 @@ fn sorted_moves(
       None, _ -> order.Gt
       Some(a), Some(b) -> {
         case a, b {
-          Evaluation(_, Cut, _), _ -> order.Gt
-          _, Evaluation(_, Cut, _) -> order.Lt
-          Evaluation(a_score, _, _), Evaluation(b_score, _, _) ->
+          Evaluation(_, Cut, _, _), _ -> order.Gt
+          _, Evaluation(_, Cut, _, _) -> order.Lt
+          Evaluation(a_score, _, _, _), Evaluation(b_score, _, _, _) ->
             xint.compare(b_score, a_score)
         }
       }

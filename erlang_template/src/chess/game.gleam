@@ -413,7 +413,7 @@ pub fn move_to_san(move: move.Move(a), game: Game) -> Result(SAN, Nil) {
   let to = move.get_to(move)
   let assert Ok(us_piece) = dict.get(game.board, from)
   use #(new_game, move) <- result.try(apply(game, move))
-  // no moving into check
+  // no moving if we're in check
   use <- bool.guard(is_check(new_game, us), Error(Nil))
 
   // We can assume `move` is legal from this point on
@@ -755,6 +755,11 @@ pub fn apply(
       fullmove_number:,
       halfmove_clock:,
     )
+  // TODO: generate attacker bitboard here
+
+  // We need to verify that we're not in check here
+  use <- bool.guard(is_check(game, us), Error(Nil))
+
   let validated_move = {
     let capture = result.is_ok(captured_piece)
 

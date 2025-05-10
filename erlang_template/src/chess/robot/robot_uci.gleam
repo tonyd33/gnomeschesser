@@ -6,6 +6,7 @@ import chess/uci
 import gleam/erlang/process.{type Subject}
 import gleam/function
 import gleam/io
+import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/time/timestamp
@@ -137,8 +138,12 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
             search.SearchUpdate(best_evaluation:, game:, transposition: memo) -> {
               case option.map(state.game, game.equal(_, game)) {
                 Some(True) -> {
-                  let search.Evaluation(score, node_type, best_move) =
-                    best_evaluation
+                  let search.Evaluation(
+                    score:,
+                    node_type:,
+                    best_move:,
+                    best_line:,
+                  ) = best_evaluation
 
                   option.map(best_move, fn(best_move) {
                     let info_score_list = [
@@ -154,6 +159,9 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
                     uci.GUICmdInfo([
                       uci.InfoPrincipalVariation([move.to_lan(best_move)]),
                       uci.InfoScore(info_score_list),
+                      uci.InfoPrincipalVariation(
+                        best_line |> list.map(move.to_lan),
+                      ),
                     ])
                     |> uci.serialize_gui_cmd
                     |> io.println
@@ -175,7 +183,7 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
               // We don't respond to this if there's no search active
               case state.searcher.0 {
                 Some(pid) -> {
-                  let search.Evaluation(_, _, best_move) = best_evaluation
+                  let search.Evaluation(_, _, best_move, _) = best_evaluation
                   option.map(best_move, fn(best_move) {
                     uci.GUICmdBestMove(
                       move: move.to_lan(best_move),
@@ -242,6 +250,7 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
                   score: _,
                   node_type: _,
                   best_move: Some(move),
+                  best_line: _,
                 )) ->
                   uci.GUICmdBestMove(move: move.to_lan(move), ponder: None)
                   |> uci.serialize_gui_cmd
