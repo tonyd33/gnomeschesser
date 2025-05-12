@@ -41,7 +41,6 @@ pub fn game(game: game.Game) -> ExtendedInt {
 
   // TODO: use a cached moves in game
   let pseudo_moves = game.pseudo_moves(game)
-  //echo game.to_fen(game)
   let valid_moves = list.filter_map(pseudo_moves, game.validate_move(_, game))
 
   // Calculate a [mobility score](https://www.chessprogramming.org/Mobility).

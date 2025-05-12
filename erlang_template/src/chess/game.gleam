@@ -35,6 +35,7 @@ pub opaque type Game {
     // extra info
     // in check
     // pseudo moves generated?
+    pseudo_moves: List(move.Move(move.Pseudo)),
   )
 }
 
@@ -163,6 +164,8 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
     let assert Ok(piece) = dict.get(board, square)
     bitboard.or(game_bitboard, piece, piece_attacking)
   }
+  let pseudo_moves =
+    generate_pseudo_moves(board, bitboard, castling_availability, active_color)
 
   Game(
     board:,
@@ -174,6 +177,7 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
     en_passant_target_square:,
     halfmove_clock:,
     fullmove_number:,
+    pseudo_moves:,
   )
   |> Ok
 }
@@ -605,7 +609,9 @@ pub fn validate_move(
     en_passant_target_square: _,
     fullmove_number: _,
     halfmove_clock: _,
+    pseudo_moves: _,
   ) = game
+  // we could assert the move is in pseudo_moves
 
   let them = player.opponent(us)
   use piece <- result.try(dict.get(board, from))
@@ -809,6 +815,7 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     en_passant_target_square: _,
     fullmove_number:,
     halfmove_clock:,
+    pseudo_moves:,
   ) = game
   let them = player.opponent(us)
 
@@ -966,8 +973,8 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     piece.Pawn, _ | _, Some(_) -> 0
     _, _ -> halfmove_clock + 1
   }
-
-  // update attacking piecewise
+  let pseudo_moves =
+    generate_pseudo_moves(board, bitboard, castling_availability, them)
   let game =
     Game(
       board:,
@@ -979,6 +986,7 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
       en_passant_target_square:,
       fullmove_number:,
       halfmove_clock:,
+      pseudo_moves:,
     )
 
   game
@@ -989,17 +997,19 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
 /// And also that castles aren't occupied by pieces
 /// but it does not check if there's an attack in the way
 pub fn pseudo_moves(game: Game) -> List(move.Move(move.Pseudo)) {
-  pseudo_moves_player(game, game.active_color)
+  game.pseudo_moves
 }
 
-pub fn pseudo_moves_player(
-  game: Game,
+fn generate_pseudo_moves(
+  board: dict.Dict(square.Square, piece.Piece),
+  bitboard: bitboard.GameBitboard,
+  castling_availability: List(#(player.Player, Castle)),
   player: player.Player,
 ) -> List(move.Move(move.Pseudo)) {
   let us = player
-  let all_bitboard = bitboard.get_bitboard_all(game.bitboard)
+  let all_bitboard = bitboard.get_bitboard_all(bitboard)
   let us_pieces_list =
-    game.board
+    board
     |> dict.to_list
     |> list.filter(fn(square_piece) { { square_piece.1 }.player == us })
 
@@ -1016,7 +1026,7 @@ pub fn pseudo_moves_player(
   }
   let #(pawn_moves_one, pawn_moves_two) = {
     let pawn_bb =
-      bitboard.get_bitboard_piece(game.bitboard, piece.Piece(us, piece.Pawn))
+      bitboard.get_bitboard_piece(bitboard, piece.Piece(us, piece.Pawn))
 
     // The direction that our pawns travel
     let us_direction = case us {
@@ -1063,7 +1073,7 @@ pub fn pseudo_moves_player(
     us_pieces_list
     |> list.flat_map(fn(square_piece) {
       let #(from, piece) = square_piece
-      square.piece_attacking(game.board, from, piece, True)
+      square.piece_attacking(board, from, piece, True)
       |> list.flat_map(fn(to) {
         case piece.symbol == piece.Pawn {
           True -> promotions(to)
@@ -1074,7 +1084,7 @@ pub fn pseudo_moves_player(
     })
 
   let castle_moves =
-    game.castling_availability
+    castling_availability
     |> list.filter(fn(castle_available) {
       let #(player, castle) = castle_available
       player == us
