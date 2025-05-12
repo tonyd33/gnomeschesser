@@ -1,6 +1,7 @@
 import chess/piece
 import chess/player
 import gleam/bool
+import gleam/dict
 import gleam/int
 import gleam/list
 import gleam/result
@@ -157,28 +158,76 @@ pub fn player_rank(player: player.Player) -> Int {
   }
 }
 
-/// List of lists of squares being "paths" a piece can travel down
-/// This does not consider any obstacles
-pub fn piece_moves(from: Square, piece: piece.Piece) -> List(List(Square)) {
+/// Shoots a ray vertical/horizontal/diagonals
+/// returns the first piece hit if it exists
+/// otherwise returns error
+pub fn piece_attacking_ray(
+  occupancy: dict.Dict(Square, piece.Piece),
+  from: Square,
+  to: Square,
+) -> Result(piece.Piece, Nil) {
+  let difference = to.ox88 - from.ox88
+  use offset <- result.try({
+    case difference {
+      diff if diff % 16 == 0 -> int.clamp(diff, -16, 16) |> Ok
+      diff if diff < 8 && diff > -8 -> int.clamp(diff, -1, 1) |> Ok
+      diff if diff % 15 == 0 -> int.clamp(diff, -15, 15) |> Ok
+      diff if diff % 17 == 0 -> int.clamp(diff, -17, 17) |> Ok
+      _ -> Error(Nil)
+    }
+  })
+
+  [1, 2, 3, 4, 5, 6, 7, 8]
+  |> list.find_map(fn(depth) {
+    use to <- result.try(from_ox88(offset * depth + from.ox88))
+    dict.get(occupancy, to)
+  })
+}
+
+/// considers squares that are attackable
+/// returns a list of squares attacking until and 
+/// including the first piece hit if it's the opponent's
+pub fn piece_attacking(
+  occupancy: dict.Dict(Square, piece.Piece),
+  from: Square,
+  piece: piece.Piece,
+  opponent_only: Bool,
+) -> List(Square) {
   let depths = case piece.symbol {
-    piece.Knight | piece.King -> [1]
+    piece.Knight | piece.King | piece.Pawn -> [1]
     piece.Bishop | piece.Queen | piece.Rook -> [1, 2, 3, 4, 5, 6, 7, 8]
-    piece.Pawn -> panic as "We don't support using piece_moves for pawns"
   }
 
-  piece_offsets(piece)
-  |> list.map(fn(offset) {
-    list.filter_map(depths, fn(depth) { from_ox88(offset * depth + from.ox88) })
+  let us = piece.player
+
+  piece_attack_offsets(piece)
+  |> list.flat_map(fn(offset) {
+    list.fold_until(depths, [], fn(acc, depth) {
+      case from_ox88(offset * depth + from.ox88) {
+        Ok(to) ->
+          case dict.get(occupancy, to), opponent_only {
+            Ok(piece.Piece(player, _)), True if player == us -> list.Stop(acc)
+            Error(Nil), _ -> list.Continue([to, ..acc])
+            _, _ -> list.Stop([to, ..acc])
+          }
+        Error(Nil) -> list.Stop(acc)
+      }
+    })
   })
 }
 
 /// Gets the ox88 offsets of each piece's "one space" moves
-fn piece_offsets(piece: piece.Piece) {
+/// Considers attacks only (so only x moves for pawns)
+fn piece_attack_offsets(piece: piece.Piece) {
   case piece.symbol {
     piece.Knight -> [-18, -33, -31, -14, 18, 33, 31, 14]
     piece.Bishop -> [-17, -15, 17, 15]
     piece.King -> [-17, -16, -15, 1, 17, 16, 15, -1]
-    piece.Pawn -> panic as "We don't support using piece_offsets for pawns"
+    piece.Pawn ->
+      case piece.player {
+        player.White -> [17, 15]
+        player.Black -> [-17, -15]
+      }
     piece.Queen -> [-17, -16, -15, 1, 17, 16, 15, -1]
     piece.Rook -> [-16, 1, 16, -1]
   }

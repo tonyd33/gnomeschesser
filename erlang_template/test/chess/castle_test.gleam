@@ -4,12 +4,12 @@ import chess/player
 import gleam/list
 import gleeunit/should
 
-pub fn castle_king_move_test() {
+pub fn move_king_castle_test() {
   [
-    castle.king_move(player.White, castle.KingSide),
-    castle.king_move(player.White, castle.QueenSide),
-    castle.king_move(player.Black, castle.KingSide),
-    castle.king_move(player.Black, castle.QueenSide),
+    move.king_castle(player.White, castle.KingSide),
+    move.king_castle(player.White, castle.QueenSide),
+    move.king_castle(player.Black, castle.KingSide),
+    move.king_castle(player.Black, castle.QueenSide),
   ]
   |> list.map(move.to_lan)
   |> should.equal(["e1g1", "e1c1", "e8g8", "e8c8"])

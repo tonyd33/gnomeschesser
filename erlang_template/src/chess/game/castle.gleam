@@ -1,9 +1,7 @@
 import chess/bitboard
-import chess/move
 import chess/player
 import chess/square
 import gleam/int
-import gleam/option
 
 pub type Castle {
   KingSide
@@ -45,33 +43,22 @@ pub fn rook_from_file(castle: Castle) {
   }
 }
 
-pub fn rook_move(
-  player: player.Player,
-  castle: Castle,
-) -> move.Move(move.Pseudo) {
-  let rank = square.player_rank(player)
-  let from_file = rook_from_file(castle)
-  let to_file = case castle {
-    KingSide -> 5
-    QueenSide -> 3
+/// Bitboard of each rook's initial position to be castleable
+pub fn rook_initial_bitboard(player: player.Player, side: Castle) {
+  case player, side {
+    player.White, KingSide -> 0b0_10000000
+    player.White, QueenSide -> 0b_00000001
+    player.Black, KingSide ->
+      0b_10000000_00000000_00000000_00000000_00000000_00000000_00000000_00000000
+    player.Black, QueenSide ->
+      0b_00000001_00000000_00000000_00000000_00000000_00000000_00000000_00000000
   }
-  let assert Ok(from) = square.from_rank_file(rank, from_file)
-  let assert Ok(to) = square.from_rank_file(rank, to_file)
-  move.new_pseudo(from:, to:, promotion: option.None)
 }
 
-pub fn king_move(
-  player: player.Player,
-  castle: Castle,
-) -> move.Move(move.Pseudo) {
-  let rank = square.player_rank(player)
-
-  let to_file = case castle {
-    KingSide -> 6
-    QueenSide -> 2
+pub fn king_initial_bitboard(player: player.Player) {
+  case player {
+    player.White -> 0b_00010000
+    player.Black ->
+      0b_00010000_00000000_00000000_00000000_00000000_00000000_00000000_00000000
   }
-
-  let assert Ok(from) = square.from_rank_file(rank, square.king_file)
-  let assert Ok(to) = square.from_rank_file(rank, to_file)
-  move.new_pseudo(from:, to:, promotion: option.None)
 }

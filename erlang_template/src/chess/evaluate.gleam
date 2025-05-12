@@ -15,7 +15,7 @@ import util/xint.{type ExtendedInt}
 ///
 pub fn game(game: game.Game) -> ExtendedInt {
   let us = game.turn(game)
-
+  //echo game.to_fen(game)
   // evaluate material score
   let material_score =
     game.pieces(game)
@@ -41,7 +41,8 @@ pub fn game(game: game.Game) -> ExtendedInt {
 
   // TODO: use a cached moves in game
   let pseudo_moves = game.pseudo_moves(game)
-  let valid_moves = list.filter_map(pseudo_moves, game.apply(game, _))
+  //echo game.to_fen(game)
+  let valid_moves = list.filter_map(pseudo_moves, game.validate_move(_, game))
 
   // Calculate a [mobility score](https://www.chessprogramming.org/Mobility).
   //
@@ -53,10 +54,9 @@ pub fn game(game: game.Game) -> ExtendedInt {
   // TODO: change these based on the state of the game
   let mobility_score =
     valid_moves
-    |> list.fold(0, fn(mobility_score, move_game) {
-      let #(_new_game, move) = move_game
+    |> list.fold(0, fn(mobility_score, move) {
       let move_context = move.get_context(move)
-      case move_context.piece {
+      case move_context.piece.symbol {
         piece.Pawn | piece.Knight -> 0
         piece.Bishop -> 458_758
         piece.Rook -> 262_147

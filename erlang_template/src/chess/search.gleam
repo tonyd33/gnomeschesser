@@ -281,6 +281,7 @@ fn quiesce(
     evaluate.game(game)
     |> xint.multiply({ evaluate.player(game.turn(game)) |> xint.from_int })
 
+  //echo game.to_fen(game)
   use <- bool.guard(xint.gte(score, beta), score)
   let alpha = xint.max(alpha, score)
 
@@ -290,9 +291,12 @@ fn quiesce(
       // If game isn't capture, continue
       {
         // If game failed to apply, short circuit to continuing
-        use #(new_game, valid_move) <- result.try(game.apply(game, move))
-        let move_context = move.get_context(valid_move)
-        use <- bool.guard(!move_context.capture, Error(Nil))
+
+        use move <- result.try(game.validate_move(move, game))
+        //echo move.to_lan(move)
+        let move_context = move.get_context(move)
+        use <- bool.guard(move_context.capture |> option.is_none, Error(Nil))
+        let new_game = game.apply(game, move)
 
         let #(best_score, alpha) = acc
         let score =
@@ -317,7 +321,10 @@ fn sorted_moves(
   game.pseudo_moves(game)
   |> list.filter_map(fn(move) {
     // Also validates the move here
-    use #(new_game, move) <- result.try(game.apply(game, move))
+    use move <- result.try(game.validate_move(move, game))
+    // TODO: we can probably generate the sorted moves without applying every game
+    // Since we only need the current PV
+    let new_game = game.apply(game, move)
     // TODO: Make this stateful and update the transposition table
     // - Why does this need to update the transposition table? This part is read-only right?
     let evaluation = case dict.get(transposition.dict, zobrist.hash(new_game)) {
