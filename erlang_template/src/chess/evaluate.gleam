@@ -3,11 +3,10 @@ import chess/move
 import chess/piece
 import chess/player
 import chess/psqt
-import gleam/dict
-import gleam/int
-import gleam/list
 import chess/square
 import gleam/bool
+import gleam/int
+import gleam/list
 import gleam/result
 import util/result_addons
 import util/xint.{type ExtendedInt}
@@ -60,7 +59,7 @@ pub fn game(game: game.Game) -> ExtendedInt {
         piece.Pawn | piece.Knight -> 0
         piece.Bishop -> 125_000
         piece.Rook -> 60_000
-        piece.Queen -> 50_000
+        piece.Queen -> 25_000
         piece.King -> -10
       }
       + mobility_score
