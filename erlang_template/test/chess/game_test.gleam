@@ -6,7 +6,7 @@ import chess/player
 import chess/square
 import gleam/dict
 import gleam/list
-import gleam/pair
+import gleam/option
 import gleam/string
 import gleeunit/should
 
@@ -154,33 +154,6 @@ pub fn load_fen_fail_test() {
     load_fen("p/rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1")
 }
 
-///   +------------------------+
-/// 8 | R  .  .  .  .  .  r  k |
-/// 7 | .  .  B  .  .  .  p  p |
-/// 6 | .  .  .  .  .  .  .  . |
-/// 5 | .  .  .  Q  .  .  .  . |
-/// 4 | .  P  .  .  .  .  .  . |
-/// 3 | .  N  .  .  .  .  .  . |
-/// 2 | .  .  .  .  .  .  .  . |
-/// 1 | R  .  .  .  B  .  .  K |
-///   +------------------------+
-///     a  b  c  d  e  f  g  h
-pub fn attackers_basic_test() {
-  let assert Ok(game) = load_fen("R5rk/2B3pp/8/3Q4/1P6/1N6/8/R3B2K w - - 0 1")
-
-  game
-  |> game.attackers(
-    {
-      let assert Ok(square) = square.from_string("a5")
-      square
-    },
-    player.White,
-  )
-  |> list.map(fn(x) { square.to_string(x.0) })
-  |> list.sort(string.compare)
-  |> should.equal(["a1", "a8", "b3", "b4", "c7", "d5"])
-}
-
 // All of these test boards include kings on both sides because
 // it's necessary for a board to be valid. We want to remain agnostic
 // to whether our FEN loader accepts valid boards.
@@ -217,7 +190,7 @@ pub fn moves_basic_test() {
   let assert Ok(game) =
     load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
-  game.pseudo_moves(game)
+  game.valid_moves(game)
   |> list.filter_map(game.move_to_san(_, game))
   |> list.sort(string.compare)
   |> should.equal([
@@ -240,7 +213,7 @@ pub fn moves_basic_test() {
 pub fn moves_knight_test() {
   let assert Ok(game) = load_fen("7k/8/2P1p3/8/3N4/8/8/7K w - - 0 1")
 
-  game.pseudo_moves(game)
+  game.valid_moves(game)
   |> list.filter_map(game.move_to_san(_, game))
   |> list.sort(string.compare)
   |> should.equal([
@@ -263,7 +236,7 @@ pub fn moves_knight_test() {
 pub fn moves_bishop_test() {
   let assert Ok(game) = load_fen("7k/8/8/8/4B3/8/8/7K w - - 0 1")
 
-  game.pseudo_moves(game)
+  game.valid_moves(game)
   |> list.filter_map(game.move_to_san(_, game))
   |> list.sort(string.compare)
   |> should.equal([
@@ -289,7 +262,7 @@ pub fn moves_bishop_test() {
 pub fn moves_queen_test() {
   let assert Ok(game) = load_fen("6pk/6pp/5p2/8/3Q4/2P5/8/7K w - - 0 1")
 
-  game.pseudo_moves(game)
+  game.valid_moves(game)
   |> list.filter_map(game.move_to_san(_, game))
   |> list.sort(string.compare)
   |> should.equal([
@@ -317,7 +290,7 @@ pub fn moves_queen_test() {
 pub fn moves_pawn_test() {
   let assert Ok(game) = load_fen("7k/8/8/8/8/1Pp1p3/P2PP3/7K w - - 0 1")
 
-  game.pseudo_moves(game)
+  game.valid_moves(game)
   |> list.filter_map(game.move_to_san(_, game))
   |> list.sort(string.compare)
   |> should.equal([
@@ -339,7 +312,7 @@ pub fn moves_pawn_test() {
 pub fn moves_pawn_promotion_test() {
   let assert Ok(game) = load_fen("3n4/2P4k/8/8/8/8/8/7K w - - 0 1")
 
-  game.pseudo_moves(game)
+  game.valid_moves(game)
   |> list.filter_map(game.move_to_san(_, game))
   |> list.sort(string.compare)
   |> should.equal([
@@ -366,7 +339,7 @@ pub fn moves_disambiguation_test() {
   let assert Ok(game) =
     load_fen("KR3Rn1/6pk/5ppp/R5p1/3Q2Q1/8/8/R5Q1 w - - 0 1")
 
-  game.pseudo_moves(game)
+  game.valid_moves(game)
   |> list.filter_map(game.move_to_san(_, game))
   |> list.sort(string.compare)
   |> should.equal([
@@ -396,7 +369,7 @@ pub fn moves_disambiguation_test() {
 pub fn moves_disambiguation_pawn_test() {
   let assert Ok(game) = load_fen("8/7k/8/3n4/2P1P3/8/8/7K w - - 0 1")
 
-  game.pseudo_moves(game)
+  game.valid_moves(game)
   |> list.filter_map(game.move_to_san(_, game))
   |> list.sort(string.compare)
   |> should.equal(["Kg1", "Kg2", "Kh2", "c5", "cxd5", "e5", "exd5"])
@@ -417,7 +390,7 @@ pub fn moves_disambiguation_pawn_test() {
 pub fn moves_check_test() {
   let assert Ok(game) = load_fen("1r5k/8/8/8/8/8/r7/7K b - - 0 1")
 
-  game.pseudo_moves(game)
+  game.valid_moves(game)
   |> list.filter_map(game.move_to_san(_, game))
   |> list.sort(string.compare)
   |> should.equal([
@@ -442,7 +415,7 @@ pub fn moves_check_test() {
 pub fn moves_no_move_into_check_test() {
   let assert Ok(game) = load_fen("6rk/7r/8/8/8/7B/8/7K w - - 0 1")
 
-  game.pseudo_moves(game)
+  game.valid_moves(game)
   |> list.filter_map(game.move_to_san(_, game))
   |> list.sort(string.compare)
   |> should.equal(["Kh2"])
@@ -463,7 +436,7 @@ pub fn moves_no_move_into_check_test() {
 pub fn moves_castle_test() {
   let assert Ok(game) =
     load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1")
-  game.pseudo_moves(game)
+  game.valid_moves(game)
   |> list.filter_map(game.move_to_san(_, game))
   |> list.sort(string.compare)
   |> should.equal([
@@ -489,7 +462,7 @@ pub fn moves_castle_ineligible_test() {
   let assert Ok(game) =
     load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w kq - 0 1")
 
-  game.pseudo_moves(game)
+  game.valid_moves(game)
   |> list.filter_map(game.move_to_san(_, game))
   |> list.sort(string.compare)
   |> should.equal([
@@ -514,7 +487,7 @@ pub fn moves_castle_not_moved_test() {
   let assert Ok(game) =
     load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/3RK2R w Kkq - 1 1")
 
-  game.pseudo_moves(game)
+  game.valid_moves(game)
   |> list.filter_map(game.move_to_san(_, game))
   |> list.sort(string.compare)
   |> should.equal([
@@ -539,7 +512,7 @@ pub fn moves_castle_no_block_test() {
   let assert Ok(game) =
     load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R1B1K2R w KQkq - 0 1")
 
-  game.pseudo_moves(game)
+  game.valid_moves(game)
   |> list.filter_map(game.move_to_san(_, game))
   |> list.sort(string.compare)
   |> should.equal([
@@ -563,7 +536,7 @@ pub fn moves_castle_no_block_test() {
 pub fn moves_castle_no_check_test() {
   let assert Ok(game) = load_fen("r3k2r/8/6B1/8/8/8/8/4K3 b kq - 0 1")
 
-  game.pseudo_moves(game)
+  game.valid_moves(game)
   |> list.filter_map(game.move_to_san(_, game))
   |> list.sort(string.compare)
   |> should.equal(["Kd7", "Kd8", "Ke7", "Kf8"])
@@ -585,7 +558,7 @@ pub fn moves_castle_no_check_test() {
 pub fn moves_castle_passthrough_test() {
   let assert Ok(game) = load_fen("4k3/8/2q5/8/8/8/8/R3K2R w KQ - 0 1")
 
-  game.pseudo_moves(game)
+  game.valid_moves(game)
   |> list.filter_map(game.move_to_san(_, game))
   |> list.sort(string.compare)
   |> should.equal([
@@ -610,7 +583,7 @@ pub fn moves_real_world_1_test() {
   let assert Ok(game) =
     load_fen("1nbqkbnr/rppppppp/8/p7/8/3PK3/PPP1PPPP/RNBQ1BNR w - - 0 1")
 
-  game.pseudo_moves(game)
+  game.valid_moves(game)
   |> list.filter_map(game.move_to_san(_, game))
   |> list.sort(string.compare)
   |> should.equal([
@@ -635,7 +608,7 @@ pub fn moves_real_world_2_test() {
   let assert Ok(game) =
     load_fen("1nbqkbnr/rppppppp/8/p2P4/2P1P3/8/PP3PPP/RNBQKBNR b KQk - 0 4")
 
-  game.pseudo_moves(game)
+  game.valid_moves(game)
   |> list.filter_map(game.move_to_san(_, game))
   |> list.sort(string.compare)
   |> should.equal([
@@ -653,7 +626,7 @@ pub fn apply_basic_test() {
     load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
   let assert Ok(move_e4) = game.move_from_san("e4", game)
-  let assert Ok(#(game, _valid_move)) = game.apply(game, move_e4)
+  let game = game.apply(game, move_e4)
 
   game.to_fen(game)
   |> should.equal("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1")
@@ -677,7 +650,7 @@ pub fn apply_castling_test() {
   let assert Ok(game) =
     load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQ - 0 1")
   let assert Ok(move) = game.move_from_san("O-O-O", game)
-  let assert Ok(#(game, _valid_move)) = game.apply(game, move)
+  let game = game.apply(game, move)
   game.to_fen(game)
   |> should.equal("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/2KR3R b - - 1 1")
 
@@ -685,7 +658,7 @@ pub fn apply_castling_test() {
   let assert Ok(game) =
     load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQ - 0 1")
   let assert Ok(move) = game.move_from_san("O-O", game)
-  let assert Ok(#(game, _valid_move)) = game.apply(game, move)
+  let game = game.apply(game, move)
   game.to_fen(game)
   |> should.equal("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R4RK1 b - - 1 1")
 
@@ -693,7 +666,7 @@ pub fn apply_castling_test() {
   let assert Ok(game) =
     load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R b kq - 0 1")
   let assert Ok(move) = game.move_from_san("O-O-O", game)
-  let assert Ok(#(game, _valid_move)) = game.apply(game, move)
+  let game = game.apply(game, move)
   game.to_fen(game)
   |> should.equal("2kr3r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w - - 1 2")
 
@@ -701,7 +674,7 @@ pub fn apply_castling_test() {
   let assert Ok(game) =
     load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R b kq - 0 1")
   let assert Ok(move) = game.move_from_san("O-O", game)
-  let assert Ok(#(game, _valid_move)) = game.apply(game, move)
+  let game = game.apply(game, move)
   game.to_fen(game)
   |> should.equal("r4rk1/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w - - 1 2")
 }
@@ -723,21 +696,21 @@ pub fn apply_castling_availability_move_king_test() {
   let assert Ok(game) =
     load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQ - 0 1")
   let assert Ok(move) = game.move_from_san("Kd1", game)
-  let assert Ok(#(game, _valid_move)) = game.apply(game, move)
+  let game = game.apply(game, move)
   game.castling_availability(game) |> should.equal([])
 
   // Long castle
   let assert Ok(game) =
     load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQ - 0 1")
   let assert Ok(move) = game.move_from_san("O-O-O", game)
-  let assert Ok(#(game, _valid_move)) = game.apply(game, move)
+  let game = game.apply(game, move)
   game.castling_availability(game) |> should.equal([])
 
   // Short castle
   let assert Ok(game) =
     load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQ - 0 1")
   let assert Ok(move) = game.move_from_san("O-O", game)
-  let assert Ok(#(game, _valid_move)) = game.apply(game, move)
+  let game = game.apply(game, move)
   game.castling_availability(game) |> should.equal([])
 }
 
@@ -759,14 +732,14 @@ pub fn apply_castling_availability_move_rook_test() {
     load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQ - 0 1")
 
   let assert Ok(move) = game.move_from_san("Rb1", game)
-  let assert Ok(#(game, _valid_move)) = game.apply(game, move)
+  let game = game.apply(game, move)
   game.castling_availability(game)
   |> should.equal([#(player.White, castle.KingSide)])
 
   let assert Ok(game) =
     load_fen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQ - 0 1")
   let assert Ok(move) = game.move_from_san("Rg1", game)
-  let assert Ok(#(game, _valid_move)) = game.apply(game, move)
+  let game = game.apply(game, move)
   game.castling_availability(game)
   |> should.equal([#(player.White, castle.QueenSide)])
 }
@@ -789,14 +762,14 @@ pub fn apply_castling_availability_move_rook_capture_test() {
     load_fen("r3k2r/1ppp1pp1/8/8/8/8/1PPPPPP1/R3K2R w kq - 0 1")
 
   let assert Ok(move) = game.move_from_san("Rxa8+", game)
-  let assert Ok(#(game, _valid_move)) = game.apply(game, move)
+  let game = game.apply(game, move)
   game.castling_availability(game)
   |> should.equal([#(player.Black, castle.KingSide)])
 
   let assert Ok(game) =
     load_fen("r3k2r/1pppppp1/8/8/8/8/1PPPPPP1/R3K2R w KQ - 0 1")
   let assert Ok(move) = game.move_from_san("Rg1", game)
-  let assert Ok(#(game, _valid_move)) = game.apply(game, move)
+  let game = game.apply(game, move)
   game.castling_availability(game)
   |> should.equal([#(player.White, castle.QueenSide)])
 }
@@ -843,10 +816,11 @@ pub fn move_from_lan_castle_test() {
     )
 
   let move = move.from_lan("e1g1")
-  move.equal(move, castle.king_move(player.White, castle.KingSide))
+  move.equal(move, move.king_castle(player.White, castle.KingSide))
   |> should.be_true
 
-  let assert Ok(#(game, _valid_move)) = game.apply(game, move)
+  let assert Ok(move) = game.validate_move(move, game)
+  let game = game.apply(game, move)
   game.to_fen(game)
   |> should.equal(
     "r1bqk2r/ppppbppp/2n2n2/4p3/2B1P3/3P1N2/PPP2PPP/RNBQ1RK1 b kq - 2 5",
@@ -855,18 +829,85 @@ pub fn move_from_lan_castle_test() {
 
 pub fn pinning_test() {
   let assert Ok(game) = load_fen("7k/8/8/8/3b4/8/8/B5QK b - - 0 1")
-  let pseudo = game.pseudo_moves(game)
-  pseudo
+
+  game.valid_moves(game)
+  |> list.map(move.to_lan)
+  |> list.sort(string.compare)
+  |> should.equal(["d4a1", "d4b2", "d4c3", "d4e5", "d4f6", "d4g7", "h8h7"])
+}
+
+pub fn moves_no_move_while_in_check_test() {
+  let assert Ok(game) =
+    load_fen("2k4r/pppq3p/8/2b2p2/4r1n1/2N2P2/PPBP2P1/R1BQ2K1 w - - 0 18")
+
+  game.valid_moves(game)
+  |> list.map(move.to_lan)
+  |> list.sort(string.compare)
+  |> should.equal(["d2d4", "g1f1", "g1h1"])
+}
+
+pub fn escape_or_block_check_test() {
+  let assert Ok(game) =
+    load_fen("rnb1kbnr/pp1ppppp/2p5/q7/3P4/8/PPPKPPPP/RNBQ1BNR w kq - 2 3")
+
+  game.valid_moves(game)
+  |> list.map(move.to_lan)
+  |> list.sort(string.compare)
+  |> should.equal(["b1c3", "b2b4", "c2c3", "d2d3", "d2e3"])
+
+  let assert Ok(game) =
+    load_fen("rnbq1bnr/ppp1pppp/2k5/3P4/8/P1N5/1P1PPPPP/R1BQKBNR b KQ - 0 4")
+  game.valid_moves(game)
+  |> list.map(move.to_lan)
+  |> list.sort(string.compare)
+  |> should.equal(["c6b6", "c6c5", "c6d6", "c6d7", "d8d5"])
+}
+
+pub fn checkmated_test() {
+  let assert Ok(game) =
+    load_fen("rB1q2r1/1p3pP1/5k2/p3Q3/4B3/1P2P3/P1PP3P/RN2Kb2 b Q - 1 25")
+
+  game.valid_moves(game)
+  |> list.map(move.to_lan)
+  |> list.sort(string.compare)
+  |> should.equal([])
+}
+
+pub fn validate_apply_test() {
+  let assert Ok(game) = load_fen(game.start_fen)
+  let moves = ["d2d4", "e7e6", "c2c4"]
+
+  moves
+  |> list.fold(game, fn(game, move) {
+    let assert Ok(move) =
+      move
+      |> move.from_lan
+      |> game.validate_move(game)
+    game.apply(game, move)
+  })
+  |> fn(x) {
+    game.en_passant_target_square(x) |> echo
+    x
+  }
+  |> game.valid_moves
   |> list.map(move.to_lan)
   |> list.sort(string.compare)
   |> should.equal([
-    "d4a1", "d4a7", "d4b2", "d4b6", "d4c3", "d4c5", "d4e3", "d4e5", "d4f2",
-    "d4f6", "d4g1", "d4g7", "h8g7", "h8g8", "h8h7",
+    "a7a5", "a7a6", "b7b5", "b7b6", "b8a6", "b8c6", "c7c5", "c7c6", "d7d5",
+    "d7d6", "d8e7", "d8f6", "d8g5", "d8h4", "e6e5", "e8e7", "f7f5", "f7f6",
+    "f8a3", "f8b4", "f8c5", "f8d6", "f8e7", "g7g5", "g7g6", "g8e7", "g8f6",
+    "g8h6", "h7h5", "h7h6",
   ])
 
-  pseudo
-  |> list.filter_map(game.apply(game, _))
-  |> list.map(pair.second)
+  let assert Ok(game) =
+    load_fen("rnbqkbnr/pppp1ppp/4p3/8/2PP4/8/PP2PPPP/RNBQKBNR b KQkq - 0 2")
+  game.valid_moves(game)
   |> list.map(move.to_lan)
-  |> should.equal(["d4a1", "d4b2", "d4c3", "d4g7", "d4f6", "d4e5", "h8h7"])
+  |> list.sort(string.compare)
+  |> should.equal([
+    "a7a5", "a7a6", "b7b5", "b7b6", "b8a6", "b8c6", "c7c5", "c7c6", "d7d5",
+    "d7d6", "d8e7", "d8f6", "d8g5", "d8h4", "e6e5", "e8e7", "f7f5", "f7f6",
+    "f8a3", "f8b4", "f8c5", "f8d6", "f8e7", "g7g5", "g7g6", "g8e7", "g8f6",
+    "g8h6", "h7h5", "h7h6",
+  ])
 }

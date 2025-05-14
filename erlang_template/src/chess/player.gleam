@@ -1,4 +1,5 @@
 import gleam/dynamic/decode
+import util/direction
 
 pub type Player {
   White
@@ -18,5 +19,12 @@ pub fn opponent(player: Player) -> Player {
   case player {
     White -> Black
     Black -> White
+  }
+}
+
+pub fn direction(player: Player) -> direction.Direction {
+  case player {
+    White -> direction.Up
+    Black -> direction.Down
   }
 }

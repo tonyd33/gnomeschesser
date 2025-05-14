@@ -108,7 +108,7 @@ fn search(
     do: ByRecency(max_tt_recency),
   ))
   let now = timestamp.system_time()
-  use _info <- state.do(tt_info_s(now))
+  use info <- state.do(tt_info_s(now))
 
   use _ <- state.do(tt_zero(now))
   use tt <- state.do(state.get())
@@ -118,7 +118,7 @@ fn search(
     SearchUpdate(best_evaluation:, game:, transposition: tt),
   )
   // TODO: use a logging library for this
-  //io.print_error(info)
+  io.print_error(info)
 
   case opts.max_depth {
     Some(max_depth) if current_depth >= max_depth -> {
@@ -285,23 +285,24 @@ fn quiesce(
   let alpha = xint.max(alpha, score)
 
   let #(best_score, _) =
-    game.pseudo_moves(game)
+    game.valid_moves(game)
     |> list.fold_until(#(score, alpha), fn(acc, move) {
+      let move_context = move.get_context(move)
       // If game isn't capture, continue
-      use <- bool.guard(!game.move_is_capture(move, game), list.Continue(acc))
-      {
-        // If game failed to apply, short circuit to continuing
-        use #(new_game, _valid_move) <- result.try(game.apply(game, move))
-        let #(best_score, alpha) = acc
-        let score =
-          xint.negate(quiesce(new_game, xint.negate(beta), xint.negate(alpha)))
 
-        use <- bool.guard(xint.gte(score, beta), Ok(list.Stop(#(score, alpha))))
-        Ok(
-          list.Continue(#(xint.max(best_score, score), xint.max(alpha, score))),
-        )
-      }
-      |> result.unwrap(list.Continue(acc))
+      use <- bool.guard(
+        move_context.capture |> option.is_none,
+        list.Continue(acc),
+      )
+      let new_game = game.apply(game, move)
+
+      let #(best_score, alpha) = acc
+      let score =
+        xint.negate(quiesce(new_game, xint.negate(beta), xint.negate(alpha)))
+
+      use <- bool.guard(xint.gte(score, beta), list.Stop(#(score, alpha)))
+
+      list.Continue(#(xint.max(best_score, score), xint.max(alpha, score)))
     })
   best_score
 }
@@ -312,10 +313,11 @@ fn sorted_moves(
   transposition: TranspositionTable,
 ) -> List(#(move.Move(move.ValidInContext), game.Game)) {
   // retrieve the cached transposition table data
-  game.pseudo_moves(game)
+  game.valid_moves(game)
   |> list.filter_map(fn(move) {
-    // Also validates the move here
-    use #(new_game, move) <- result.try(game.apply(game, move))
+    // TODO: we can probably generate the sorted moves without applying every game
+    // Since we only need the current PV
+    let new_game = game.apply(game, move)
     // TODO: Make this stateful and update the transposition table
     // - Why does this need to update the transposition table? This part is read-only right?
     let evaluation = case dict.get(transposition.dict, zobrist.hash(new_game)) {

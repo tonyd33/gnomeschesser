@@ -1,6 +1,7 @@
 import chess/player
 import gleam/result
 import gleam/string
+import util/direction
 
 pub type PieceSymbol {
   Pawn
@@ -50,5 +51,12 @@ pub fn symbol_from_string(string: String) -> Result(PieceSymbol, Nil) {
     "q" -> Ok(Queen)
     "k" -> Ok(King)
     _ -> Error(Nil)
+  }
+}
+
+pub fn pawn_direction(player: player.Player) {
+  case player {
+    player.White -> direction.Up
+    player.Black -> direction.Down
   }
 }

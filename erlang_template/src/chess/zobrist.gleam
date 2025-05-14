@@ -1,8 +1,11 @@
+import chess/bitboard
 import chess/game
 import chess/game/castle
 import chess/piece
 import chess/player
 import chess/square
+import gleam/bool
+import gleam/dict
 import gleam/dynamic
 import gleam/dynamic/decode
 import gleam/int
@@ -47,12 +50,22 @@ pub fn hash(game: game.Game) -> Hash {
   let en_passant_hash = {
     game.en_passant_target_square(game)
     |> option.map(fn(square) {
-      let #(_, square) = square
-      // TODO: make sure this isn't expensive
+      let #(them, square) = square
+      // For this specific spec, we also need to see if
+      // There's a valid pawn that *could* en passant
+      let us = player.opponent(them)
 
       case
-        game.attackers(game, square, game.turn(game))
-        |> list.any(fn(x) { { x.1 }.symbol == piece.Pawn })
+        square.piece_attack_offsets(piece.Piece(them, piece.Pawn))
+        |> list.any(fn(offset) {
+          {
+            use from <- result.try(square.add(square, offset))
+            use piece <- result.map(dict.get(game.board(game), from))
+            use <- bool.guard(piece != piece.Piece(us, piece.Pawn), False)
+            True
+          }
+          |> result.unwrap(False)
+        })
       {
         True -> {
           let assert Ok(hash) =
