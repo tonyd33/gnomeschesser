@@ -1,14 +1,10 @@
-import chess/debug/perft
 import chess/game
+import chess/util/perft
 import gleam/erlang
 import gleam/float
 import gleam/int
 import gleam/io
 import gleeunit/should
-
-pub type Timeout {
-  Timeout(Float, fn() -> Nil)
-}
 
 pub fn perft_starting_position_test() {
   let assert Ok(game) = game.load_fen(game.start_fen)
@@ -39,20 +35,4 @@ pub fn perft_position_3_test() {
   perft.perft(game, 4) |> should.equal(43_238)
   perft.perft(game, 5) |> should.equal(674_624)
   //perft.perft(game, 6) |> should.equal(11_030_083)
-}
-
-pub fn perft_timing_test_() {
-  use <- Timeout(10.0)
-  let assert Ok(game) = game.load_fen(game.start_fen)
-  let start = erlang.system_time(erlang.Millisecond)
-  perft.perft(game, 4)
-  |> should.equal(197_281)
-  let end = erlang.system_time(erlang.Millisecond)
-  io.println_error("Perft depth 4 in: " <> int.to_string(end - start) <> " ms")
-  io.println_error(
-    "Perft depth 4 in: "
-    <> float.to_string(197_281.0 /. int.to_float(end - start) *. 1000.0)
-    <> " nodes/second",
-  )
-  Nil
 }

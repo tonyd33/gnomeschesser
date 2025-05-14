@@ -885,10 +885,6 @@ pub fn validate_apply_test() {
       |> game.validate_move(game)
     game.apply(game, move)
   })
-  |> fn(x) {
-    game.en_passant_target_square(x) |> echo
-    x
-  }
   |> game.valid_moves
   |> list.map(move.to_lan)
   |> list.sort(string.compare)
