@@ -587,42 +587,33 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
       ]
       |> option.values
 
-    // TODO: optimize this, better dict operations?
-    let board =
-      list.fold(deletion, board, fn(board, square_piece) {
-        dict.delete(board, square_piece.0)
-      })
-      |> dict.merge(dict.from_list(insertion))
-    let bitboard =
-      bitboard
-      |> list.fold(deletion, _, fn(bitboard, square_piece) {
-        let #(square, piece) = square_piece
+    #(board, bitboard, hash)
+    |> list.fold(deletion, _, fn(bbh, square_piece) {
+      let #(board, bitboard, hash) = bbh
+      let #(square, piece) = square_piece
+      #(
+        dict.delete(board, square_piece.0),
         // mask it out
         bitboard.and(
           bitboard,
           piece,
           int.bitwise_not(bitboard.from_square(square)),
-        )
-      })
-      |> list.fold(insertion, _, fn(bitboard, square_piece) {
-        let #(square, piece) = square_piece
-        // mask it in
-        bitboard.or(bitboard, piece, bitboard.from_square(square))
-      })
-    let hash =
-      hash
-      |> list.fold(deletion, _, fn(hash, square_piece) {
-        let #(square, piece) = square_piece
+        ),
         // (un)XOR squares out
-        int.bitwise_exclusive_or(hash, piece_hash(square, piece))
-      })
-      |> list.fold(insertion, _, fn(hash, square_piece) {
-        let #(square, piece) = square_piece
+        int.bitwise_exclusive_or(hash, piece_hash(square, piece)),
+      )
+    })
+    |> list.fold(insertion, _, fn(bbh, square_piece) {
+      let #(board, bitboard, hash) = bbh
+      let #(square, piece) = square_piece
+      #(
+        dict.insert(board, square, piece),
+        // mask it in
+        bitboard.or(bitboard, piece, bitboard.from_square(square)),
         // XOR squares in
-        int.bitwise_exclusive_or(hash, piece_hash(square, piece))
-      })
-
-    #(board, bitboard, hash)
+        int.bitwise_exclusive_or(hash, piece_hash(square, piece)),
+      )
+    })
   }
 
   // update castling availibility based on new game state
