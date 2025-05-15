@@ -621,7 +621,7 @@ pub fn moves_real_world_2_test() {
 
 // BEGIN: move.apply tests
 
-pub fn apply_basic_test_1() {
+pub fn apply_basic_1_test() {
   let assert Ok(game) =
     load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
@@ -634,7 +634,7 @@ pub fn apply_basic_test_1() {
   game.hash(game) |> should.equal(game.compute_zobrist_hash(game))
 }
 
-pub fn apply_basic_test_2() {
+pub fn apply_basic_2_test() {
   let assert Ok(game) =
     load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
@@ -650,13 +650,13 @@ pub fn apply_basic_test_2() {
   let game = game.apply(game, move)
   game.to_fen(game)
   |> should.equal(
-    "r1bqkbnr/pppppppp/2n5/8/8/2N5/PPPPPPPP/R1BQKBNR w KQkq - 2 1",
+    "r1bqkbnr/pppppppp/2n5/8/8/2N5/PPPPPPPP/R1BQKBNR w KQkq - 2 2",
   )
   game.turn(game) |> should.equal(player.White)
   game.hash(game) |> should.equal(game.compute_zobrist_hash(game))
 }
 
-pub fn apply_basic_test_3() {
+pub fn apply_basic_3_test() {
   let assert Ok(game) =
     load_fen("rnbqkbnr/ppp1pppp/8/3pP3/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 2")
 

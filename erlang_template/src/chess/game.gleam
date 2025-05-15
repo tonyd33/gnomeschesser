@@ -8,6 +8,7 @@ import chess/square
 import gleam/bool
 import gleam/dict.{type Dict}
 import gleam/int
+import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/pair
@@ -527,16 +528,22 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
   let to = move.get_to(move)
   let promotion = move.get_promotion(move)
   let move_context = move.get_context(move)
+  // TODO: Remove
+  let prev_game = game
   let Game(
     board:,
     bitboard:,
     castling_availability:,
     active_color: us,
-    en_passant_target_square: _,
+    en_passant_target_square:,
     fullmove_number:,
     halfmove_clock:,
     hash:,
   ) = game
+  // TODO: We can be very slightly more efficient by perhaps caching this or
+  // accounting for the previous hash smartly. See [Disservin's C++ chess library](https://github.com/Disservin/chess-library/blob/1f60cef1b708a78c02bff473f5de6ef544436560/include/chess.hpp#L2023)
+  let prev_castle_hash = castle_hash(castling_availability)
+  let prev_ep_hash = ep_hash(us, bitboard, en_passant_target_square)
   let them = player.opponent(us)
   let assert Ok(piece) = dict.get(board, from)
   // en passant target square update
@@ -552,10 +559,6 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
       }
     _ -> None
   }
-  // TODO: We can be very slightly more efficient by perhaps caching this or
-  // accounting for the previous hash smartly. See [Disservin's C++ chess library](https://github.com/Disservin/chess-library/blob/1f60cef1b708a78c02bff473f5de6ef544436560/include/chess.hpp#L2023)
-  let prev_castle_hash = castle_hash(castling_availability)
-  let prev_ep_hash = ep_hash(us, bitboard, en_passant_target_square)
 
   // Updates to the board.
   let #(board, bitboard, hash) = {
@@ -623,7 +626,7 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
       let #(player, castle) = x
       use <- bool.guard(
         !{
-          // This expression returns false to short-circuit 
+          // This expression returns false to short-circuit
           // If it's not us, continue the checks
           use <- bool.guard(player != us, True)
           // If we castled, remove this availability
@@ -665,6 +668,7 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     // Castle rights
     |> int.bitwise_exclusive_or(prev_castle_hash)
     |> int.bitwise_exclusive_or(castle_hash(castling_availability))
+
   let game =
     Game(
       board:,
@@ -1035,6 +1039,8 @@ const turn_offset = 780
 pub type Hash =
   Int
 
+/// Expensive! This re-computes the hash. Use `hash()` instead.
+///
 pub fn compute_zobrist_hash(game: Game) {
   compute_zobrist_hash_impl(
     game.active_color,
@@ -1045,6 +1051,11 @@ pub fn compute_zobrist_hash(game: Game) {
   )
 }
 
+/// Why is there `compute_zobrist_hash` and this function? The `hash` is part
+/// of the `Game` and should be computed _before_ the `Game` is created.
+/// Therefore, we run into a big of a chicken-and-egg problem when we need to
+/// create a Game from scratch (e.g. loading FEN)
+///
 fn compute_zobrist_hash_impl(
   us: player.Player,
   board: Dict(square.Square, piece.Piece),
