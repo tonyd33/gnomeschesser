@@ -2,6 +2,7 @@
 
 set -euo pipefail
 
+working_dir=$(pwd)
 script_path=$(dirname "$0")
 repo_root_path=$(realpath "$script_path/../../../")
 start_uci="$repo_root_path/dev_utils/scripts/start-uci.sh"
@@ -17,6 +18,19 @@ stockfish_depth=24
 engine_cmd="$start_uci"
 results_dir="$repo_root_path/results"
 system=$(uname -sm)
+
+case "$system" in
+  "Darwin arm64")
+    stockfish_bin_url="https://github.com/official-stockfish/Stockfish/releases/download/sf_17.1/stockfish-macos-m1-apple-silicon.tar"
+    fastchess_bin_url="https://github.com/Disservin/fastchess/releases/download/v1.4.0-alpha/fastchess-macos-latest.zip"
+    ;;
+  "Linux x86_64")
+    stockfish_bin_url="https://github.com/official-stockfish/Stockfish/releases/download/sf_17.1/stockfish-ubuntu-x86-64.tar"
+    fastchess_bin_url="https://github.com/Disservin/fastchess/releases/download/v1.4.0-alpha/fastchess-ubuntu-22.04.zip"
+    ;;
+  *) echo "unknown system: $system"; exit 1;;
+esac
+
 
 usage() {
   cat <<EOF
@@ -44,7 +58,7 @@ while [ "$#" -gt 0 ]; do
     --concurrency) concurrency="$2"; shift 2;;
     --sf-skill)    stockfish_skill_level="$2"; shift 2;;
     --sf-depth)    stockfish_depth="$2"; shift 2;;
-    --engine-cmd)  engine_cmd="$2"; shift 2;;
+    --engine-cmd)  engine_cmd="$(realpath "$working_dir/$2")"; shift 2;;
     *)             usage; exit 1;
   esac
 done
@@ -62,18 +76,6 @@ results_dir="$results_dir"
 system="$system"
 
 EOF
-
-case "$system" in
-  "Darwin arm64")
-    stockfish_bin_url="https://github.com/official-stockfish/Stockfish/releases/download/sf_17.1/stockfish-macos-m1-apple-silicon.tar"
-    fastchess_bin_url="https://github.com/Disservin/fastchess/releases/download/v1.4.0-alpha/fastchess-macos-latest.zip"
-    ;;
-  "Linux x86_64")
-    stockfish_bin_url="https://github.com/official-stockfish/Stockfish/releases/download/sf_17.1/stockfish-ubuntu-x86-64.tar"
-    fastchess_bin_url="https://github.com/Disservin/fastchess/releases/download/v1.4.0-alpha/fastchess-ubuntu-22.04.zip"
-    ;;
-  *) echo "unknown system: $system"; exit 1;;
-esac
 
 download_stockfish() {
   where="$1"
@@ -106,7 +108,8 @@ mkdir -p "$results_dir"
     -event "$fastchess_event_name" \
     -engine \
       cmd="$start_uci" \
-      name=gnomes st=6 \
+      name=gnomes \
+      st=6 \
     -engine \
       cmd="$run_stockfish" \
       name=stockfish \
@@ -114,5 +117,5 @@ mkdir -p "$results_dir"
       option.Threads=2 \
       "option.Skill Level=$stockfish_skill_level" \
     -rounds "$rounds" -games "$games" -concurrency "$concurrency" -maxmoves 100 \
-    -pgnout file="$results_dir/sprt.pgn" \
-    -log file="$results_dir/fastchess.log" level=trace
+    -pgnout file="$results_dir/stockfish.pgn" \
+    -log file="$results_dir/fastchess-stockfish.log" level=trace

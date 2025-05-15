@@ -44,6 +44,11 @@ async function main() {
       default: 1000,
       describe: "time (ms) to rest between uploads",
     })
+    .option("title", {
+      type: "string",
+      default: "SPRT Results",
+      describe: "title of the markdown result"
+    })
     .parse(hideBin(process.argv));
 
   dotenv.config();
@@ -110,7 +115,11 @@ async function main() {
     tableHeader,
     tableHeader.map((_) => "---"),
     ...R.flow(results, [
-      R.sortBy(({ headers }) => headers.Round),
+      R.sortWith([
+        R.ascend(x => x.headers.Round ?? ""),
+        R.ascend(x => x.headers.White ?? ""),
+        R.ascend(x => x.headers.Result ?? ""),
+      ]),
       R.map((
         { headers, game: { url } }: {
           headers: Record<string, string>;
@@ -124,7 +133,7 @@ async function main() {
   ];
   const mdtable = tabulate(table, " | ");
   const md = `
-# 🥊 SPRT Results
+# 🥊 ${opts.title}
 
 ${mdtable}
 
