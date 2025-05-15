@@ -293,11 +293,12 @@ async function runTestCase(
 
 async function runTestCases(
   tests: TestCase[],
-  { enginePath, timeout, depth, rest }: {
+  { enginePath, timeout, depth, rest, workerNum }: {
     enginePath: string;
     timeout: number;
     rest: number;
     depth?: number;
+    workerNum: number;
   },
 ) {
   const results: TestResult[] = [];
@@ -307,14 +308,14 @@ async function runTestCases(
     await engine.init();
     await engine.isready();
     for await (const test of tests) {
-      process.stderr.write(`⏰ ${test.id}: RUN\n`);
+      process.stderr.write(`[WORKER ${workerNum}] ⏰ ${test.id}: RUN\n`);
 
       const result = await runTestCase(test, { engine, timeout, depth });
 
       if (result.ok) {
-        process.stderr.write(`✅ ${test.id}: OK\n`);
+        process.stderr.write(`[WORKER ${workerNum}] ✅ ${test.id}: OK\n`);
       } else {
-        process.stderr.write(`❌ ${test.id}: FAIL\n`);
+        process.stderr.write(`[WORKER ${workerNum}] ❌ ${test.id}: FAIL\n`);
       }
       results.push(result);
 
@@ -322,9 +323,9 @@ async function runTestCases(
     }
   } catch (err) {
     if (err instanceof Error) {
-      process.stderr.write(`Error: ${err.message}\n`);
+      process.stderr.write(`[WORKER ${workerNum}] Error: ${err.message}\n`);
     } else {
-      process.stderr.write(`Unknown error\n`);
+      process.stderr.write(`[WORKER ${workerNum}] Unknown error\n`);
     }
     process.exit(1);
   } finally {
@@ -411,12 +412,13 @@ async function main() {
 
   const results = await Promise
     .all(
-      tasks.map((tests) =>
+      tasks.map((tests, workerNum) =>
         runTestCases(tests, {
           enginePath: engineAbsPath,
           timeout: opts.timeout,
           depth: opts.depth,
           rest: opts.rest,
+          workerNum: workerNum + 1,
         })
       ),
     )
