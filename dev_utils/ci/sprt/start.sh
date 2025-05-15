@@ -56,6 +56,6 @@ mkdir -p "$repo_root_path/results"
     -event "$fastchess_event_name" \
     -engine cmd="$start_uci" name=gnomes st=6 \
     -engine cmd="$run_stockfish" name=stockfish depth=24 option.Threads=2 \
-    -rounds 3 -repeat -concurrency 6 -maxmoves 75 \
+    -rounds 3 -repeat -concurrency 6 -maxmoves 100 \
     -pgnout file="$repo_root_path/results/sprt.pgn" \
     -log file="$repo_root_path/results/fastchess.log" level=trace

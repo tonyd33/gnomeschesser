@@ -13,7 +13,7 @@ type TestResult = {
   got: string;
 };
 
-const testCases: TestCase[] = [
+const bkTests: TestCase[] = [
   {
     fen: "1k1r4/pp1b1R2/3q2pp/4p3/2B5/4Q3/PPP2B2/2K5 b - - 0 1",
     bms: ["d6d1"],
@@ -137,6 +137,82 @@ const testCases: TestCase[] = [
   },
 ];
 
+const hangingTests: TestCase[] = [
+  {
+    fen: "3k4/8/4q3/8/3N4/8/1R4R1/3K4 w - - 0 1",
+    bms: ["d4e6"],
+    id: "HG.01",
+  },
+  {
+    fen: "rnb1kbnr/ppp1pppp/8/3p4/4P3/4q3/PPPP1PPP/RNBQKBNR w KQkq - 0 1",
+    bms: ["d2e3", "f2e3"],
+    id: "HG.02",
+  },
+  {
+    fen: "rnb1kbnr/ppp1pppp/8/1q1p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1",
+    bms: ["f1b5"],
+    id: "HG.03",
+  },
+];
+
+const advantageTests: TestCase[] = [
+  {
+    // Win the queen for a rook
+    // https://lichess.org/training/jIJhw
+    fen: "1r1r2k1/6pp/3pq3/3Rp3/2Q1P3/1p3P2/PPP3PP/1K1R4 b - - 0 26",
+    bms: ["d8c8"],
+    id: "AV.01",
+  },
+  {
+    // Win a queen and a knight
+    // https://lichess.org/training/RwQxm
+    fen: "r4r2/pp2Bpk1/2qP2p1/2p1n3/2Bb2Q1/5R2/PP5P/R6K w - - 9 25",
+    bms: ["e7f6"],
+    id: "AV.02",
+  },
+  {
+    // https://lichess.org/training/rCkOs
+    fen: "2kr1b1r/ppp2pp1/8/3pnP1p/4N1nq/7P/PPP1BPP1/R1BQ1RK1 w - - 0 13",
+    bms: ["c1g5"],
+    id: "AV.03",
+  },
+];
+
+const mateTests: TestCase[] = [
+  {
+    fen: "6k1/P6p/5Kp1/2p5/1P3P2/2r5/8/8 w - - 0 1",
+    bms: ["a7a8q", "a7a8r"],
+    id: "MT.01",
+  },
+  {
+    // Mate in 4
+    // https://lichess.org/training/VL81U
+    fen: "4rn1k/1r2q1bp/3pB1p1/p2Pp1P1/Np2PP1R/1Pp1Q3/P1P5/1K5R b - - 0 28",
+    bms: ["e5f4"],
+    id: "MT.02",
+  },
+  {
+    // Mate in 3
+    // https://lichess.org/training/YqcxF
+    fen: "8/5k2/1PR2p2/5ppp/8/4PKPP/1r6/8 b - - 8 41",
+    bms: ["g5g4"],
+    id: "MT.03",
+  },
+  // Mate in 1
+  {
+    fen: "8/5k2/1PR2p2/5p2/5Kp1/4P1P1/1r6/8 b - - 1 43",
+    bms: ["b2f2"],
+    id: "MT.04",
+  },
+];
+
+const testCases: TestCase[] = [
+  ...bkTests,
+  ...hangingTests,
+  ...mateTests,
+  ...advantageTests,
+];
+
 function chunk<A>(n: number, xs: A[]): A[][] {
   if (n >= xs.length) return [xs];
   return [xs.slice(0, n), ...chunk(n, xs.slice(n))];
@@ -203,8 +279,17 @@ async function runTestCase(
 ): Promise<TestResult> {
   await engine.position(tc.fen, []);
   await engine.isready();
-  const { bestmove }: { bestmove: string; info: string[] } = await engine
-    .go({ movetime: timeout, depth });
+  const { bestmove }: { bestmove: string; info: string[] } = await Promise.race(
+    [
+      engine.go({ movetime: timeout, depth }),
+      new Promise((resolve) =>
+        setTimeout(
+          () => resolve({ bestmove: "timeout", info: [] }),
+          timeout * 2,
+        )
+      ),
+    ],
+  );
 
   return {
     ok: tc.bms.includes(bestmove),
@@ -217,11 +302,12 @@ async function runTestCase(
 
 async function runTestCases(
   tests: TestCase[],
-  { enginePath, timeout, depth, rest }: {
+  { enginePath, timeout, depth, rest, workerNum }: {
     enginePath: string;
     timeout: number;
     rest: number;
     depth?: number;
+    workerNum: number;
   },
 ) {
   const results: TestResult[] = [];
@@ -231,14 +317,14 @@ async function runTestCases(
     await engine.init();
     await engine.isready();
     for await (const test of tests) {
-      process.stderr.write(`⏰ ${test.id}: RUN\n`);
+      process.stderr.write(`[WORKER ${workerNum}] ⏰ ${test.id}: RUN\n`);
 
       const result = await runTestCase(test, { engine, timeout, depth });
 
       if (result.ok) {
-        process.stderr.write(`✅ ${test.id}: OK\n`);
+        process.stderr.write(`[WORKER ${workerNum}] ✅ ${test.id}: OK\n`);
       } else {
-        process.stderr.write(`❌ ${test.id}: FAIL\n`);
+        process.stderr.write(`[WORKER ${workerNum}] ❌ ${test.id}: FAIL\n`);
       }
       results.push(result);
 
@@ -246,9 +332,9 @@ async function runTestCases(
     }
   } catch (err) {
     if (err instanceof Error) {
-      process.stderr.write(`Error: ${err.message}\n`);
+      process.stderr.write(`[WORKER ${workerNum}] Error: ${err.message}\n`);
     } else {
-      process.stderr.write(`Unknown error\n`);
+      process.stderr.write(`[WORKER ${workerNum}] Unknown error\n`);
     }
     process.exit(1);
   } finally {
@@ -328,19 +414,20 @@ async function main() {
     }
   }
 
-  const chunkSize = Math.max(Math.floor(testsToRun.length / opts.workers), 1);
+  const chunkSize = Math.max(Math.ceil(testsToRun.length / opts.workers), 1);
   const tasks = chunk(chunkSize, testsToRun);
 
   const engineAbsPath = path.join(process.cwd(), opts.engine);
 
   const results = await Promise
     .all(
-      tasks.map((tests) =>
+      tasks.map((tests, workerNum) =>
         runTestCases(tests, {
           enginePath: engineAbsPath,
           timeout: opts.timeout,
           depth: opts.depth,
           rest: opts.rest,
+          workerNum: workerNum + 1,
         })
       ),
     )

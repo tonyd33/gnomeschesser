@@ -285,6 +285,43 @@ pub fn piece_at(game: Game, square: square.Square) -> Result(piece.Piece, Nil) {
   game.board |> dict.get(square)
 }
 
+pub fn piece_exists_at(
+  game: Game,
+  piece: piece.Piece,
+  square: square.Square,
+) -> Bool {
+  let bit =
+    int.bitwise_shift_left(1, square.rank(square) * 8 + square.file(square))
+  case piece {
+    piece.Piece(player.White, piece.Pawn) ->
+      int.bitwise_or(game.bitboard.white_pawns, bit)
+    piece.Piece(player.White, piece.Knight) ->
+      int.bitwise_or(game.bitboard.white_knights, bit)
+    piece.Piece(player.White, piece.Bishop) ->
+      int.bitwise_or(game.bitboard.white_bishops, bit)
+    piece.Piece(player.White, piece.Rook) ->
+      int.bitwise_or(game.bitboard.white_rooks, bit)
+    piece.Piece(player.White, piece.Queen) ->
+      int.bitwise_or(game.bitboard.white_queens, bit)
+    piece.Piece(player.White, piece.King) ->
+      int.bitwise_or(game.bitboard.white_king, bit)
+
+    piece.Piece(player.Black, piece.Pawn) ->
+      int.bitwise_or(game.bitboard.black_pawns, bit)
+    piece.Piece(player.Black, piece.Knight) ->
+      int.bitwise_or(game.bitboard.black_knights, bit)
+    piece.Piece(player.Black, piece.Bishop) ->
+      int.bitwise_or(game.bitboard.black_bishops, bit)
+    piece.Piece(player.Black, piece.Rook) ->
+      int.bitwise_or(game.bitboard.black_rooks, bit)
+    piece.Piece(player.Black, piece.Queen) ->
+      int.bitwise_or(game.bitboard.black_queens, bit)
+    piece.Piece(player.Black, piece.King) ->
+      int.bitwise_or(game.bitboard.black_king, bit)
+  }
+  != 0
+}
+
 pub fn empty_at(game: Game, square: square.Square) -> Bool {
   let square = bitboard.from_square(square)
   0 == int.bitwise_and(square, bitboard.get_bitboard_all(game.bitboard))
@@ -365,6 +402,16 @@ pub fn ascii(game: Game) -> String {
 
 pub fn pieces(game: Game) -> List(#(square.Square, piece.Piece)) {
   game.board |> dict.to_list
+}
+
+pub fn has_castled(game: Game, player: player.Player) {
+  game.castling_availability
+  |> list.find(fn(x) { x.0 == player })
+  |> result.is_ok
+}
+
+pub fn can_castle(game: Game, player: player.Player) {
+  !has_castled(game, player)
 }
 
 // There are functions that require the game state as well as move, those will go here
@@ -646,6 +693,17 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     )
 
   game
+}
+
+pub fn find_player_king(
+  game: Game,
+  player: player.Player,
+) -> Result(#(square.Square, piece.Piece), Nil) {
+  pieces(game)
+  |> list.find(fn(x) {
+    let #(_, piece) = x
+    piece.symbol == piece.King && piece.player == player
+  })
 }
 
 // TODO: bring back explicitly validating it

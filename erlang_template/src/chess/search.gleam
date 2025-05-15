@@ -369,12 +369,12 @@ pub type TranspositionTable {
 
 /// We don't let the transposition table get bigger than this
 ///
-const max_tt_size = 40_000
+const max_tt_size = 100_000
 
 /// When pruning the transposition table, how recent of entries do we decide to
 /// keep?
 ///
-const max_tt_recency = 20_000
+const max_tt_recency = 50_000
 
 /// We also store "when" an entry was last accessed so we can prune it if need be.
 /// "when" should be any monotonic non-decreasing measure; time is an obvious
