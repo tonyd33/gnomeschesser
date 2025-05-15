@@ -1,7 +1,6 @@
 import chess/evaluate
 import chess/game
 import chess/move
-import chess/zobrist
 import gleam/bool
 import gleam/dict
 import gleam/erlang/process
@@ -147,7 +146,7 @@ fn negamax_alphabeta_failsoft(
   alpha: ExtendedInt,
   beta: ExtendedInt,
 ) -> State(SearchContext, Evaluation) {
-  let game_hash = zobrist.hash(game)
+  let game_hash = game.hash(game)
 
   // TODO: check for cache collision here
   use cached_evaluation <- state.do(
@@ -320,7 +319,7 @@ fn sorted_moves(
     let new_game = game.apply(game, move)
     // TODO: Make this stateful and update the transposition table
     // - Why does this need to update the transposition table? This part is read-only right?
-    let evaluation = case dict.get(transposition.dict, zobrist.hash(new_game)) {
+    let evaluation = case dict.get(transposition.dict, game.hash(new_game)) {
       Ok(TranspositionEntry(_, evaluation, _)) ->
         // negate the evaluation so that it's relative to our current game
         evaluation_negate(evaluation) |> Some
@@ -355,7 +354,7 @@ fn sorted_moves(
 ///
 pub type TranspositionTable {
   TranspositionTable(
-    dict: dict.Dict(zobrist.Hash, TranspositionEntry),
+    dict: dict.Dict(game.Hash, TranspositionEntry),
     // Honestly, this attribute doesn't really belong in here. it belongs more
     // in `SearchContext`, but... whatever.
     nodes_searched: Int,
@@ -441,7 +440,7 @@ pub fn tt_info_s(now: timestamp.Timestamp) {
 }
 
 pub fn tt_get_s(
-  hash: zobrist.Hash,
+  hash: game.Hash,
 ) -> State(TranspositionTable, Result(TranspositionEntry, Nil)) {
   State(run: fn(tt: TranspositionTable) {
     let rv = dict.get(tt.dict, hash)
@@ -466,7 +465,7 @@ pub fn tt_inc_s() -> State(TranspositionTable, Nil) {
 }
 
 pub fn tt_insert_s(
-  hash: zobrist.Hash,
+  hash: game.Hash,
   e: #(Depth, Evaluation),
 ) -> State(TranspositionTable, Nil) {
   let #(depth, eval) = e

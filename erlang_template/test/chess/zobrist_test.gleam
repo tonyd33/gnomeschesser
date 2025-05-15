@@ -1,5 +1,4 @@
 import chess/game.{load_fen}
-import chess/zobrist
 import gleam/list
 import gleeunit/should
 
@@ -45,6 +44,6 @@ pub fn zobrist_test() {
   |> list.map(fn(x) {
     let #(fen, expected) = x
     let assert Ok(game) = load_fen(fen)
-    zobrist.hash(game) |> should.equal(expected)
+    game.compute_zobrist_hash(game) |> should.equal(expected)
   })
 }

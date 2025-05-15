@@ -120,6 +120,7 @@ pub fn get_bitboard_piece(
 
 /// Move the pieces on the bitboard a certain direction
 /// from the perspective of white
+///
 pub fn move(
   bitboard: BitBoard,
   direction: direction.Direction,
