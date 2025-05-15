@@ -1,2 +1,8 @@
 .direnv
 .vscode
+
+# artifacts from running sprt
+stockfish
+fastchess
+results
+config.json

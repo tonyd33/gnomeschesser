@@ -32,6 +32,7 @@
             meson
             ninja
             act
+            wget
           ];
         };
       });

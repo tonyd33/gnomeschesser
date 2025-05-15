@@ -42,7 +42,12 @@ async function main() {
     .option("rest", {
       type: "number",
       default: 1000,
-      describe: "time (ms) to rest between uploads"
+      describe: "time (ms) to rest between uploads",
+    })
+    .option("title", {
+      type: "string",
+      default: "SPRT Results",
+      describe: "title of the markdown result"
     })
     .parse(hideBin(process.argv));
 
@@ -110,7 +115,17 @@ async function main() {
     tableHeader,
     tableHeader.map((_) => "---"),
     ...R.flow(results, [
-      R.map(({ headers, game: { url } }) => [
+      R.sortWith([
+        R.ascend(x => x.headers.Round ?? ""),
+        R.ascend(x => x.headers.White ?? ""),
+        R.descend(x => x.headers.Result ?? ""),
+      ]),
+      R.map((
+        { headers, game: { url } }: {
+          headers: Record<string, string>;
+          game: { url: string };
+        },
+      ) => [
         ...availableHeaderKeys.map((hk) => headers[hk] ?? "N/A"),
         url,
       ]),
@@ -118,7 +133,7 @@ async function main() {
   ];
   const mdtable = tabulate(table, " | ");
   const md = `
-# 🥊 SPRT Results
+# 🥊 ${opts.title}
 
 ${mdtable}
 
