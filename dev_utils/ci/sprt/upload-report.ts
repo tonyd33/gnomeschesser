@@ -118,7 +118,7 @@ async function main() {
       R.sortWith([
         R.ascend(x => x.headers.Round ?? ""),
         R.ascend(x => x.headers.White ?? ""),
-        R.ascend(x => x.headers.Result ?? ""),
+        R.descend(x => x.headers.Result ?? ""),
       ]),
       R.map((
         { headers, game: { url } }: {

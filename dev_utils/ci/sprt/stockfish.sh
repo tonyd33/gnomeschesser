@@ -8,11 +8,11 @@ repo_root_path=$(realpath "$script_path/../../../")
 start_uci="$repo_root_path/dev_utils/scripts/start-uci.sh"
 
 fastchess_event_name="Fastchess Tournament"
-rounds=3
+rounds=6
 # run (half #cores - 2) games at a time.
 # yes, we're piping into deno just for this. yes, it's cursed
-concurrency=$(echo "Math.min(($(nproc)/2) - 2)" | NO_COLOR=1 deno repl -q)
-games=2
+concurrency=$(echo "Math.max(($(nproc)/2) - 2, 1)" | NO_COLOR=1 deno repl -q)
+games=1
 stockfish_skill_level=20
 stockfish_depth=24
 engine_cmd="$start_uci"

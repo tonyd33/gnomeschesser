@@ -1,6 +1,6 @@
 #!/bin/sh
 
-set -euo pipefail
+set -eu
 
 working_dir=$(pwd)
 script_path=$(dirname "$0")
@@ -50,8 +50,8 @@ while [ "$#" -gt 0 ]; do
     --rounds)      rounds="$2"; shift 2;;
     --games)       games="$2"; shift 2;;
     --concurrency) concurrency="$2"; shift 2;;
-    --challenger)  run_challenger=""$(realpath "$working_dir/$2")""; shift 2;;
-    --defender)    run_defender=""$(realpath "$working_dir/$2")""; shift 2;;
+    --challenger)  run_challenger=$(realpath "$working_dir/$2"); shift 2;;
+    --defender)    run_defender=$(realpath "$working_dir/$2"); shift 2;;
     *)             usage; exit 1;
   esac
 done

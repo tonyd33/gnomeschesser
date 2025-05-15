@@ -30,7 +30,7 @@ jobs:
         working-directory: erlang_template
 
   evaluation_test:
-    runs-on: [self-hosted, linux, x64, fast]
+    runs-on: [self-hosted, linux, x64]
     env:
       ImageOS: ubuntu24
     steps:
@@ -62,7 +62,7 @@ jobs:
             --engine ../../scripts/start-uci.sh \
             --workers 2 \
             --timeout 30000 \
-            --depth 5 > ${{ github.workspace }}/results/bratko-kopec.md
+            --depth 4 > ${{ github.workspace }}/results/bratko-kopec.md
         working-directory: dev_utils/ci/bratko-kopec
 
       - name: Find existing PR comment
@@ -209,7 +209,7 @@ jobs:
           edit-mode: replace
           token: ${{ secrets.GITHUB_TOKEN }}
           issue-number: ${{ github.event.pull_request.number }}
-          body-file: results/us-vs-stockfish.md
+          body-file: results/defender-vs-challenger.md
           comment-id: ${{ steps.find-comment.outputs.comment-id }}
 
       - name: Upload artifacts
