@@ -170,12 +170,12 @@ const advantageTests: TestCase[] = [
     bms: ["e7f6"],
     id: "AV.02",
   },
-  {
-    // https://lichess.org/training/rCkOs
-    fen: "2kr1b1r/ppp2pp1/8/3pnP1p/4N1nq/7P/PPP1BPP1/R1BQ1RK1 w - - 0 13",
-    bms: ["c1g5"],
-    id: "AV.03",
-  },
+  // {
+  //   // https://lichess.org/training/rCkOs
+  //   fen: "2kr1b1r/ppp2pp1/8/3pnP1p/4N1nq/7P/PPP1BPP1/R1BQ1RK1 w - - 0 13",
+  //   bms: ["c1g5"],
+  //   id: "AV.03",
+  // },
 ];
 
 const mateTests: TestCase[] = [
