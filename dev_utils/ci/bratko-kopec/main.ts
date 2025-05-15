@@ -170,12 +170,12 @@ const advantageTests: TestCase[] = [
     bms: ["e7f6"],
     id: "AV.02",
   },
-  // {
-  //   // https://lichess.org/training/rCkOs
-  //   fen: "2kr1b1r/ppp2pp1/8/3pnP1p/4N1nq/7P/PPP1BPP1/R1BQ1RK1 w - - 0 13",
-  //   bms: ["c1g5"],
-  //   id: "AV.03",
-  // },
+  {
+    // https://lichess.org/training/rCkOs
+    fen: "2kr1b1r/ppp2pp1/8/3pnP1p/4N1nq/7P/PPP1BPP1/R1BQ1RK1 w - - 0 13",
+    bms: ["c1g5"],
+    id: "AV.03",
+  },
 ];
 
 const mateTests: TestCase[] = [
@@ -279,8 +279,17 @@ async function runTestCase(
 ): Promise<TestResult> {
   await engine.position(tc.fen, []);
   await engine.isready();
-  const { bestmove }: { bestmove: string; info: string[] } = await engine
-    .go({ movetime: timeout, depth });
+  const { bestmove }: { bestmove: string; info: string[] } = await Promise.race(
+    [
+      engine.go({ movetime: timeout, depth }),
+      new Promise((resolve) =>
+        setTimeout(
+          () => resolve({ bestmove: "timeout", info: [] }),
+          timeout * 2,
+        )
+      ),
+    ],
+  );
 
   return {
     ok: tc.bms.includes(bestmove),
@@ -405,7 +414,7 @@ async function main() {
     }
   }
 
-  const chunkSize = Math.max(Math.floor(testsToRun.length / opts.workers), 1);
+  const chunkSize = Math.max(Math.ceil(testsToRun.length / opts.workers), 1);
   const tasks = chunk(chunkSize, testsToRun);
 
   const engineAbsPath = path.join(process.cwd(), opts.engine);
