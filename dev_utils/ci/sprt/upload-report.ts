@@ -42,7 +42,7 @@ async function main() {
     .option("rest", {
       type: "number",
       default: 1000,
-      describe: "time (ms) to rest between uploads"
+      describe: "time (ms) to rest between uploads",
     })
     .parse(hideBin(process.argv));
 
@@ -110,7 +110,13 @@ async function main() {
     tableHeader,
     tableHeader.map((_) => "---"),
     ...R.flow(results, [
-      R.map(({ headers, game: { url } }) => [
+      R.sortBy(({ headers }) => headers.Round),
+      R.map((
+        { headers, game: { url } }: {
+          headers: Record<string, string>;
+          game: { url: string };
+        },
+      ) => [
         ...availableHeaderKeys.map((hk) => headers[hk] ?? "N/A"),
         url,
       ]),
