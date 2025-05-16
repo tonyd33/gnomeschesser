@@ -33,6 +33,7 @@
             ninja
             act
             wget
+            unzip
           ];
         };
       });
