@@ -22,7 +22,6 @@ pub fn game(game: game.Game) -> ExtendedInt {
     game.pieces(game)
     |> list.map(fn(square_piece) { piece(square_piece.1) })
     |> list.fold(0, int.add)
-    |> int.multiply(200_000)
 
   let pqst_score = {
     let pieces = game.pieces(game)
@@ -37,7 +36,6 @@ pub fn game(game: game.Game) -> ExtendedInt {
       psqt.get_psq_score(square_pieces.1, square_pieces.0, game_stage)
     })
     |> list.fold(0, int.add)
-    |> int.multiply(2000)
   }
 
   // TODO: use a cached version of getting moves somehow
@@ -51,29 +49,32 @@ pub fn game(game: game.Game) -> ExtendedInt {
   // This is implemented in a similar fashion: for every move, it counts
   // positively towards the mobility score and is weighted by the piece.
   // TODO: change these based on the state of the game
-  let mobility_score =
+  let assert Ok(mobility_score) =
     valid_moves
     |> list.fold(0, fn(mobility_score, move) {
       let move_context = move.get_context(move)
       case move_context.piece.symbol {
-        piece.Pawn | piece.Knight -> 0
-        piece.Bishop -> 125_000
-        piece.Rook -> 60_000
-        piece.Queen -> 25_000
-        piece.King -> -10
+        piece.Pawn | piece.Knight | piece.King -> 0
+        piece.Bishop -> 125
+        piece.Rook -> 60
+        piece.Queen -> 25
       }
       + mobility_score
     })
     |> int.multiply(player(us))
+    |> int.divide(10)
 
   let king_safety_score = king_safety(game)
 
   // combine scores with weight
   {
-    { material_score * 850 }
-    + { mobility_score * 10 }
-    + { pqst_score * 50 }
-    + { king_safety_score * 1000 }
+    {
+      { material_score * 850 }
+      + { mobility_score * 10 }
+      + { pqst_score * 50 }
+      + { king_safety_score * 40 }
+    }
+    / { 850 + 10 + 50 + 40 }
   }
   |> xint.from_int
 }
@@ -156,17 +157,18 @@ pub fn king_safety(game: game.Game) -> Int {
     int.negate(penalty)
   }
 
-  pawn_shield_score
+  // let's ballpark the pawn shield should range around 100-200 centipawns
+  pawn_shield_score * 60
 }
 
 /// Piece score based on player side
 fn piece(piece: piece.Piece) -> Int {
   case piece.symbol {
-    piece.Pawn -> 1
-    piece.Knight -> 3
-    piece.Bishop -> 3
-    piece.Rook -> 5
-    piece.Queen -> 9
+    piece.Pawn -> 100
+    piece.Knight -> 300
+    piece.Bishop -> 300
+    piece.Rook -> 500
+    piece.Queen -> 900
     piece.King -> 0
   }
   * player(piece.player)

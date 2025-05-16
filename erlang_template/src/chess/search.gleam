@@ -95,13 +95,35 @@ fn search(
   current_depth: Depth,
   opts: SearchOpts,
 ) -> State(SearchContext, Nil) {
+  let game_hash = zobrist.hash(game)
+  use cached_evaluation <- state.do(tt_get_s(game_hash))
+
   // perform the search at each depth, the negamax function will handle sorting and caching
-  use best_evaluation <- state.do(negamax_alphabeta_failsoft(
-    game,
-    current_depth,
-    xint.NegInf,
-    xint.PosInf,
-  ))
+  use best_evaluation <- state.do(case cached_evaluation {
+    Ok(TranspositionEntry(
+      _,
+      Evaluation(score:, node_type: _, best_move: _, best_line: _),
+      _,
+    )) -> {
+      let offset = 10 |> xint.from_int
+      search_with_widening_windows(
+        game,
+        current_depth,
+        score |> xint.subtract(offset),
+        score |> xint.add(offset),
+        0,
+      )
+    }
+    Error(Nil) ->
+      search_with_widening_windows(
+        game,
+        current_depth,
+        xint.NegInf,
+        xint.PosInf,
+        0,
+      )
+  })
+
   use _ <- state.do(tt_prune_by(
     when: LargerThan(max_tt_size),
     do: ByRecency(max_tt_recency),
@@ -128,6 +150,45 @@ fn search(
       state.return(Nil)
     }
     _ -> search(search_subject, game, current_depth + 1, opts)
+  }
+}
+
+/// Calls negamax_alphabeta_failsoft with wider and wider windows
+/// until we get a PV node
+fn search_with_widening_windows(
+  game: game.Game,
+  depth: Depth,
+  alpha: ExtendedInt,
+  beta: ExtendedInt,
+  attempts: Int,
+) -> State(SearchContext, Evaluation) {
+  use best_evaluation <- state.do(negamax_alphabeta_failsoft(
+    game,
+    depth,
+    alpha,
+    beta,
+  ))
+  case best_evaluation {
+    Evaluation(score: _, node_type: PV, best_move: _, best_line: _) ->
+      state.return(best_evaluation)
+    Evaluation(score:, node_type: All, best_move: _, best_line: _) -> {
+      search_with_widening_windows(
+        game,
+        depth,
+        score |> xint.subtract(10 + attempts * 100 |> xint.from_int),
+        beta,
+        attempts + 1,
+      )
+    }
+    Evaluation(score:, node_type: Cut, best_move: _, best_line: _) -> {
+      search_with_widening_windows(
+        game,
+        depth,
+        alpha,
+        score |> xint.add(10 + attempts * 100 |> xint.from_int),
+        attempts + 1,
+      )
+    }
   }
 }
 
