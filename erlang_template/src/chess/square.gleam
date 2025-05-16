@@ -199,7 +199,7 @@ pub fn piece_attacking_ray(
 }
 
 /// considers squares that are attackable
-/// returns a list of squares attacking until and 
+/// returns a list of squares attacking until and
 /// including the first piece hit if it's the opponent's
 pub fn piece_attacking(
   occupancy: dict.Dict(Square, piece.Piece),
@@ -232,19 +232,19 @@ pub fn piece_attacking(
 
 pub fn get_squares_attacking_at(
   board: dict.Dict(Square, piece.Piece),
+  pieces_yielder: yielder.Yielder(#(Square, piece.Piece)),
   at: Square,
   by: player.Player,
 ) -> List(Square) {
-  board
-  |> dict.to_list
-  |> list.filter_map(fn(piece) {
+  pieces_yielder
+  |> yielder.fold([], fn(acc, piece) {
     let #(from, piece) = piece
-    // We only consider attacks by a certain player 
-    use <- bool.guard(piece.player != by, Error(Nil))
+    // We only consider attacks by a certain player
+    use <- bool.guard(piece.player != by, acc)
 
     let difference = from.ox88 - at.ox88
     // skip if to/from square are the same
-    use <- bool.guard(difference == 0, Error(Nil))
+    use <- bool.guard(difference == 0, acc)
 
     // This index is used for `attacks` and `rays`, where a difference of 0 corresponds to the centre
     let index = difference + 0x77
@@ -253,10 +253,10 @@ pub fn get_squares_attacking_at(
     // if it's not the piece we currently have, we just return
     use <- bool.guard(
       int.bitwise_and(attacks(index), piece_masks(piece.symbol)) == 0,
-      Error(Nil),
+      acc,
     )
 
-    case piece.symbol {
+    let x = case piece.symbol {
       // Knights and Kings can't be blocked
       piece.Knight | piece.King -> Ok(from)
       // Pawns can't be blocked
@@ -287,6 +287,10 @@ pub fn get_squares_attacking_at(
         }
       }
     }
+    case x {
+      Ok(x) -> [x, ..acc]
+      _ -> acc
+    }
   })
 }
 
@@ -299,7 +303,7 @@ pub fn is_attacked_at(
   |> dict.to_list
   |> list.any(fn(piece) {
     let #(from, piece) = piece
-    // We only consider attacks by a certain player 
+    // We only consider attacks by a certain player
     use <- bool.guard(piece.player != by, False)
 
     let difference = from.ox88 - at.ox88
@@ -348,21 +352,21 @@ pub fn is_attacked_at(
 /// This is for determining if the king is in check
 /// Returns a list of attackers as well as pinned piece if it exists
 pub fn attacks_and_pins_to(
+  pieces_yielder: yielder.Yielder(#(Square, piece.Piece)),
   board: dict.Dict(Square, piece.Piece),
   at: Square,
   by: player.Player,
 ) -> List(#(Square, option.Option(Square))) {
   let _attacks_and_pins =
-    board
-    |> dict.to_list
-    |> list.filter_map(fn(piece) {
+    pieces_yielder
+    |> yielder.fold([], fn(acc, piece) {
       let #(from, piece) = piece
-      // We only consider attacks by a certain player 
-      use <- bool.guard(piece.player != by, Error(Nil))
+      // We only consider attacks by a certain player
+      use <- bool.guard(piece.player != by, acc)
 
       let difference = from.ox88 - at.ox88
       // skip if to/from square are the same
-      use <- bool.guard(difference == 0, Error(Nil))
+      use <- bool.guard(difference == 0, acc)
 
       // This index is used for `attacks` and `rays`, where a difference of 0 corresponds to the centre
       let index = difference + 0x77
@@ -371,10 +375,10 @@ pub fn attacks_and_pins_to(
       // if it's not the piece we currently have, we just return
       use <- bool.guard(
         int.bitwise_and(attacks(index), piece_masks(piece.symbol)) == 0,
-        Error(Nil),
+        acc,
       )
 
-      case piece.symbol {
+      let x = case piece.symbol {
         // Knights and Kings can't be blocked
         piece.Knight | piece.King -> Ok(#(from, option.None))
         // Pawns can't be blocked
@@ -427,6 +431,10 @@ pub fn attacks_and_pins_to(
             }
           }
         }
+      }
+      case x {
+        Ok(x) -> [x, ..acc]
+        _ -> acc
       }
     })
 }

@@ -15,6 +15,7 @@ import gleam/result
 import gleam/set
 import gleam/string
 import util/direction
+import util/yielder
 
 pub const start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
@@ -460,7 +461,6 @@ pub fn move_to_san(
     _ -> Error(Nil)
   }
   use <- result.lazy_or(castle_san)
-  // use <- result.lazy_unwrap(castle_san)
 
   let undecorated_san = {
     let is_capture =
@@ -565,6 +565,40 @@ pub fn move_from_san(
   |> list.find(fn(x) { move_to_san(x, game) == Ok(san) })
 }
 
+type GameOp {
+  BoardInsertion(square: square.Square, piece: piece.Piece)
+  BoardDeletion(square: square.Square, piece: piece.Piece)
+}
+
+fn map_bbh(bbh, op) {
+  case op {
+    BoardDeletion(square, piece) -> {
+      let #(board, bitboard, hash) = bbh
+      #(
+        dict.delete(board, square),
+        // mask it out
+        bitboard.and(
+          bitboard,
+          piece,
+          int.bitwise_not(bitboard.from_square(square)),
+        ),
+        // (un)XOR squares out
+        int.bitwise_exclusive_or(hash, piece_hash(square, piece)),
+      )
+    }
+    BoardInsertion(square, piece) -> {
+      let #(board, bitboard, hash) = bbh
+      #(
+        dict.insert(board, square, piece),
+        // mask it in
+        bitboard.or(bitboard, piece, bitboard.from_square(square)),
+        // XOR squares in
+        int.bitwise_exclusive_or(hash, piece_hash(square, piece)),
+      )
+    }
+  }
+}
+
 /// Applies a move to a game, takes either pseudo or validated moves
 /// Returns a validated version of the move
 /// TODO: we could return the new validated move?
@@ -615,52 +649,35 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     let castle_rook_move =
       move_context.castling
       |> option.map(move.rook_castle(us, _))
-    // Collect deletion and insertion of data
-    let deletion =
-      [
-        Some(#(from, move_context.piece)),
-        move_context.capture,
-        castle_rook_move
-          |> option.map(fn(x) {
-            #(move.get_from(x), piece.Piece(us, piece.Rook))
-          }),
-      ]
-      |> option.values
-    let insertion =
-      [
-        Some(#(to, new_piece)),
-        castle_rook_move
-          |> option.map(fn(x) { #(move.get_to(x), piece.Piece(us, piece.Rook)) }),
-      ]
-      |> option.values
 
-    #(board, bitboard, hash)
-    |> list.fold(deletion, _, fn(bbh, square_piece) {
-      let #(board, bitboard, hash) = bbh
-      let #(square, piece) = square_piece
-      #(
-        dict.delete(board, square_piece.0),
-        // mask it out
-        bitboard.and(
-          bitboard,
-          piece,
-          int.bitwise_not(bitboard.from_square(square)),
-        ),
-        // (un)XOR squares out
-        int.bitwise_exclusive_or(hash, piece_hash(square, piece)),
-      )
-    })
-    |> list.fold(insertion, _, fn(bbh, square_piece) {
-      let #(board, bitboard, hash) = bbh
-      let #(square, piece) = square_piece
-      #(
-        dict.insert(board, square, piece),
-        // mask it in
-        bitboard.or(bitboard, piece, bitboard.from_square(square)),
-        // XOR squares in
-        int.bitwise_exclusive_or(hash, piece_hash(square, piece)),
-      )
-    })
+    // Collect deletion and insertion of data
+
+    // Over the course of hundreds of thousands of nodes, manually doing this
+    // rather than folding over a list is marginally but measurably faster.
+    let bbh = #(board, bitboard, hash)
+    let bbh = map_bbh(bbh, BoardDeletion(from, move_context.piece))
+    let bbh = case move_context.capture {
+      Some(x) -> map_bbh(bbh, BoardDeletion(x.0, x.1))
+      None -> bbh
+    }
+    let bbh = case castle_rook_move {
+      Some(x) ->
+        map_bbh(
+          bbh,
+          BoardDeletion(move.get_from(x), piece.Piece(us, piece.Rook)),
+        )
+      None -> bbh
+    }
+    let bbh = map_bbh(bbh, BoardInsertion(to, new_piece))
+    let bbh = case castle_rook_move {
+      Some(x) ->
+        map_bbh(
+          bbh,
+          BoardInsertion(move.get_to(x), piece.Piece(us, piece.Rook)),
+        )
+      None -> bbh
+    }
+    bbh
   }
 
   // update castling availibility based on new game state
@@ -728,15 +745,9 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
   game
 }
 
-pub fn find_player_king(
-  game: Game,
-  player: player.Player,
-) -> Result(#(square.Square, piece.Piece), Nil) {
-  pieces(game)
-  |> list.find(fn(x) {
-    let #(_, piece) = x
-    piece.symbol == piece.King && piece.player == player
-  })
+pub fn find_player_king(game: Game, player: player.Player) -> square.Square {
+  let assert [a] = find_piece(game, piece.Piece(player, piece.King))
+  a
 }
 
 // TODO: bring back explicitly validating it
@@ -753,15 +764,21 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
   let them = player.opponent(us)
 
   let pieces = game.board |> dict.to_list
+  let pieces_yielder = pieces |> yielder.from_list
 
-  // TODO: find the king faster!
   let king_piece = piece.Piece(us, piece.King)
+  // let king_position = find_player_king(game, us)
   let assert [king_position] = find_piece(game, king_piece)
 
   // find attacks and pins to the king
   let #(king_attackers, king_blockers) = {
     let #(attackers, pins) =
-      square.attacks_and_pins_to(game.board, king_position, them)
+      square.attacks_and_pins_to(
+        pieces_yielder,
+        game.board,
+        king_position,
+        them,
+      )
       |> list.partition(fn(x) { x.1 |> option.is_none })
     let attackers = list.map(attackers, pair.first)
     let blockers =
@@ -824,7 +841,12 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
       Ok(x) if x.symbol == piece.Knight || x.symbol == piece.Pawn -> {
         let assert [attacker_square] = king_attackers
         let assert Ok(attacker_piece) = dict.get(game.board, attacker_square)
-        square.get_squares_attacking_at(game.board, attacker_square, us)
+        square.get_squares_attacking_at(
+          game.board,
+          pieces_yielder,
+          attacker_square,
+          us,
+        )
         |> list.filter_map(fn(defender_square) {
           let assert Ok(piece) = dict.get(game.board, defender_square)
           use <- bool.guard(piece.symbol == piece.King, Error(Nil))

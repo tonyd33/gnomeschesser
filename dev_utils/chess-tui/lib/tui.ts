@@ -170,7 +170,12 @@ export const commands: {
       const perft = ctx.chess.perft(moves);
       const end = Date.now();
       console.log(perft);
-      console.log(`Ran in ${end - start}ms`);
+      console.log(`Perft depth ${moves} in: ${end - start} ms`);
+      console.log(
+        `Perft depth ${moves} in: ${
+          (perft * 1000 / (end - start)).toFixed(2)
+        } nodes/second`,
+      );
       return ["ok", ctx];
     },
   },
