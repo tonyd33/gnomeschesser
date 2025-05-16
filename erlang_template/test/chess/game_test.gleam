@@ -6,7 +6,6 @@ import chess/player
 import chess/square
 import gleam/dict
 import gleam/list
-import gleam/option
 import gleam/string
 import gleeunit/should
 

@@ -1,68 +1,64 @@
 import chess/game
-import chess/move
 import chess/search
 import gleam/erlang/process
-import gleam/float
-import gleam/int
-import gleam/io
 import gleam/option
-import gleam/string
-import gleam/time/duration
 import gleam/time/timestamp
+import glychee/benchmark
+import glychee/configuration
 import util/yielder
 
-pub fn main() {
-  search_fen_to_depth(
-    "1nrq1rk1/3nppbp/p2pb1p1/8/2pNP3/1PN1B3/P2QBPPP/2RR2K1 w - - 0 16",
-    2,
-  )
-  search_fen_to_depth(game.start_fen, 5)
+type Arguments {
+  Arguments(game: game.Game, depth: Int)
 }
 
-fn search_fen_to_depth(fen: String, depth: Int) {
-  let assert Ok(game) = game.load_fen(fen)
+pub fn main() {
+  configuration.initialize()
+  configuration.set_pair(configuration.Warmup, 2)
+  configuration.set_pair(configuration.Parallel, 2)
 
+  let assert Ok(starting) = game.load_fen(game.start_fen)
+  let assert Ok(game2) =
+    game.load_fen(
+      "1nrq1rk1/3nppbp/p2pb1p1/8/2pNP3/1PN1B3/P2QBPPP/2RR2K1 w - - 0 16",
+    )
+
+  // Run the benchmarks
+  benchmark.run(
+    [
+      benchmark.Function(label: "search", callable: fn(test_data: Arguments) {
+        fn() { search_game_to_depth(test_data.game, test_data.depth) }
+      }),
+    ],
+    [
+      benchmark.Data(
+        label: "starting",
+        data: Arguments(game: starting, depth: 2),
+      ),
+      benchmark.Data(
+        label: "some position",
+        data: Arguments(game: game2, depth: 2),
+      ),
+    ],
+  )
+}
+
+fn search_game_to_depth(game: game.Game, depth: Int) {
   let memo = search.tt_new(timestamp.system_time())
   let subject = process.new_subject()
-  let start_time = timestamp.system_time()
-  let search_pid =
+  let _search_pid =
     search.new(
       game,
       memo,
       subject,
-      search.SearchOpts(max_depth: option.Some(2)),
+      search.SearchOpts(max_depth: option.Some(depth)),
     )
 
-  io.println_error("Searching through: " <> fen)
   yielder.repeat(subject)
   |> yielder.take_while(fn(subject) {
     case process.receive_forever(subject) {
-      search.SearchDone(best_evaluation:, game: _, transposition: _) -> {
-        let end_time = timestamp.system_time()
-
-        io.println_error(
-          "Got best move at depth "
-          <> int.to_string(depth)
-          <> " in: "
-          <> {
-            timestamp.difference(start_time, end_time)
-            |> duration.to_seconds
-            |> float.to_string
-          }
-          <> " seconds",
-        )
-
-        best_evaluation.best_move
-        |> option.map(move.to_lan)
-        |> string.inspect
-        |> io.println_error
-
-        False
-      }
+      search.SearchDone(_, _, _) -> False
       search.SearchUpdate(_, _, _) -> True
     }
   })
   |> yielder.run
-  process.unlink(search_pid)
-  process.kill(search_pid)
 }

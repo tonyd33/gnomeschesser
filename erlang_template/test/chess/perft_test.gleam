@@ -1,9 +1,5 @@
 import chess/game
 import chess/util/perft
-import gleam/erlang
-import gleam/float
-import gleam/int
-import gleam/io
 import gleeunit/should
 
 pub fn perft_starting_position_test() {
