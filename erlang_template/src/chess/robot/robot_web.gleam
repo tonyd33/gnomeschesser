@@ -15,6 +15,7 @@ pub opaque type Robot {
 }
 
 type RobotMessage {
+  ApplyMove(move: move.Move(move.ValidInContext))
   UpdateGame(game: game.Game)
   SearcherMessage(message: search.SearchMessage)
   GetBestEvaluation(response: Subject(Result(search.Evaluation, Nil)))
@@ -31,6 +32,38 @@ type RobotState {
 
 pub fn init() -> Robot {
   Robot(main_subject: create_robot_thread())
+}
+
+/// Updates the robot to specified FEN and then
+/// waits a certain number of milliseconds before getting
+/// the best move
+/// If there's only 1 move the robot responds immediately 
+pub fn get_best_move_from_fen_by(
+  robot: Robot,
+  fen: String,
+  by: Int,
+) -> Result(move.Move(move.ValidInContext), Nil) {
+  let assert Ok(game) = game.load_fen(fen)
+  process.send(robot.main_subject, UpdateGame(game))
+
+  let valid_moves = game.valid_moves(game)
+  case valid_moves {
+    [] -> Error(Nil)
+    [one_move] -> {
+      process.send(robot.main_subject, ApplyMove(one_move))
+      one_move |> Ok
+    }
+    _ -> {
+      // TODO: adjust the sleep duration so that it's more precise from any work done in between
+      // atm it looks like there's no delay anyways?
+      process.sleep(by)
+      use evaluation <- result.then(process.call_forever(
+        robot.main_subject,
+        GetBestEvaluation,
+      ))
+      option.to_result(evaluation.best_move, Nil)
+    }
+  }
 }
 
 /// This updates the robot with a new FEN (which will start a search)
@@ -95,13 +128,16 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
   let message = process.select_forever(update)
   let state = case message {
     UpdateGame(game) -> update_state_with_new_game(state, game)
+    ApplyMove(move) ->
+      game.apply(state.game, move)
+      |> update_state_with_new_game(state, _)
     GetBestEvaluation(response:) -> {
       state.best_evaluation
       |> option.to_result(Nil)
       |> process.send(response, _)
 
       io.println_error("Requested best move")
-      echo state.best_evaluation
+      //echo state.best_evaluation
 
       // We should do any cleanup or extra calculations while the opponent has their turn
       case state.best_evaluation {

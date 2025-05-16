@@ -3,11 +3,13 @@ import chess/move
 import chess/player
 import chess/search
 import chess/uci
+import gleam/bool
 import gleam/erlang/process.{type Subject}
 import gleam/function
 import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/pair
 import gleam/result
 import gleam/time/timestamp
 import util/xint
@@ -144,7 +146,6 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
                     best_move:,
                     best_line:,
                   ) = best_evaluation
-
                   option.map(best_move, fn(best_move) {
                     let info_score_list = [
                       uci.ScoreCentipawns(
@@ -167,6 +168,10 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
                     |> io.println
                   })
 
+                  use <- bool.guard(
+                    option.is_none(best_move),
+                    RobotState(..state, memo:),
+                  )
                   RobotState(
                     ..state,
                     best_evaluation: Some(best_evaluation),
@@ -280,10 +285,15 @@ fn start_searcher(
     process.unlink(pid)
     process.kill(pid)
   })
-
-  let pid =
-    state.game
-    |> option.map(search.new(_, state.memo, state.searcher.1, search_opts))
-
-  RobotState(..state, searcher: #(pid, state.searcher.1))
+  // don't bother running the search if there's no valid moves
+  case state.game {
+    Some(game) ->
+      case game.valid_moves(game) {
+        [] -> None
+        _ -> search.new(game, state.memo, state.searcher.1, search_opts) |> Some
+      }
+    None -> None
+  }
+  |> pair.new(state.searcher.1)
+  |> fn(searcher) { RobotState(..state, searcher:, best_evaluation: None) }
 }
