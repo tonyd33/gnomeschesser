@@ -95,7 +95,7 @@ fn search(
   current_depth: Depth,
   opts: SearchOpts,
 ) -> State(SearchContext, Nil) {
-  let game_hash = zobrist.hash(game)
+  let game_hash = game.hash(game)
   use cached_evaluation <- state.do(tt_get_s(game_hash))
 
   // perform the search at each depth, the negamax function will handle sorting and caching
