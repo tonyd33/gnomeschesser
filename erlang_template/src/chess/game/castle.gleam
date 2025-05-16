@@ -7,6 +7,22 @@ pub type Castle {
   QueenSide
 }
 
+pub type CastlingAvailability {
+  CastlingAvailability(
+    white_kingside: Bool,
+    white_queenside: Bool,
+    black_kingside: Bool,
+    black_queenside: Bool,
+  )
+}
+
+pub const no_castling_availability = CastlingAvailability(
+  white_kingside: False,
+  white_queenside: False,
+  black_kingside: False,
+  black_queenside: False,
+)
+
 pub const kingside_file = 6
 
 pub const queenside_file = 1

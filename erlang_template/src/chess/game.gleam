@@ -24,7 +24,7 @@ pub opaque type Game {
     board: Dict(square.Square, piece.Piece),
     bitboard: bitboard.GameBitboard,
     active_color: player.Player,
-    castling_availability: List(#(player.Player, Castle)),
+    castling_availability: castle.CastlingAvailability,
     en_passant_target_square: Option(#(player.Player, square.Square)),
     halfmove_clock: Int,
     fullmove_number: Int,
@@ -114,16 +114,34 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
   let castling_availability =
     castling_availability
     |> string.to_graphemes
-    |> list.fold([], fn(castling_availability, char) {
-      castling_availability
-      |> list.append(case char {
-        "K" -> [#(player.White, KingSide)]
-        "Q" -> [#(player.White, QueenSide)]
-        "k" -> [#(player.Black, KingSide)]
-        "q" -> [#(player.Black, QueenSide)]
-        _ -> []
-      })
-    })
+    |> list.fold(
+      castle.no_castling_availability,
+      fn(castling_availability, char) {
+        case char {
+          "K" ->
+            castle.CastlingAvailability(
+              ..castling_availability,
+              white_kingside: True,
+            )
+          "Q" ->
+            castle.CastlingAvailability(
+              ..castling_availability,
+              white_queenside: True,
+            )
+          "k" ->
+            castle.CastlingAvailability(
+              ..castling_availability,
+              black_kingside: True,
+            )
+          "q" ->
+            castle.CastlingAvailability(
+              ..castling_availability,
+              black_queenside: True,
+            )
+          _ -> castling_availability
+        }
+      },
+    )
 
   let active_color = case active_color {
     "w" -> player.White
@@ -170,7 +188,24 @@ pub fn hash(game: Game) -> Hash {
 }
 
 pub fn castling_availability(game: Game) -> List(#(player.Player, Castle)) {
-  game.castling_availability
+  let x = []
+  let x = case game.castling_availability.black_queenside {
+    True -> [#(player.Black, QueenSide), ..x]
+    False -> x
+  }
+  let x = case game.castling_availability.black_kingside {
+    True -> [#(player.Black, KingSide), ..x]
+    False -> x
+  }
+  let x = case game.castling_availability.white_queenside {
+    True -> [#(player.White, QueenSide), ..x]
+    False -> x
+  }
+  let x = case game.castling_availability.white_kingside {
+    True -> [#(player.White, KingSide), ..x]
+    False -> x
+  }
+  x
 }
 
 pub fn en_passant_target_square(
@@ -238,7 +273,7 @@ pub fn to_fen(game: Game) -> String {
   let halfmove_clock_string = int.to_string(game.halfmove_clock)
   let fullmove_number_string = int.to_string(game.fullmove_number)
   let castling_rights_string =
-    game.castling_availability
+    castling_availability(game)
     |> list.filter_map(fn(val) {
       case val {
         #(player.White, KingSide) -> Ok("K")
@@ -412,9 +447,14 @@ pub fn pieces(game: Game) -> List(#(square.Square, piece.Piece)) {
 }
 
 pub fn has_castled(game: Game, player: player.Player) {
-  game.castling_availability
-  |> list.find(fn(x) { x.0 == player })
-  |> result.is_ok
+  case player {
+    player.White ->
+      !game.castling_availability.white_kingside
+      || !game.castling_availability.white_queenside
+    player.Black ->
+      !game.castling_availability.black_kingside
+      || !game.castling_availability.black_queenside
+  }
 }
 
 pub fn can_castle(game: Game, player: player.Player) {
@@ -681,30 +721,83 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
   }
 
   // update castling availibility based on new game state
-  let castling_availability =
+  let castling_availability = {
+    let we_castled = move_context.castling |> option.is_some
+    let we_moved_king = piece == piece.Piece(us, piece.King)
+
+    let castling_availability = case we_castled || we_moved_king {
+      True ->
+        case us {
+          player.White ->
+            castle.CastlingAvailability(
+              ..castling_availability,
+              white_kingside: False,
+              white_queenside: False,
+            )
+          player.Black ->
+            castle.CastlingAvailability(
+              ..castling_availability,
+              black_kingside: False,
+              black_queenside: False,
+            )
+        }
+      False -> castling_availability
+    }
+    // Did we move a rook? Then disable it
+    let castling_availability = case us, piece, square.to_ox88(from) {
+      player.White, piece.Piece(_, piece.Rook), 0x07 ->
+        castle.CastlingAvailability(
+          ..castling_availability,
+          white_kingside: False,
+        )
+      player.White, piece.Piece(_, piece.Rook), 0x00 ->
+        castle.CastlingAvailability(
+          ..castling_availability,
+          white_queenside: False,
+        )
+      player.Black, piece.Piece(_, piece.Rook), 0x77 ->
+        castle.CastlingAvailability(
+          ..castling_availability,
+          black_kingside: False,
+        )
+      player.Black, piece.Piece(_, piece.Rook), 0x70 ->
+        castle.CastlingAvailability(
+          ..castling_availability,
+          black_queenside: False,
+        )
+      _, _, _ -> castling_availability
+    }
+    // Did we kill their rook? Then disable it
+    let castling_availability = case
+      them,
+      move_context.capture,
+      square.to_ox88(to)
+    {
+      player.White, Some(#(_, piece.Piece(_, piece.Rook))), 0x07 ->
+        castle.CastlingAvailability(
+          ..castling_availability,
+          white_kingside: False,
+        )
+      player.White, Some(#(_, piece.Piece(_, piece.Rook))), 0x00 ->
+        castle.CastlingAvailability(
+          ..castling_availability,
+          white_queenside: False,
+        )
+      player.Black, Some(#(_, piece.Piece(_, piece.Rook))), 0x77 ->
+        castle.CastlingAvailability(
+          ..castling_availability,
+          black_kingside: False,
+        )
+      player.Black, Some(#(_, piece.Piece(_, piece.Rook))), 0x70 ->
+        castle.CastlingAvailability(
+          ..castling_availability,
+          black_queenside: False,
+        )
+      _, _, _ -> castling_availability
+    }
+
     castling_availability
-    |> list.filter(fn(x) {
-      let #(player, castle) = x
-      use <- bool.guard(
-        !{
-          // This expression returns false to short-circuit
-          // If it's not us, continue the checks
-          use <- bool.guard(player != us, True)
-          // If we castled, remove this availability
-          use <- bool.guard(move_context.castling |> option.is_some, False)
-          // Otherwise, check if our king has moved
-          use <- bool.guard(piece == piece.Piece(player, piece.King), False)
-          // Otherwise, continue the check
-          True
-        },
-        False,
-      )
-      // check if the rooks are in the initial position
-      let rook_in_starting_square =
-        castle.rook_start_position(player, castle) |> dict.get(board, _)
-        == Ok(piece.Piece(player, piece.Rook))
-      rook_in_starting_square
-    })
+  }
 
   let fullmove_number = case us {
     player.Black -> fullmove_number + 1
@@ -756,6 +849,37 @@ pub fn validate_move(
   game: Game,
 ) -> Result(move.Move(move.ValidInContext), Nil) {
   valid_moves(game) |> list.find(move.equal(_, move))
+}
+
+fn generate_castle_move(game: Game, castle_player, castle) {
+  let us = game.active_color
+  let them = player.opponent(us)
+
+  use <- bool.guard(castle_player != us, Error(Nil))
+  let occupancy_blocked =
+    castle.occupancy_squares(us, castle)
+    |> list.any(fn(square) { dict.get(game.board, square) |> result.is_ok })
+  use <- bool.guard(occupancy_blocked, Error(Nil))
+  let attacked_somewhere =
+    castle.unattacked_squares(us, castle)
+    |> list.any(square.is_attacked_at(game.board, _, them))
+  use <- bool.guard(attacked_somewhere, Error(Nil))
+
+  let rank = square.player_rank(us)
+  let to_file = case castle {
+    castle.KingSide -> 6
+    castle.QueenSide -> 2
+  }
+  let assert Ok(from) = square.from_rank_file(rank, square.king_file)
+  let assert Ok(to) = square.from_rank_file(rank, to_file)
+  let context =
+    move.Context(
+      capture: None,
+      piece: piece.Piece(us, piece.King),
+      castling: Some(castle),
+    )
+    |> Some
+  move.new_valid(from:, to:, promotion: None, context:) |> Ok
 }
 
 /// generate valid moves
@@ -1064,35 +1188,126 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
   let castling_moves = {
     // if there's already an attacker, just don't try castling
     use <- bool.guard(!list.is_empty(king_attackers), [])
-    game.castling_availability
-    |> list.filter_map(fn(x) {
-      let #(castle_player, castle) = x
-      use <- bool.guard(castle_player != us, Error(Nil))
-      let occupancy_blocked =
-        castle.occupancy_squares(us, castle)
-        |> list.any(fn(square) { dict.get(game.board, square) |> result.is_ok })
-      use <- bool.guard(occupancy_blocked, Error(Nil))
-      let attacked_somewhere =
-        castle.unattacked_squares(us, castle)
-        |> list.any(square.is_attacked_at(game.board, _, them))
-      use <- bool.guard(attacked_somewhere, Error(Nil))
 
-      let rank = square.player_rank(us)
-      let to_file = case castle {
-        castle.KingSide -> 6
-        castle.QueenSide -> 2
+    // Yes, this is actually more performant.
+    let castle_moves = []
+    let castle_moves = case us {
+      player.White -> {
+        // case game.castling_availability {
+        //   castle.CastlingAvailability(
+        //     white_kingside: True,
+        //     white_queenside: False,
+        //     black_kingside: _,
+        //     black_queenside: _,
+        //   ) ->
+        //     case generate_castle_move(game, player.White, KingSide) {
+        //       Ok(m) -> [m]
+        //       Error(_) -> []
+        //     }
+        //   castle.CastlingAvailability(
+        //     white_kingside: False,
+        //     white_queenside: True,
+        //     black_kingside: _,
+        //     black_queenside: _,
+        //   ) ->
+        //     case generate_castle_move(game, player.White, QueenSide) {
+        //       Ok(m) -> [m]
+        //       Error(_) -> []
+        //     }
+        //   castle.CastlingAvailability(
+        //     white_kingside: True,
+        //     white_queenside: True,
+        //     black_kingside: _,
+        //     black_queenside: _,
+        //   ) ->
+        //     case
+        //       generate_castle_move(game, player.White, QueenSide),
+        //       generate_castle_move(game, player.White, QueenSide)
+        //     {
+        //       Ok(m1), Ok(m2) -> [m1, m2]
+        //       Ok(m1), Error(_) -> [m1]
+        //       Error(_), Ok(m2) -> [m2]
+        //       _, _ -> []
+        //     }
+        //   _ -> []
+        // }
+        let castle_moves = case game.castling_availability.white_kingside {
+          True ->
+            case generate_castle_move(game, player.White, KingSide) {
+              Ok(m) -> [m, ..castle_moves]
+              Error(_) -> castle_moves
+            }
+          False -> castle_moves
+        }
+        let castle_moves = case game.castling_availability.white_queenside {
+          True ->
+            case generate_castle_move(game, player.White, QueenSide) {
+              Ok(m) -> [m, ..castle_moves]
+              Error(_) -> castle_moves
+            }
+          False -> castle_moves
+        }
+        castle_moves
       }
-      let assert Ok(from) = square.from_rank_file(rank, square.king_file)
-      let assert Ok(to) = square.from_rank_file(rank, to_file)
-      let context =
-        move.Context(
-          capture: None,
-          piece: piece.Piece(us, piece.King),
-          castling: Some(castle),
-        )
-        |> Some
-      move.new_valid(from:, to:, promotion: None, context:) |> Ok
-    })
+      player.Black -> {
+        // case game.castling_availability {
+        //   castle.CastlingAvailability(
+        //     white_kingside: _,
+        //     white_queenside: _,
+        //     black_kingside: True,
+        //     black_queenside: False,
+        //   ) ->
+        //     case generate_castle_move(game, player.Black, KingSide) {
+        //       Ok(m) -> [m]
+        //       Error(_) -> []
+        //     }
+        //   castle.CastlingAvailability(
+        //     white_kingside: _,
+        //     white_queenside: _,
+        //     black_kingside: False,
+        //     black_queenside: True,
+        //   ) ->
+        //     case generate_castle_move(game, player.Black, QueenSide) {
+        //       Ok(m) -> [m]
+        //       Error(_) -> []
+        //     }
+        //   castle.CastlingAvailability(
+        //     white_kingside: _,
+        //     white_queenside: _,
+        //     black_kingside: True,
+        //     black_queenside: True,
+        //   ) ->
+        //     case
+        //       generate_castle_move(game, player.Black, QueenSide),
+        //       generate_castle_move(game, player.Black, QueenSide)
+        //     {
+        //       Ok(m1), Ok(m2) -> [m1, m2]
+        //       Ok(m1), Error(_) -> [m1]
+        //       Error(_), Ok(m2) -> [m2]
+        //       _, _ -> []
+        //     }
+        //   _ -> []
+        // }
+        let castle_moves = case game.castling_availability.black_kingside {
+          True ->
+            case generate_castle_move(game, player.Black, KingSide) {
+              Ok(m) -> [m, ..castle_moves]
+              Error(_) -> castle_moves
+            }
+          False -> castle_moves
+        }
+        let castle_moves = case game.castling_availability.black_queenside {
+          True ->
+            case generate_castle_move(game, player.Black, QueenSide) {
+              Ok(m) -> [m, ..castle_moves]
+              Error(_) -> castle_moves
+            }
+          False -> castle_moves
+        }
+        castle_moves
+      }
+    }
+    castle_moves
   }
 
   list.flatten([king_moves, regular_moves, en_passant_move, castling_moves])
@@ -1101,9 +1316,6 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
 // Zobrist below
 
 // A zobrist implementation that matches http://hgm.nubati.net/book_format.html
-// TODO: Implement cheap updates to zobrist based on move applied
-// We can probably keep the zobrist stuff in this file by removing the dependency for game.gleam
-// Or we just move all of this into game.gleam
 
 const piece_offset = 0
 
@@ -1137,7 +1349,7 @@ fn compute_zobrist_hash_impl(
   us: player.Player,
   board: Dict(square.Square, piece.Piece),
   bb: bitboard.GameBitboard,
-  castling_availability: List(#(player.Player, Castle)),
+  castling_availability: castle.CastlingAvailability,
   en_passant_target_square: Option(#(player.Player, square.Square)),
 ) -> Hash {
   let piece_hash =
@@ -1164,18 +1376,25 @@ fn compute_zobrist_hash_impl(
   |> int.bitwise_exclusive_or(turn_hash)
 }
 
-fn castle_hash(castling_availability) {
-  castling_availability
-  |> list.fold(0x0, fn(acc, x) {
-    let castle_type = case x {
-      #(player.White, castle.KingSide) -> 0
-      #(player.White, castle.QueenSide) -> 1
-      #(player.Black, castle.KingSide) -> 2
-      #(player.Black, castle.QueenSide) -> 3
-    }
-    let assert Ok(hash) = get_hash(castle_type + castle_offset)
-    int.bitwise_exclusive_or(acc, hash)
-  })
+fn castle_hash(castling_availability: castle.CastlingAvailability) {
+  let hash = 0x0
+  let hash = case castling_availability.white_kingside {
+    True -> int.bitwise_exclusive_or(hash, hashes.768)
+    False -> hash
+  }
+  let hash = case castling_availability.white_queenside {
+    True -> int.bitwise_exclusive_or(hash, hashes.769)
+    False -> hash
+  }
+  let hash = case castling_availability.black_kingside {
+    True -> int.bitwise_exclusive_or(hash, hashes.770)
+    False -> hash
+  }
+  let hash = case castling_availability.black_queenside {
+    True -> int.bitwise_exclusive_or(hash, hashes.771)
+    False -> hash
+  }
+  hash
 }
 
 fn ep_hash(
