@@ -51,10 +51,7 @@ fn handle_move(request: Request, robot: robot.Robot) -> Response {
     Ok(MoveRequest(fen:, turn: _, failed_moves:)) -> {
       robot.update_fen(robot, fen, failed_moves)
 
-      // TODO: do more precise timing so we can squeeze the most thinking time
-      // Also to avoid any surprises here
-      process.sleep(4900)
-      case robot.get_best_move(robot) {
+      case robot.get_best_move_from_fen_by(robot, fen, 4900) {
         Ok(move) -> wisp.ok() |> wisp.string_body(move.to_lan(move))
         Error(Nil) ->
           wisp.internal_server_error()

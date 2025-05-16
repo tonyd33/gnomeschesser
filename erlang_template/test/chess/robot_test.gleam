@@ -21,3 +21,16 @@ pub fn robot_web_test_() {
   |> result.map(move.to_lan)
   |> should.equal(Ok("g4f2"))
 }
+
+pub fn robot_mating_position_test_() {
+  use <- Timeout(15.0)
+  let robot = robot_web.init()
+
+  robot_web.get_best_move_from_fen_by(
+    robot,
+    "1k6/ppppp3/ppppp3/8/8/8/8/K6R w - - 0 1",
+    500,
+  )
+  |> result.map(move.to_lan)
+  |> should.equal(Ok("h1h8"))
+}

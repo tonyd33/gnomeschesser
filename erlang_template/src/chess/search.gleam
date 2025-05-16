@@ -133,6 +133,23 @@ fn search(
   use _ <- state.do(tt_zero(now))
   use tt <- state.do(state.get())
 
+  let best_evaluation = case best_evaluation.best_move {
+    Some(_) -> best_evaluation
+    None -> {
+      let valid_moves =
+        game.valid_moves(game)
+        |> list.shuffle()
+      // get a random move if we are in checkmate
+      let random_move = valid_moves |> list.first |> option.from_result
+      Evaluation(
+        ..best_evaluation,
+        best_move: random_move,
+        best_line: [random_move]
+          |> option.values,
+      )
+    }
+  }
+  // This can send a best_move of None if we're in checkmate
   process.send(
     search_subject,
     SearchUpdate(best_evaluation:, game:, transposition: tt),
@@ -148,7 +165,14 @@ fn search(
       )
       state.return(Nil)
     }
-    _ -> search(search_subject, game, current_depth + 1, opts)
+    _ -> {
+      // terminate the search if we detect we're in mate
+      let is_mating_situation =
+        best_evaluation.score == xint.PosInf
+        || best_evaluation.score == xint.NegInf
+      use <- bool.guard(is_mating_situation, state.return(Nil))
+      search(search_subject, game, current_depth + 1, opts)
+    }
   }
 }
 
@@ -167,10 +191,11 @@ fn search_with_widening_windows(
     alpha,
     beta,
   ))
-  case best_evaluation {
-    Evaluation(score: _, node_type: PV, best_move: _, best_line: _) ->
-      state.return(best_evaluation)
-    Evaluation(score:, node_type: All, best_move: _, best_line: _) -> {
+  case best_evaluation.score, best_evaluation.node_type {
+    // if it's inf means it's already hit the highest bound
+    // no point in searching more
+    _, PV | xint.PosInf, _ | xint.NegInf, _ -> state.return(best_evaluation)
+    score, All -> {
       search_with_widening_windows(
         game,
         depth,
@@ -179,7 +204,7 @@ fn search_with_widening_windows(
         attempts + 1,
       )
     }
-    Evaluation(score:, node_type: Cut, best_move: _, best_line: _) -> {
+    score, Cut -> {
       search_with_widening_windows(
         game,
         depth,
@@ -298,19 +323,18 @@ fn do_negamax_alphabeta_failsoft(
             best_line: [move, ..evaluation.best_line],
           )
         let best_evaluation = case
-          xint.lt(best_evaluation.score, evaluation.score)
+          xint.gt(evaluation.score, best_evaluation.score)
         {
           True -> evaluation
           False -> best_evaluation
         }
         let alpha = xint.max(alpha, evaluation.score)
-
-        state.return(#(evaluation, best_evaluation, alpha))
+        state.return(#(best_evaluation, alpha))
       }
       |> state.fmap(fn(x) {
         // beta-cutoff
-        let #(evaluation, best_evaluation, alpha) = x
-        case xint.gte(evaluation.score, beta) {
+        let #(best_evaluation, alpha) = x
+        case xint.gte(best_evaluation.score, beta) {
           True -> {
             let best_evaluation = Evaluation(..best_evaluation, node_type: Cut)
             list.Stop(#(best_evaluation, alpha))
