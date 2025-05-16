@@ -84,7 +84,7 @@ pub fn game(game: game.Game) -> ExtendedInt {
 ///
 pub fn king_safety(game: game.Game) -> Int {
   let us = game.turn(game)
-  let king_square = game.find_player_king(game, us)
+  let assert Ok(#(king_square, _)) = game.find_player_king(game, us)
 
   // Pawn shield: When the king has castled, it is important to preserve
   // pawns next to it, in order to protect it against the assault. Generally

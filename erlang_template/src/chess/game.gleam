@@ -447,18 +447,18 @@ pub fn pieces(game: Game) -> List(#(square.Square, piece.Piece)) {
 }
 
 pub fn has_castled(game: Game, player: player.Player) {
-  case player {
-    player.White ->
-      !game.castling_availability.white_kingside
-      || !game.castling_availability.white_queenside
-    player.Black ->
-      !game.castling_availability.black_kingside
-      || !game.castling_availability.black_queenside
-  }
+  !can_castle(game, player)
 }
 
 pub fn can_castle(game: Game, player: player.Player) {
-  !has_castled(game, player)
+  case player {
+    player.White ->
+      game.castling_availability.white_kingside
+      || game.castling_availability.white_queenside
+    player.Black ->
+      game.castling_availability.black_kingside
+      || game.castling_availability.black_queenside
+  }
 }
 
 // There are functions that require the game state as well as move, those will go here
@@ -838,9 +838,12 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
   game
 }
 
-pub fn find_player_king(game: Game, player: player.Player) -> square.Square {
-  let assert [a] = find_piece(game, piece.Piece(player, piece.King))
-  a
+pub fn find_player_king(game: Game, player: player.Player) {
+  pieces(game)
+  |> list.find(fn(x) {
+    let #(_, piece) = x
+    piece.symbol == piece.King && piece.player == player
+  })
 }
 
 // TODO: bring back explicitly validating it
@@ -1190,121 +1193,86 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
     use <- bool.guard(!list.is_empty(king_attackers), [])
 
     // Yes, this is actually more performant.
-    let castle_moves = []
     let castle_moves = case us {
       player.White -> {
-        // case game.castling_availability {
-        //   castle.CastlingAvailability(
-        //     white_kingside: True,
-        //     white_queenside: False,
-        //     black_kingside: _,
-        //     black_queenside: _,
-        //   ) ->
-        //     case generate_castle_move(game, player.White, KingSide) {
-        //       Ok(m) -> [m]
-        //       Error(_) -> []
-        //     }
-        //   castle.CastlingAvailability(
-        //     white_kingside: False,
-        //     white_queenside: True,
-        //     black_kingside: _,
-        //     black_queenside: _,
-        //   ) ->
-        //     case generate_castle_move(game, player.White, QueenSide) {
-        //       Ok(m) -> [m]
-        //       Error(_) -> []
-        //     }
-        //   castle.CastlingAvailability(
-        //     white_kingside: True,
-        //     white_queenside: True,
-        //     black_kingside: _,
-        //     black_queenside: _,
-        //   ) ->
-        //     case
-        //       generate_castle_move(game, player.White, QueenSide),
-        //       generate_castle_move(game, player.White, QueenSide)
-        //     {
-        //       Ok(m1), Ok(m2) -> [m1, m2]
-        //       Ok(m1), Error(_) -> [m1]
-        //       Error(_), Ok(m2) -> [m2]
-        //       _, _ -> []
-        //     }
-        //   _ -> []
-        // }
-        let castle_moves = case game.castling_availability.white_kingside {
-          True ->
+        case game.castling_availability {
+          castle.CastlingAvailability(
+            white_kingside: True,
+            white_queenside: False,
+            black_kingside: _,
+            black_queenside: _,
+          ) ->
             case generate_castle_move(game, player.White, KingSide) {
-              Ok(m) -> [m, ..castle_moves]
-              Error(_) -> castle_moves
+              Ok(m) -> [m]
+              Error(_) -> []
             }
-          False -> castle_moves
-        }
-        let castle_moves = case game.castling_availability.white_queenside {
-          True ->
+          castle.CastlingAvailability(
+            white_kingside: False,
+            white_queenside: True,
+            black_kingside: _,
+            black_queenside: _,
+          ) ->
             case generate_castle_move(game, player.White, QueenSide) {
-              Ok(m) -> [m, ..castle_moves]
-              Error(_) -> castle_moves
+              Ok(m) -> [m]
+              Error(_) -> []
             }
-          False -> castle_moves
+          castle.CastlingAvailability(
+            white_kingside: True,
+            white_queenside: True,
+            black_kingside: _,
+            black_queenside: _,
+          ) ->
+            case
+              generate_castle_move(game, player.White, KingSide),
+              generate_castle_move(game, player.White, QueenSide)
+            {
+              Ok(m1), Ok(m2) -> [m1, m2]
+              Ok(m1), Error(_) -> [m1]
+              Error(_), Ok(m2) -> [m2]
+              _, _ -> []
+            }
+          _ -> []
         }
-        castle_moves
       }
       player.Black -> {
-        // case game.castling_availability {
-        //   castle.CastlingAvailability(
-        //     white_kingside: _,
-        //     white_queenside: _,
-        //     black_kingside: True,
-        //     black_queenside: False,
-        //   ) ->
-        //     case generate_castle_move(game, player.Black, KingSide) {
-        //       Ok(m) -> [m]
-        //       Error(_) -> []
-        //     }
-        //   castle.CastlingAvailability(
-        //     white_kingside: _,
-        //     white_queenside: _,
-        //     black_kingside: False,
-        //     black_queenside: True,
-        //   ) ->
-        //     case generate_castle_move(game, player.Black, QueenSide) {
-        //       Ok(m) -> [m]
-        //       Error(_) -> []
-        //     }
-        //   castle.CastlingAvailability(
-        //     white_kingside: _,
-        //     white_queenside: _,
-        //     black_kingside: True,
-        //     black_queenside: True,
-        //   ) ->
-        //     case
-        //       generate_castle_move(game, player.Black, QueenSide),
-        //       generate_castle_move(game, player.Black, QueenSide)
-        //     {
-        //       Ok(m1), Ok(m2) -> [m1, m2]
-        //       Ok(m1), Error(_) -> [m1]
-        //       Error(_), Ok(m2) -> [m2]
-        //       _, _ -> []
-        //     }
-        //   _ -> []
-        // }
-        let castle_moves = case game.castling_availability.black_kingside {
-          True ->
+        case game.castling_availability {
+          castle.CastlingAvailability(
+            white_kingside: _,
+            white_queenside: _,
+            black_kingside: True,
+            black_queenside: False,
+          ) ->
             case generate_castle_move(game, player.Black, KingSide) {
-              Ok(m) -> [m, ..castle_moves]
-              Error(_) -> castle_moves
+              Ok(m) -> [m]
+              Error(_) -> []
             }
-          False -> castle_moves
-        }
-        let castle_moves = case game.castling_availability.black_queenside {
-          True ->
+          castle.CastlingAvailability(
+            white_kingside: _,
+            white_queenside: _,
+            black_kingside: False,
+            black_queenside: True,
+          ) ->
             case generate_castle_move(game, player.Black, QueenSide) {
-              Ok(m) -> [m, ..castle_moves]
-              Error(_) -> castle_moves
+              Ok(m) -> [m]
+              Error(_) -> []
             }
-          False -> castle_moves
+          castle.CastlingAvailability(
+            white_kingside: _,
+            white_queenside: _,
+            black_kingside: True,
+            black_queenside: True,
+          ) ->
+            case
+              generate_castle_move(game, player.Black, KingSide),
+              generate_castle_move(game, player.Black, QueenSide)
+            {
+              Ok(m1), Ok(m2) -> [m1, m2]
+              Ok(m1), Error(_) -> [m1]
+              Error(_), Ok(m2) -> [m2]
+              _, _ -> []
+            }
+          _ -> []
         }
-        castle_moves
       }
     }
     castle_moves
@@ -1318,8 +1286,6 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
 // A zobrist implementation that matches http://hgm.nubati.net/book_format.html
 
 const piece_offset = 0
-
-const castle_offset = 768
 
 const en_passant_offset = 772
 
