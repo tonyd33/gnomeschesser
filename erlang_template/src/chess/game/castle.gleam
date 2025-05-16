@@ -1,7 +1,5 @@
-import chess/bitboard
 import chess/player
 import chess/square
-import gleam/int
 import gleam/list
 
 pub type Castle {

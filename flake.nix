@@ -19,6 +19,7 @@
             # erlang
             erlang
             rebar3 # needed to build
+            elixir
 
             # javascript
             deno
@@ -33,6 +34,7 @@
             ninja
             act
             wget
+            unzip
           ];
         };
       });

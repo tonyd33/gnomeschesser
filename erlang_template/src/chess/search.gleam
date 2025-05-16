@@ -6,7 +6,6 @@ import gleam/dict
 import gleam/erlang/process
 import gleam/float
 import gleam/int
-import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/order
@@ -129,7 +128,7 @@ fn search(
     do: ByRecency(max_tt_recency),
   ))
   let now = timestamp.system_time()
-  use info <- state.do(tt_info_s(now))
+  use _info <- state.do(tt_info_s(now))
 
   use _ <- state.do(tt_zero(now))
   use tt <- state.do(state.get())
@@ -139,7 +138,7 @@ fn search(
     SearchUpdate(best_evaluation:, game:, transposition: tt),
   )
   // TODO: use a logging library for this
-  io.print_error(info)
+  //io.print_error(info)
 
   case opts.max_depth {
     Some(max_depth) if current_depth >= max_depth -> {

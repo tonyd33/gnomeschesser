@@ -8,7 +8,6 @@ import chess/square
 import gleam/bool
 import gleam/dict.{type Dict}
 import gleam/int
-import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/pair
@@ -368,9 +367,9 @@ pub fn is_stalemate(game: Game) -> Bool {
 /// true iff that's the case. See the same function in chess.js:
 /// https://github.com/jhlywa/chess.js/blob/dc1f397bc0195dda45e12f0ddf3322550cbee078/src/chess.ts#L1123
 ///
-pub fn is_insufficient_material(_game: Game) -> Bool {
-  todo
-}
+// pub fn is_insufficient_material(_game: Game) -> Bool {
+//   todo
+// }
 
 pub fn is_draw(_game: Game) -> Bool {
   False
@@ -575,8 +574,6 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
   let to = move.get_to(move)
   let promotion = move.get_promotion(move)
   let move_context = move.get_context(move)
-  // TODO: Remove
-  let prev_game = game
   let Game(
     board:,
     bitboard:,

@@ -22,6 +22,7 @@ jobs:
           otp-version: "27.1.2"
           gleam-version: "1.9.1"
           rebar3-version: "3"
+          elixir-version: "1.18"
       - run: gleam deps download
         working-directory: erlang_template
       - run: gleam test
@@ -41,6 +42,7 @@ jobs:
           otp-version: "27.1.2"
           gleam-version: "1.9.1"
           rebar3-version: "3"
+          elixir-version: "1.18"
 
       - run: gleam deps download
         working-directory: erlang_template
@@ -98,6 +100,7 @@ jobs:
           otp-version: "27.1.2"
           gleam-version: "1.9.1"
           rebar3-version: "3"
+          elixir-version: "1.18"
 
       - run: gleam deps download
         working-directory: erlang_template
@@ -175,6 +178,7 @@ jobs:
           otp-version: "27.1.2"
           gleam-version: "1.9.1"
           rebar3-version: "3"
+          elixir-version: "1.18"
 
       - run: gleam deps download
         working-directory: erlang_template
