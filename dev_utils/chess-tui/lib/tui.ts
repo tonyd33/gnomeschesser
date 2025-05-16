@@ -16,6 +16,7 @@ export type Command =
   | { _sig: "move"; move: string }
   | { _sig: "fen" }
   | { _sig: "load"; fen: string }
+  | { _sig: "perft"; moves: number }
   | { _sig: "loadpgn"; pgn: string }
   | { _sig: "loadpgnfile"; pgnfile: string }
   | { _sig: "undo" }
@@ -155,6 +156,24 @@ export const commands: {
       return ["ok", ctx];
     },
   },
+  perft: {
+    summary: "get perft",
+    args: ["moves"],
+    parser: (args) => {
+      if (args.length !== 1) return ["err", "expected argument"];
+      const moves = parseInt(args[0]);
+      if (isNaN(moves)) return ["err", "needed an int"];
+      return ["ok", { moves }];
+    },
+    handler: async (ctx, { moves }) => {
+      const start = Date.now();
+      const perft = ctx.chess.perft(moves);
+      const end = Date.now();
+      console.log(perft);
+      console.log(`Ran in ${end - start}ms`);
+      return ["ok", ctx];
+    },
+  },
   load: {
     args: ["fen"],
     summary: "load a game",
@@ -186,7 +205,9 @@ export const commands: {
     aliases: ["lpf"],
     print: true,
     parser: (args) =>
-      args.length === 0 ? ["err", "need pgn file"] : ["ok", { pgnfile: args.join(" ") }],
+      args.length === 0
+        ? ["err", "need pgn file"]
+        : ["ok", { pgnfile: args.join(" ") }],
     handler: async (ctx, { pgnfile }) => {
       const pgn = await fs.promises.readFile(pgnfile, "utf8");
       ctx.chess.loadPgn(pgn);
