@@ -155,7 +155,17 @@ jobs:
     runs-on: [self-hosted, linux, x64, fast]
     env:
       ImageOS: ubuntu24
+      REGISTRY: ghcr.io
+
     steps:
+      - name: Log in to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          logout: true
+
       - uses: actions/checkout@v4
         with:
           submodules: true

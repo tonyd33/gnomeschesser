@@ -86,6 +86,8 @@ download_fastchess() {
 
 run_fastchess=$(ls "$repo_root_path"/fastchess/fastchess-*)
 
+docker pull ghcr.io/tonyd33/gleam-chess-tournament/chess-bot
+
 # Run fastchess
 mkdir -p "$results_dir"
 "$run_fastchess" \
