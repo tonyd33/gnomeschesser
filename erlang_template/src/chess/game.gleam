@@ -902,8 +902,8 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
   let #(king_attackers, king_blockers) = {
     let #(attackers, pins) =
       square.attacks_and_pins_to(
-        pieces_yielder,
         game.board,
+        pieces_yielder,
         king_position,
         them,
       )

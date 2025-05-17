@@ -1,4 +1,5 @@
-/// This is a copy of gleam_yielder v1.1.0
+//// This is a copy of gleam_yielder v1.1.0
+
 import gleam/dict.{type Dict}
 import gleam/int
 import gleam/list

@@ -352,8 +352,8 @@ pub fn is_attacked_at(
 /// This is for determining if the king is in check
 /// Returns a list of attackers as well as pinned piece if it exists
 pub fn attacks_and_pins_to(
-  pieces_yielder: yielder.Yielder(#(Square, piece.Piece)),
   board: dict.Dict(Square, piece.Piece),
+  pieces_yielder: yielder.Yielder(#(Square, piece.Piece)),
   at: Square,
   by: player.Player,
 ) -> List(#(Square, option.Option(Square))) {
