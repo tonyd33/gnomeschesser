@@ -25,7 +25,7 @@ pub const king_file = 4
 ///
 /// https://en.wikipedia.org/wiki/0x88
 ///
-pub opaque type Square {
+pub type Square {
   Square(ox88: Int)
 }
 
