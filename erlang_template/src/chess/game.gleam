@@ -30,6 +30,9 @@ pub opaque type Game {
     halfmove_clock: Int,
     fullmove_number: Int,
     hash: Hash,
+    // TODO: Only store en_passant_target_square if there's actually a piece
+    // to take it, and then get rid of this field
+    en_passant_hash: Hash,
   )
 }
 
@@ -162,6 +165,8 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
       castling_availability,
       en_passant_target_square,
     )
+  let en_passant_hash =
+    ep_hash(active_color, bitboard, en_passant_target_square)
 
   Game(
     board:,
@@ -172,6 +177,7 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
     halfmove_clock:,
     fullmove_number:,
     hash:,
+    en_passant_hash:,
   )
   |> Ok
 }
@@ -654,17 +660,16 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     bitboard:,
     castling_availability:,
     active_color: us,
-    en_passant_target_square:,
+    en_passant_target_square: _,
     fullmove_number:,
     halfmove_clock:,
     hash:,
+    en_passant_hash: prev_en_passant_hash,
   ) = game
-  // TODO: We can be very slightly more efficient by perhaps caching this or
-  // accounting for the previous hash smartly. See [Disservin's C++ chess library](https://github.com/Disservin/chess-library/blob/1f60cef1b708a78c02bff473f5de6ef544436560/include/chess.hpp#L2023)
-  let prev_castle_hash = castle_hash(castling_availability)
-  let prev_ep_hash = ep_hash(us, bitboard, en_passant_target_square)
+  let prev_castling_availability = castling_availability
   let them = player.opponent(us)
   let assert Ok(piece) = dict.get(board, from)
+
   // en passant target square update
   // if it's a pawn move and it has a 2 rank difference
   let en_passant_target_square = case move_context.piece.symbol {
@@ -809,34 +814,56 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     _, _ -> halfmove_clock + 1
   }
 
+  let en_passant_hash = ep_hash(them, bitboard, en_passant_target_square)
+  // Turn hash
   let hash =
     hash
-    // Turn
     |> int.bitwise_exclusive_or(zobrist.hashes.780)
     // En passant hash
-    |> int.bitwise_exclusive_or(prev_ep_hash)
-    |> int.bitwise_exclusive_or(ep_hash(
-      them,
-      bitboard,
-      en_passant_target_square,
-    ))
-    // Castle rights
-    |> int.bitwise_exclusive_or(prev_castle_hash)
-    |> int.bitwise_exclusive_or(castle_hash(castling_availability))
+    |> int.bitwise_exclusive_or(prev_en_passant_hash)
+    |> int.bitwise_exclusive_or(en_passant_hash)
 
-  let game =
-    Game(
-      board:,
-      bitboard:,
-      active_color: them,
-      castling_availability:,
-      en_passant_target_square:,
-      fullmove_number:,
-      halfmove_clock:,
-      hash:,
-    )
+  // Castle hash
+  let hash = case prev_castling_availability, castling_availability {
+    castle.CastlingAvailability(True, _, _, _),
+      castle.CastlingAvailability(False, _, _, _)
+    -> int.bitwise_exclusive_or(hash, zobrist.hashes.768)
 
-  game
+    _, _ -> hash
+  }
+  let hash = case prev_castling_availability, castling_availability {
+    castle.CastlingAvailability(_, True, _, _),
+      castle.CastlingAvailability(_, False, _, _)
+    -> int.bitwise_exclusive_or(hash, zobrist.hashes.769)
+
+    _, _ -> hash
+  }
+  let hash = case prev_castling_availability, castling_availability {
+    castle.CastlingAvailability(_, _, True, _),
+      castle.CastlingAvailability(_, _, False, _)
+    -> int.bitwise_exclusive_or(hash, zobrist.hashes.770)
+
+    _, _ -> hash
+  }
+  let hash = case prev_castling_availability, castling_availability {
+    castle.CastlingAvailability(_, _, _, True),
+      castle.CastlingAvailability(_, _, _, False)
+    -> int.bitwise_exclusive_or(hash, zobrist.hashes.771)
+
+    _, _ -> hash
+  }
+
+  Game(
+    board:,
+    bitboard:,
+    active_color: them,
+    castling_availability:,
+    en_passant_target_square:,
+    fullmove_number:,
+    halfmove_clock:,
+    hash:,
+    en_passant_hash:,
+  )
 }
 
 pub fn find_player_king(game: Game, player: player.Player) {

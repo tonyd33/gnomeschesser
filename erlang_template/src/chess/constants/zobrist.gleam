@@ -1,11 +1,12 @@
 //// A zobrist implementation that matches http://hgm.nubati.net/book_format.html
-//// Toss all this shit into its own file so compile times arent slow as fuck
+//// Toss all this shit into its own file so compile times arent slow as fuck.
+//// Update: They're still slow as fuck but I'm not moving this file anymore.
+//// - Tony
 ////
 
 import chess/piece
 import chess/player
 import chess/square
-import gleam/option.{type Option}
 
 pub const piece_offset = 0
 
