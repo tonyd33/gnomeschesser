@@ -43,7 +43,7 @@ pub fn main() {
 }
 
 fn search_game_to_depth(game: game.Game, depth: Int) {
-  let memo = search.tt_new(timestamp.system_time())
+  let memo = search.state_new(timestamp.system_time())
   let subject = process.new_subject()
   let _search_pid =
     search.new(
@@ -56,8 +56,9 @@ fn search_game_to_depth(game: game.Game, depth: Int) {
   yielder.repeat(subject)
   |> yielder.take_while(fn(subject) {
     case process.receive_forever(subject) {
-      search.SearchDone(_, _, _) -> False
-      search.SearchUpdate(_, _, _) -> True
+      search.SearchDone(_, _) -> False
+      search.SearchUpdate(_, _) -> True
+      search.SearchStateUpdate(_) -> True
     }
   })
   |> yielder.run

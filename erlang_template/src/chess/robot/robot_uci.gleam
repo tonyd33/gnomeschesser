@@ -51,7 +51,7 @@ type RobotState {
     game: Option(game.Game),
     best_evaluation: Option(search.Evaluation),
     searcher: #(Option(process.Pid), Subject(search.SearchMessage)),
-    memo: search.TranspositionTable,
+    search_state: search.SearchState,
     subject: Subject(RobotMessage),
   )
 }
@@ -65,7 +65,7 @@ fn create_robot_thread() -> Subject(RobotMessage) {
       let robot_subject: Subject(RobotMessage) = process.new_subject()
       process.send(reply_subject, robot_subject)
 
-      let memo = search.tt_new(timestamp.system_time())
+      let search_state = search.state_new(timestamp.system_time())
       // The search_subject will be used by searchers to update new best moves found
       let search_subject: Subject(search.SearchMessage) = process.new_subject()
 
@@ -74,7 +74,7 @@ fn create_robot_thread() -> Subject(RobotMessage) {
           game: None,
           best_evaluation: None,
           searcher: #(None, search_subject),
-          memo:,
+          search_state:,
           subject: robot_subject,
         ),
         // This selector allows is to merge the different subjects (like from the searcher) into one selector
@@ -137,7 +137,7 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
         // Messages we receive from the Searcher process
         SearcherMessage(message) ->
           case message {
-            search.SearchUpdate(best_evaluation:, game:, transposition: memo) -> {
+            search.SearchUpdate(best_evaluation:, game:) -> {
               case option.map(state.game, game.equal(_, game)) {
                 Some(True) -> {
                   let search.Evaluation(
@@ -168,23 +168,16 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
                     |> io.println
                   })
 
-                  use <- bool.guard(
-                    option.is_none(best_move),
-                    RobotState(..state, memo:),
-                  )
-                  RobotState(
-                    ..state,
-                    best_evaluation: Some(best_evaluation),
-                    memo:,
-                  )
+                  use <- bool.guard(option.is_none(best_move), state)
+                  RobotState(..state, best_evaluation: Some(best_evaluation))
                 }
                 _ -> {
                   echo "received best move for incorrect game"
-                  RobotState(..state, memo:)
+                  state
                 }
               }
             }
-            search.SearchDone(best_evaluation:, game: _, transposition: memo) -> {
+            search.SearchDone(best_evaluation:, game: _) -> {
               // We don't respond to this if there's no search active
               case state.searcher.0 {
                 Some(pid) -> {
@@ -200,15 +193,13 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
                   process.unlink(pid)
                   process.kill(pid)
 
-                  RobotState(
-                    ..state,
-                    searcher: #(None, state.searcher.1),
-                    memo:,
-                  )
+                  RobotState(..state, searcher: #(None, state.searcher.1))
                 }
-                None -> RobotState(..state, memo:)
+                None -> state
               }
             }
+            search.SearchStateUpdate(search_state:) ->
+              RobotState(..state, search_state:)
           }
         GoClock(
           white_time: _,
@@ -290,7 +281,9 @@ fn start_searcher(
     Some(game) ->
       case game.valid_moves(game) {
         [] -> None
-        _ -> search.new(game, state.memo, state.searcher.1, search_opts) |> Some
+        _ ->
+          search.new(game, state.search_state, state.searcher.1, search_opts)
+          |> Some
       }
     None -> None
   }
