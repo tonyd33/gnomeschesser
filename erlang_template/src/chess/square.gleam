@@ -379,7 +379,8 @@ pub fn attacks_and_pins_to(
         piece.Pawn ->
           // Pawns can only attack forwards, so we check which side they're on
           case piece.player, int.compare(difference, 0) {
-            player.Black, order.Gt | player.White, order.Lt -> Ok(#(from, option.None))
+            player.Black, order.Gt | player.White, order.Lt ->
+              Ok(#(from, option.None))
             _, _ -> Error(Nil)
           }
         // These slide, so we check if their path is empty
