@@ -161,9 +161,8 @@ pub fn king_safety(game: game.Game) -> Int {
   pawn_shield_score * 60
 }
 
-/// Piece score based on player side
-fn piece(piece: piece.Piece) -> Int {
-  case piece.symbol {
+pub fn piece_symbol(symbol: piece.PieceSymbol) -> Int {
+  case symbol {
     piece.Pawn -> 100
     piece.Knight -> 300
     piece.Bishop -> 300
@@ -171,7 +170,11 @@ fn piece(piece: piece.Piece) -> Int {
     piece.Queen -> 900
     piece.King -> 0
   }
-  * player(piece.player)
+}
+
+/// Piece score based on player side
+fn piece(piece: piece.Piece) -> Int {
+  piece_symbol(piece.symbol) * player(piece.player)
 }
 
 /// The sign of each player in evaluations

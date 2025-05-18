@@ -1,6 +1,7 @@
 import chess/evaluate
 import chess/game
 import chess/move
+import chess/piece
 import gleam/bool
 import gleam/dict
 import gleam/erlang/process
@@ -280,12 +281,12 @@ fn do_negamax_alphabeta_failsoft(
     |> state.return
   })
 
-  use move_game_list <- state.do({
+  use moves <- state.do({
     use search_state: SearchState <- state.get_value
     sorted_moves(game, search_state.transposition)
   })
 
-  use <- bool.lazy_guard(list.is_empty(move_game_list), fn() {
+  use <- bool.lazy_guard(list.is_empty(moves), fn() {
     // if checkmate/stalemate
     let score = case game.is_check(game, game.turn(game)) {
       True -> xint.NegInf
@@ -299,12 +300,13 @@ fn do_negamax_alphabeta_failsoft(
   // accumulator keeps track of best evaluation while updating the node type
 
   {
-    use #(best_evaluation, alpha), #(move, game) <- state.list_fold_until_s(
-      move_game_list,
-      #(Evaluation(xint.NegInf, PV, None, []), alpha),
-    )
+    use #(best_evaluation, alpha), move <- state.list_fold_until_s(moves, #(
+      Evaluation(xint.NegInf, PV, None, []),
+      alpha,
+    ))
     use #(best_evaluation, alpha): #(Evaluation, ExtendedInt) <- state.map_value(
       {
+        let game = game.apply(game, move)
         use evaluation <- state.do(negamax_alphabeta_failsoft(
           game,
           depth - 1,
@@ -386,40 +388,67 @@ fn quiesce(
 fn sorted_moves(
   game: game.Game,
   transposition: TranspositionTable,
-) -> List(#(move.Move(move.ValidInContext), game.Game)) {
+) -> List(move.Move(move.ValidInContext)) {
+  // the cached PV move
+  let best_move = case dict.get(transposition, game.hash(game)) {
+    Ok(TranspositionEntry(_, evaluation, _)) -> evaluation.best_move
+    Error(Nil) -> None
+  }
+
   // retrieve the cached transposition table data
-  game.valid_moves(game)
-  |> list.filter_map(fn(move) {
-    // TODO: we can probably generate the sorted moves without applying every game
-    // Since we only need the current PV
-    let new_game = game.apply(game, move)
-    let evaluation = case dict.get(transposition, game.hash(new_game)) {
-      Ok(TranspositionEntry(_, evaluation, _)) ->
-        // negate the evaluation so that it's relative to our current game
-        evaluation_negate(evaluation) |> Some
-      Error(Nil) -> None
-    }
-    Ok(#(#(move, new_game), evaluation))
-  })
-  // "smallest" elements get sorted first
-  |> list.sort(fn(a, b) {
-    let #(_a_move, a) = a
-    let #(_b_move, b) = b
-    case a, b {
-      None, None -> order.Eq
-      _, None -> order.Lt
-      None, _ -> order.Gt
-      Some(a), Some(b) -> {
-        case a, b {
-          Evaluation(_, Cut, _, _), _ -> order.Gt
-          _, Evaluation(_, Cut, _, _) -> order.Lt
-          Evaluation(a_score, _, _, _), Evaluation(b_score, _, _, _) ->
-            xint.compare(b_score, a_score)
-        }
+  let valid_moves = game.valid_moves(game)
+  let #(best_move, capture_promotion_moves, quiet_moves) =
+    list.fold(valid_moves, #(None, [], []), fn(acc, move) {
+      // TODO: also count checking moves?
+      let #(best, capture_promotions, quiet) = acc
+
+      // If this is the best move, just return
+      use <- bool.guard(
+        option.map(best_move, move.equal(_, move)) |> option.unwrap(False),
+        #(Some(move), capture_promotions, quiet),
+      )
+
+      // non-quiet moves (captures and promotions get sorted next)
+      let move_context = move.get_context(move)
+      let is_quiet =
+        option.is_none(move_context.capture)
+        && option.is_none(move.get_promotion(move))
+      case is_quiet {
+        True -> #(best, capture_promotions, [move, ..quiet])
+        False -> #(best, [move, ..capture_promotions], quiet)
       }
-    }
-  })
-  |> list.map(pair.first)
+    })
+
+  // We use MVV-LVA for sorting capture_promotion moves
+  let capture_promotion_moves =
+    capture_promotion_moves
+    // first we sort least valuable attacker, least valuable first
+    // for promotions, we count it as the promoted piece
+    |> list.sort(fn(move1, move2) {
+      let piece1 = move.get_context(move1).piece.symbol
+      let piece1 =
+        move.get_promotion(move1)
+        |> option.unwrap(piece1)
+      let piece2 = move.get_context(move2).piece.symbol
+      let piece2 =
+        move.get_promotion(move2)
+        |> option.unwrap(piece2)
+      int.compare(evaluate.piece_symbol(piece1), evaluate.piece_symbol(piece2))
+    })
+    // then we sort most valuable victim, most valuable first
+    |> list.sort(fn(move1, move2) {
+      case move.get_context(move1).capture, move.get_context(move2).capture {
+        Some(#(_, piece.Piece(_, a))), Some(#(_, piece.Piece(_, b))) ->
+          int.compare(evaluate.piece_symbol(b), evaluate.piece_symbol(a))
+        Some(_), _ -> order.Lt
+        _, Some(_) -> order.Gt
+        _, _ -> order.Eq
+      }
+    })
+
+  let non_best_move = list.append(capture_promotion_moves, quiet_moves)
+  option.map(best_move, fn(best_move) { [best_move, ..non_best_move] })
+  |> option.unwrap(non_best_move)
 }
 
 pub type SearchState {
