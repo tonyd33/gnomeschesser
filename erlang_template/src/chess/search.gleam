@@ -189,13 +189,15 @@ fn search_with_widening_windows(
 
 /// https://www.chessprogramming.org/Alpha-Beta#Negamax_Framework
 /// returns the score of the current game searched at depth
+/// 
 /// uses negamax version of alpha beta pruning with failsoft
 /// scores are from the perspective of the active player
 /// If white's turn, +1 is white's advantage
 /// If black's turn, +1 is black's advantage
 /// alpha is the "best" score for active player
 /// beta is the "best" score for non-active player
-///
+/// The window is [alpha, beta]
+/// scores outside this range will fail high or fail low
 fn negamax_alphabeta_failsoft(
   game: game.Game,
   depth: evaluation.Depth,
@@ -274,12 +276,37 @@ fn do_negamax_alphabeta_failsoft(
 
   // We iterate through every move and perform minimax to evaluate said move
   // accumulator keeps track of best evaluation while updating the node type
+  let assert [first_move, ..rest_moves] = moves
 
-  {
-    use #(best_evaluation, alpha), move <- state.list_fold_until_s(moves, #(
-      Evaluation(xint.NegInf, evaluation.PV, None, []),
-      alpha,
-    ))
+  // we evaluate the first sorted move separately
+  // since all the other nodes will have a
+  // zero-window search first
+  use first_evaluation <- state.do(
+    game.apply(game, first_move)
+    |> negamax_alphabeta_failsoft(
+      depth - 1,
+      xint.negate(beta),
+      xint.negate(alpha),
+    )
+    |> state.map(fn(evaluation) {
+      let evaluation = evaluation.negate(evaluation)
+      Evaluation(
+        ..evaluation,
+        best_line: [first_move, ..evaluation.best_line],
+        best_move: first_move |> Some,
+      )
+    }),
+  )
+  use <- bool.guard(
+    xint.gte(first_evaluation.score, beta),
+    Evaluation(..first_evaluation, node_type: evaluation.Cut)
+      |> state.return,
+  )
+  let alpha = xint.max(first_evaluation.score, alpha)
+
+  rest_moves
+  |> state.list_fold_until_s(#(first_evaluation, alpha), fn(acc, move) {
+    let #(best_evaluation, alpha) = acc
     use #(best_evaluation, alpha): #(Evaluation, ExtendedInt) <- state.do({
       let game = game.apply(game, move)
 
@@ -298,13 +325,40 @@ fn do_negamax_alphabeta_failsoft(
           |> state.return
         })
 
-        use evaluation <- state.map(negamax_alphabeta_failsoft(
+        // perform a zero-window search first, to see if it's a better or worse move
+        use zero_window_evaluation <- state.do(
+          do_negamax_alphabeta_failsoft(
+            game,
+            depth - 1,
+            xint.add(xint.negate(alpha), xint.from_int(-1)),
+            xint.negate(alpha),
+          )
+          |> state.map(evaluation.negate),
+        )
+
+        let is_not_zero_window =
+          xint.subtract(beta, alpha) |> xint.gt(xint.from_int(1))
+        // If the bounds returned isn't acceptable to our current [alpha, beta]
+        // We need to redo a proper search
+        let requires_re_search = {
+          is_not_zero_window
+          && zero_window_evaluation.node_type == evaluation.All
+          && xint.gt(zero_window_evaluation.score, alpha)
+        }
+        use <- bool.guard(
+          !requires_re_search,
+          zero_window_evaluation |> state.return,
+        )
+
+        // actually do the re-search, with the full bounds
+
+        negamax_alphabeta_failsoft(
           game,
           depth - 1,
           xint.negate(beta),
           xint.negate(alpha),
-        ))
-        evaluation.negate(evaluation)
+        )
+        |> state.map(evaluation.negate)
       })
 
       let evaluation =
@@ -323,6 +377,7 @@ fn do_negamax_alphabeta_failsoft(
       #(best_evaluation, alpha)
     })
     // beta-cutoff
+
     case xint.gte(best_evaluation.score, beta) {
       True -> {
         let best_evaluation =
@@ -336,13 +391,13 @@ fn do_negamax_alphabeta_failsoft(
             let piece = move_context.piece
             search_state.history_update(#(to, piece), depth * depth)
           }
-          False -> state.pure(Nil)
+          False -> state.return(Nil)
         })
         #(best_evaluation, alpha) |> list.Stop
       }
       False -> #(best_evaluation, alpha) |> list.Continue |> state.return
     }
-  }
+  })
   |> state.map(fn(x) { x.0 })
 }
 
