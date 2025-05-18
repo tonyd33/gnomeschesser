@@ -3,7 +3,6 @@ import chess/move
 import chess/player
 import chess/robot/robot_web as robot
 import gleam/dynamic/decode
-import gleam/erlang/process
 import gleam/json
 import mist
 import wisp.{type Request, type Response}
