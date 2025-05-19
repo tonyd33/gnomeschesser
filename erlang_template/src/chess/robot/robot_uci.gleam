@@ -6,6 +6,7 @@ import chess/search/evaluation
 import chess/search/search_state
 import chess/uci
 import gleam/bool
+import gleam/dict
 import gleam/erlang/process.{type Subject}
 import gleam/function
 import gleam/io
@@ -114,22 +115,36 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
             process.unlink(pid)
             process.kill(pid)
           })
+          let search_state = search_state.new(timestamp.system_time())
           RobotState(
             ..state,
+            search_state:,
             searcher: #(None, state.searcher.1),
             game: None,
             best_evaluation: None,
           )
         }
         ApplyMove(lan:) -> {
+          // insert the previous game into the previous_games of search_state
+          // so that we can check it for 3 fold repetition
+          let search_state =
+            option.map(state.game, fn(game) {
+              let search_state = state.search_state
+              let previous_games =
+                search_state.previous_games
+                |> dict.insert(game.hash(game), game)
+              search_state.SearchState(..search_state, previous_games:)
+            })
+            |> option.unwrap(state.search_state)
           let game =
-            option.then(state.game, fn(game) {
+            state.game
+            |> option.then(fn(game) {
               case game.validate_move(move.from_lan(lan), game) {
                 Ok(valid_move) -> Some(game.apply(game, valid_move))
                 Error(Nil) -> None
               }
             })
-          RobotState(..state, game:)
+          RobotState(..state, game:, search_state:)
         }
         IsReady -> {
           io.println(uci.serialize_gui_cmd(uci.GUICmdReadyOk))
@@ -279,17 +294,23 @@ fn start_searcher(
     process.unlink(pid)
     process.kill(pid)
   })
+
   // don't bother running the search if there's no valid moves
   case state.game {
     Some(game) ->
       case game.valid_moves(game) {
-        [] -> None
-        _ ->
-          search.new(game, state.search_state, state.searcher.1, search_opts)
-          |> Some
+        [] -> panic as "Search requested on a position with no valid moves!"
+        _ -> {
+          let search_pid =
+            search.new(game, state.search_state, state.searcher.1, search_opts)
+            |> Some
+          RobotState(
+            ..state,
+            searcher: #(search_pid, state.searcher.1),
+            best_evaluation: None,
+          )
+        }
       }
-    None -> None
+    None -> panic as "No game existed when searcher is starting!"
   }
-  |> pair.new(state.searcher.1)
-  |> fn(searcher) { RobotState(..state, searcher:, best_evaluation: None) }
 }

@@ -148,6 +148,7 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
       //echo state.best_evaluation
 
       // We should do any cleanup or extra calculations while the opponent has their turn
+      // TODO: prune the transposition table here instead
       case state.best_evaluation {
         Some(evaluation.Evaluation(_, _, Some(best_move), _)) -> {
           // We can be certain that it's the correct move for the game
@@ -190,15 +191,22 @@ fn update_state_with_new_game(state: RobotState, game: game.Game) -> RobotState 
     process.kill(pid)
   })
 
-  let search_pid =
-    search.new(
-      game,
-      state.search_state,
-      state.searcher.1,
-      search.default_search_opts,
-    )
+  let search_state = {
+    let search_state = state.search_state
+    // insert the old game into the previous_games search_state
+    let previous_games =
+      search_state.previous_games
+      |> dict.insert(game.hash(state.game), state.game)
+    search_state.SearchState(..search_state, previous_games:)
+  }
 
-  // TODO: check for collision before adding to state
+  let search_pid =
+    search.new(game, search_state, state.searcher.1, search.default_search_opts)
+
+  // TODO: check if the retrieved evaluation is actually valid for the given game
+  // this could be false due to collision
+  // TODO: just remove this because we're now confident that it will return a move in time
+  // TODO: or generate a random move instead?
   let best_evaluation = case
     dict.get(state.search_state.transposition, game.hash(game))
   {
@@ -207,9 +215,9 @@ fn update_state_with_new_game(state: RobotState, game: game.Game) -> RobotState 
   }
 
   RobotState(
-    ..state,
     searcher: #(Some(search_pid), state.searcher.1),
     game:,
     best_evaluation:,
+    search_state:,
   )
 }

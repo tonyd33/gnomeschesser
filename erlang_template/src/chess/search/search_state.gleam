@@ -8,13 +8,18 @@ import gleam/float
 import gleam/int
 import gleam/option.{type Option, None, Some}
 import gleam/result
+import gleam/set
 import gleam/time/duration
 import gleam/time/timestamp
 import util/state.{type State, State}
 import util/xint.{type ExtendedInt}
 
 pub type SearchState {
-  SearchState(transposition: transposition.Table, stats: SearchStats)
+  SearchState(
+    transposition: transposition.Table,
+    stats: SearchStats,
+    previous_games: dict.Dict(game.Hash, game.Game),
+  )
 }
 
 pub fn new(now: timestamp.Timestamp) {
@@ -25,7 +30,16 @@ pub fn new(now: timestamp.Timestamp) {
       nodes_searched_at_init_time: 0,
       init_time: now,
     ),
+    previous_games: dict.new(),
   )
+}
+
+pub fn is_previous_game(game: game.Game) -> State(SearchState, Bool) {
+  use search_state: SearchState <- state.select()
+  search_state.previous_games
+  |> dict.get(game.hash(game))
+  |> result.map(game.equal(_, game))
+  |> result.unwrap(False)
 }
 
 /// When should we prune the transposition table?

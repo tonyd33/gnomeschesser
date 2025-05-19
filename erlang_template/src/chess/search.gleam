@@ -97,11 +97,11 @@ fn search(
 
   let now = timestamp.system_time()
   // TODO: use a logging library for this?
-  use info <- state.do(
-    search_state.stats_to_string(_, now)
-    |> state.select,
-  )
-  io.print_error(info)
+  // use info <- state.do(
+  //   search_state.stats_to_string(_, now)
+  //   |> state.select,
+  // )
+  // io.print_error(info)
 
   use _ <- state.do(search_state.stats_checkpoint_time(now))
 
@@ -203,7 +203,6 @@ fn negamax_alphabeta_failsoft(
   beta: ExtendedInt,
 ) -> State(SearchState, Evaluation) {
   let game_hash = game.hash(game)
-
   // TODO: check for cache collision here
   // return early if we find an entry in the transposition table
   use cached_evaluation <- state.do(
@@ -283,18 +282,37 @@ fn do_negamax_alphabeta_failsoft(
     ))
     use #(best_evaluation, alpha): #(Evaluation, ExtendedInt) <- state.map({
       let game = game.apply(game, move)
-      use evaluation <- state.do(negamax_alphabeta_failsoft(
-        game,
-        depth - 1,
-        xint.negate(beta),
-        xint.negate(alpha),
-      ))
+
+      use evaluation <- state.map({
+        use is_previous_game <- state.do(search_state.is_previous_game(game))
+        // 3 fold repetition
+        // If we've encountered this position before, we can assume we're in a 3 fold loop
+        // and that this position will resolve to a 0
+        use <- bool.guard(is_previous_game, {
+          Evaluation(
+            score: 0 |> xint.from_int,
+            node_type: evaluation.PV,
+            best_move: None,
+            best_line: [],
+          )
+          |> state.return
+        })
+
+        use evaluation <- state.map(negamax_alphabeta_failsoft(
+          game,
+          depth - 1,
+          xint.negate(beta),
+          xint.negate(alpha),
+        ))
+        evaluation.negate(evaluation)
+      })
+
       let evaluation =
-        Evaluation(
-          ..evaluation.negate(evaluation),
-          best_move: Some(move),
-          best_line: [move, ..evaluation.best_line],
-        )
+        Evaluation(..evaluation, best_move: Some(move), best_line: [
+          move,
+          ..evaluation.best_line
+        ])
+
       let best_evaluation = case
         xint.gt(evaluation.score, best_evaluation.score)
       {
@@ -302,7 +320,7 @@ fn do_negamax_alphabeta_failsoft(
         False -> best_evaluation
       }
       let alpha = xint.max(alpha, evaluation.score)
-      state.return(#(best_evaluation, alpha))
+      #(best_evaluation, alpha)
     })
     // beta-cutoff
     case xint.gte(best_evaluation.score, beta) {
