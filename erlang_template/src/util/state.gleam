@@ -9,7 +9,7 @@ pub type State(s, a) {
 
 /// Equivalent to Haskell `fmap`
 ///
-pub fn map_value(state: State(s, a), f: fn(a) -> b) -> State(s, b) {
+pub fn map(state: State(s, a), f: fn(a) -> b) -> State(s, b) {
   State(run: fn(s) {
     let #(a, s_) = state.run(s)
     #(f(a), s_)
@@ -38,7 +38,7 @@ pub fn bind(state: State(s, a), f: fn(a) -> State(s, b)) -> State(s, b) {
 
 pub const do = bind
 
-pub fn get_value(f: fn(s) -> a) -> State(s, a) {
+pub fn select(f: fn(s) -> a) -> State(s, a) {
   State(run: fn(s) { #(f(s), s) })
 }
 
