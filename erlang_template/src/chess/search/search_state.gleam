@@ -17,20 +17,22 @@ import util/xint.{type ExtendedInt}
 pub type SearchState {
   SearchState(
     transposition: transposition.Table,
-    stats: SearchStats,
     previous_games: dict.Dict(game.Hash, game.Game),
+    history: dict.Dict(#(square.Square, piece.Piece), Int),
+    stats: SearchStats,
   )
 }
 
 pub fn new(now: timestamp.Timestamp) {
   SearchState(
     transposition: dict.new(),
+    history: dict.new(),
+    previous_games: dict.new(),
     stats: SearchStats(
       nodes_searched: 0,
       nodes_searched_at_init_time: 0,
       init_time: now,
     ),
-    previous_games: dict.new(),
   )
 }
 
@@ -40,6 +42,32 @@ pub fn is_previous_game(game: game.Game) -> State(SearchState, Bool) {
   |> dict.get(game.hash(game))
   |> result.map(game.equal(_, game))
   |> result.unwrap(False)
+}
+
+const max_history: Int = 50
+
+/// https://www.chessprogramming.org/History_Heuristic
+pub fn history_get(
+  key: #(square.Square, piece.Piece),
+) -> State(SearchState, Int) {
+  use search_state: SearchState <- state.select()
+  dict.get(search_state.history, key) |> result.unwrap(0)
+}
+
+/// https://www.chessprogramming.org/History_Heuristic
+pub fn history_update(
+  key: #(square.Square, piece.Piece),
+  bonus: Int,
+) -> State(SearchState, Nil) {
+  let clamped_bonus = int.clamp(bonus, -max_history, max_history)
+  use search_state: SearchState <- state.modify
+  let history_score = search_state.history |> dict.get(key) |> result.unwrap(0)
+  let history_score =
+    history_score
+    + clamped_bonus
+    - { history_score * int.absolute_value(clamped_bonus) / max_history }
+  let history = search_state.history |> dict.insert(key, history_score)
+  SearchState(..search_state, history:)
 }
 
 /// When should we prune the transposition table?

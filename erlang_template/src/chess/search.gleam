@@ -280,7 +280,7 @@ fn do_negamax_alphabeta_failsoft(
       Evaluation(xint.NegInf, evaluation.PV, None, []),
       alpha,
     ))
-    use #(best_evaluation, alpha): #(Evaluation, ExtendedInt) <- state.map({
+    use #(best_evaluation, alpha): #(Evaluation, ExtendedInt) <- state.do({
       let game = game.apply(game, move)
 
       use evaluation <- state.map({
@@ -327,9 +327,20 @@ fn do_negamax_alphabeta_failsoft(
       True -> {
         let best_evaluation =
           Evaluation(..best_evaluation, node_type: evaluation.Cut)
+        let move_context = move.get_context(move)
+
+        use _ <- state.map(case move_context.capture |> option.is_none {
+          True -> {
+            // non-capture moves update the history table
+            let to = move.get_to(move)
+            let piece = move_context.piece
+            search_state.history_update(#(to, piece), depth * depth)
+          }
+          False -> state.pure(Nil)
+        })
         #(best_evaluation, alpha) |> list.Stop
       }
-      False -> #(best_evaluation, alpha) |> list.Continue
+      False -> #(best_evaluation, alpha) |> list.Continue |> state.return
     }
   }
   |> state.map(fn(x) { x.0 })
@@ -382,7 +393,7 @@ fn quiesce(
 fn sorted_moves(
   game: game.Game,
 ) -> State(SearchState, List(move.Move(move.ValidInContext))) {
-  use entry <- state.map(search_state.transposition_get(game.hash(game)))
+  use entry <- state.do(search_state.transposition_get(game.hash(game)))
   // the cached PV move
   let best_move = case entry {
     Ok(transposition.Entry(_, evaluation, _)) -> evaluation.best_move
@@ -441,7 +452,23 @@ fn sorted_moves(
       }
     })
 
+  use search_state: SearchState <- state.select()
+  // for quiet moves, we sort it by its quiet history score
+  let quiet_moves = {
+    let history = search_state.history
+    quiet_moves
+    |> list.sort(fn(move1, move2) {
+      let key1 = #(move.get_to(move1), move.get_context(move1).piece)
+      let key2 = #(move.get_to(move2), move.get_context(move2).piece)
+      let history1 = dict.get(history, key1) |> result.unwrap(0)
+      let history2 = dict.get(history, key2) |> result.unwrap(0)
+      // bigger history should go first
+      int.compare(history2, history1)
+    })
+  }
+
   let non_best_move = list.append(capture_promotion_moves, quiet_moves)
+
   option.map(best_move, fn(best_move) { [best_move, ..non_best_move] })
   |> option.unwrap(non_best_move)
 }
