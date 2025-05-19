@@ -4,6 +4,9 @@
 //// - Tony
 ////
 
+import gleam/result
+import gleam/dynamic/decode
+import gleam/dynamic
 import chess/piece
 import chess/player
 import chess/square
@@ -786,6 +789,13 @@ pub fn piece_hash(square: square.Square, piece: piece.Piece) -> Int {
     piece.Piece(player.White, piece.King), 119 -> hashes.767
     _, _ -> panic
   }
+}
+
+pub fn get_hash_hack(index: Int) -> Result(Int, Nil) {
+  // Unsafe because it's hard to index tuples dynamically in Gleam
+  dynamic.from(hashes)
+  |> decode.run(decode.at([index], decode.int))
+  |> result.replace_error(Nil)
 }
 
 pub fn get_hash(index: Int) -> Result(Int, Nil) {

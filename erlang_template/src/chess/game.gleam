@@ -15,6 +15,7 @@ import gleam/pair
 import gleam/result
 import gleam/set
 import gleam/string
+import iv
 import util/direction
 import util/yielder
 
@@ -1030,12 +1031,7 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
       Ok(x) if x.symbol == piece.Knight || x.symbol == piece.Pawn -> {
         let assert [attacker_square] = king_attackers
         let assert Ok(attacker_piece) = dict.get(game.board, attacker_square)
-        square.get_squares_attacking_at(
-          game.board,
-          pieces_yielder,
-          attacker_square,
-          us,
-        )
+        square.get_squares_attacking_at(game.board, attacker_square, us)
         |> list.filter_map(fn(defender_square) {
           let assert Ok(piece) = dict.get(game.board, defender_square)
           use <- bool.guard(piece.symbol == piece.King, Error(Nil))
@@ -1090,13 +1086,12 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
             // if there's no space in between just return
             use <- bool.guard(steps <= 1, set.new())
             // we don't include the starting or ending square
-            list.range(1, steps - 1)
-            |> list.map(fn(depth) {
+            yielder.range(1, steps - 1)
+            |> yielder.fold(set.new(), fn(s, depth) {
               let assert Ok(square) =
                 square.add(king_attacker, depth * attacker_offset)
-              square
+              set.insert(s, square)
             })
-            |> set.from_list
           }
           // if there is an attacker, the only valid capture is the piece attacking the king
           // or a piece in between
@@ -1121,18 +1116,18 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
         _ -> panic
       }
     }
+    let sat = fn(x) {
+      attackable_square_predicate(x) || movable_square_predicate(x)
+    }
     pieces
-    |> list.flat_map(fn(x) {
+    |> iv.from_list
+    |> iv.fold([], fn(acc1, x) {
       let #(from, piece) = x
-      use <- bool.guard(piece.player != us, [])
+      use <- bool.guard(piece.player != us, acc1)
       // if this piece is pinned, we need to especially consider it
       let to_squares = case piece.symbol {
         piece.Knight | piece.Bishop | piece.Queen | piece.Rook ->
-          square.piece_attacking(game.board, from, piece, True)
-          |> list.filter(fn(x) {
-            attackable_square_predicate(x) || movable_square_predicate(x)
-          })
-
+          square.piece_attacking(game.board, from, piece, True, sat)
         piece.Pawn -> {
           let pawn_direction = piece.pawn_direction(us)
           let small_move =
@@ -1164,8 +1159,14 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
             })
           }
           let x_move =
-            square.piece_attacking(game.board, from, piece, True)
-            |> list.filter(attackable_square_predicate)
+            square.piece_attacking(
+              game.board,
+              from,
+              piece,
+              True,
+              attackable_square_predicate,
+            )
+          // |> list.filter(attackable_square_predicate)
           list.append([small_move, big_move] |> result.values, x_move)
         }
         // We already do king move generation separately
@@ -1173,41 +1174,53 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
       }
 
       // if we are pinned down, check if the target square is along the line
-      dict.get(king_blockers, from)
-      |> result.map(fn(pinner) {
-        let from_offset: Int = square.ray_to_offset(from: pinner, to: from).0
-        to_squares
-        |> list.filter(fn(to) {
-          to == pinner
-          // if the to square is still along the same direction
-          || from_offset == square.ray_to_offset(from: pinner, to: to).0
+      let ret =
+        dict.get(king_blockers, from)
+        |> result.map(fn(pinner) {
+          let from_offset: Int = square.ray_to_offset(from: pinner, to: from).0
+          to_squares
+          |> list.filter(fn(to) {
+            to == pinner
+            // if the to square is still along the same direction
+            || from_offset == square.ray_to_offset(from: pinner, to: to).0
+          })
         })
-      })
-      |> result.unwrap(to_squares)
-      |> list.flat_map(fn(to) {
-        let capture =
-          dict.get(game.board, to)
-          |> result.map(pair.new(to, _))
-          |> option.from_result
-        let context =
-          move.Context(capture:, piece:, castling: None)
-          |> Some
+        |> result.unwrap(to_squares)
+        |> iv.from_list
+        |> iv.fold([], fn(acc2, to) {
+          let capture =
+            dict.get(game.board, to)
+            |> result.map(pair.new(to, _))
+            |> option.from_result
+          let context =
+            move.Context(capture:, piece:, castling: None)
+            |> Some
 
-        let promotions = {
-          case square.rank(to) == square.pawn_promotion_rank(us), piece.symbol {
-            True, piece.Pawn -> [
-              Some(piece.Rook),
-              Some(piece.Knight),
-              Some(piece.Bishop),
-              Some(piece.Queen),
-            ]
-            _, _ -> [None]
+          let promotions = {
+            case
+              square.rank(to) == square.pawn_promotion_rank(us),
+              piece.symbol
+            {
+              True, piece.Pawn -> [
+                Some(piece.Rook),
+                Some(piece.Knight),
+                Some(piece.Bishop),
+                Some(piece.Queen),
+              ]
+              _, _ -> [None]
+            }
           }
-        }
-        promotions
-        |> list.map(move.new_valid(from:, to:, promotion: _, context:))
-      })
+          [
+            promotions
+              |> list.map(move.new_valid(from:, to:, promotion: _, context:)),
+            ..acc2
+          ]
+        })
+        |> list.flatten
+
+      [ret, ..acc1]
     })
+    |> list.flatten
   }
 
   // also check en passant explicitly, and see if it puts us in check

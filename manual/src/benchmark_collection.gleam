@@ -1,3 +1,4 @@
+import chess/constants/zobrist
 import chess/game
 import chess/piece
 import chess/player
@@ -206,9 +207,41 @@ pub fn list_array_find() {
   )
 }
 
+pub fn fast_flatten(lists: List(List(a))) -> List(a) {
+  fast_flatten_loop(lists, [])
+}
+
+fn fast_flatten_loop(lists: List(List(a)), acc: List(a)) -> List(a) {
+  case lists {
+    [] -> acc
+    [list, ..further_lists] ->
+      fast_flatten_loop(further_lists, list.append(list, acc))
+  }
+}
+
+type DiffList(a) =
+  fn(List(a)) -> List(a)
+
+fn to_diff_list(l: List(a)) -> DiffList(a) {
+  fn(x) { list.append(l, x) }
+}
+
+fn to_list(f: DiffList(a)) -> List(a) {
+  f([])
+}
+
+fn diff_list_empty() {
+  fn(x) { x }
+}
+
+fn diff_list_append(f, g) {
+  fn(xs) { f(g(xs)) }
+}
+
 /// Findings:
 /// Array flat maps are slower than list flat maps, ranging from about
-/// 8.5x to 10.75x slower on this data.
+/// 8.5x to 10.75x slower on this data. However, if exiting iv arrays into
+/// lists, it's slightly faster than list flat maps.
 ///
 pub fn list_array_flat_map() {
   let lst_10 = list.range(1, 10)
@@ -238,6 +271,43 @@ pub fn list_array_flat_map() {
           fn() {
             test_data.1
             |> iv.flat_map(fn(x) { iv.repeat(x, 5) })
+            Nil
+          }
+        },
+      ),
+      benchmark.Function(
+        label: "array flatmap -> list",
+        callable: fn(test_data: #(List(Int), Array(Int))) {
+          fn() {
+            test_data.1
+            |> iv.fold([], fn(acc, x) { [list.repeat(x, 5), ..acc] })
+            |> fast_flatten
+            Nil
+          }
+        },
+      ),
+      benchmark.Function(
+        label: "array flatmap -> difference lists",
+        callable: fn(test_data: #(List(Int), Array(Int))) {
+          fn() {
+            test_data.1
+            |> iv.fold(diff_list_empty(), fn(acc, x) {
+              diff_list_append(acc, to_diff_list(list.repeat(x, 5)))
+            })
+            |> to_list()
+            Nil
+          }
+        },
+      ),
+      benchmark.Function(
+        label: "array flatmap -> yielder -> list",
+        callable: fn(test_data: #(List(Int), Array(Int))) {
+          fn() {
+            test_data.1
+            |> iv.fold(yielder.empty(), fn(acc, x) {
+              yielder.append(acc, yielder.repeat(x) |> yielder.take(5))
+            })
+            |> yielder.to_list
             Nil
           }
         },
@@ -448,5 +518,68 @@ pub fn list_dict_modify() {
       ),
     ],
     [benchmark.Data(label: "board", data: #(board, arr))],
+  )
+}
+
+pub fn tuple_array_lookup() {
+  let arr =
+    list.range(0, 780)
+    |> list.fold(iv.new(), fn(arr, x) { iv.append(arr, zobrist.get_hash(x)) })
+
+  benchmark.run(
+    [
+      benchmark.Function(
+        label: "tuple lookup (fn)",
+        callable: fn(test_data: List(Int)) {
+          fn() {
+            test_data
+            |> list.map(zobrist.get_hash)
+            Nil
+          }
+        },
+      ),
+      benchmark.Function(
+        label: "tuple lookup (hack)",
+        callable: fn(test_data: List(Int)) {
+          fn() {
+            test_data
+            |> list.map(zobrist.get_hash_hack)
+            Nil
+          }
+        },
+      ),
+      benchmark.Function(
+        label: "array lookup",
+        callable: fn(test_data: List(Int)) {
+          fn() {
+            test_data
+            |> list.map(iv.get(arr, _))
+            Nil
+          }
+        },
+      ),
+    ],
+    [benchmark.Data(label: "indices", data: list.range(0, 780))],
+  )
+}
+
+pub fn array_take() {
+  let arr =
+    list.range(1, 1000)
+    |> iv.from_list
+
+  benchmark.run(
+    [
+      benchmark.Function(label: "take", callable: fn(test_data: Int) {
+        fn() {
+          iv.take_first(arr, test_data)
+          Nil
+        }
+      }),
+    ],
+    [
+      benchmark.Data(label: "10", data: 10),
+      benchmark.Data(label: "100", data: 100),
+    ],
   )
 }

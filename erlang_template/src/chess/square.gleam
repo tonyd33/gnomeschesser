@@ -204,6 +204,7 @@ pub fn piece_attacking(
   from: Square,
   piece: piece.Piece,
   opponent_only: Bool,
+  satisfying: fn(Square) -> Bool,
 ) -> List(Square) {
   let depths = case piece.symbol {
     piece.Knight | piece.King | piece.Pawn -> [1]
@@ -216,12 +217,24 @@ pub fn piece_attacking(
   |> list.flat_map(fn(offset) {
     list.fold_until(depths, [], fn(acc, depth) {
       case from_ox88(offset * depth + from) {
-        Ok(to) ->
+        Ok(to) -> {
           case dict.get(occupancy, to), opponent_only {
             Ok(piece.Piece(player, _)), True if player == us -> list.Stop(acc)
-            Error(Nil), _ -> list.Continue([to, ..acc])
-            _, _ -> list.Stop([to, ..acc])
+            Error(Nil), _ -> {
+              // list.Continue([to, ..acc])
+              case satisfying(to) {
+                True -> list.Continue([to, ..acc])
+                False -> list.Continue(acc)
+              }
+            }
+            _, _ -> {
+              case satisfying(to) {
+                True -> list.Stop([to, ..acc])
+                False -> list.Stop(acc)
+              }
+            }
           }
+        }
         Error(Nil) -> list.Stop(acc)
       }
     })
@@ -230,12 +243,12 @@ pub fn piece_attacking(
 
 pub fn get_squares_attacking_at(
   board: dict.Dict(Square, piece.Piece),
-  pieces_yielder: yielder.Yielder(#(Square, piece.Piece)),
   at: Square,
   by: player.Player,
 ) -> List(Square) {
-  pieces_yielder
-  |> yielder.fold([], fn(acc, piece) {
+  board
+  |> dict.to_list
+  |> list.fold([], fn(acc, piece) {
     let #(from, piece) = piece
     // We only consider attacks by a certain player
     use <- bool.guard(piece.player != by, acc)

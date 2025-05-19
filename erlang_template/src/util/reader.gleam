@@ -1,6 +1,8 @@
 //// Reader Monad
 ////
 
+import gleam/list
+
 pub type Reader(r, a) {
   Reader(run: fn(r) -> #(a, r))
 }
@@ -36,4 +38,35 @@ pub fn ask() -> Reader(r, r) {
 
 pub fn go(reader: Reader(r, a), initial: r) {
   reader.run(initial)
+}
+
+pub fn list_fold_until_s(
+  over list: List(a),
+  from initial: acc,
+  with fun: fn(acc, a) -> Reader(s, list.ContinueOrStop(acc)),
+) -> Reader(s, acc) {
+  case list {
+    [] -> return(initial)
+    [x, ..xs] -> {
+      use r <- bind(fun(initial, x))
+      case r {
+        list.Stop(initial_) -> return(initial_)
+        list.Continue(initial_) -> list_fold_until_s(xs, initial_, fun)
+      }
+    }
+  }
+}
+
+pub fn list_fold(
+  over list: List(a),
+  from initial: acc,
+  with fun: fn(acc, a) -> Reader(s, acc),
+) -> Reader(s, acc) {
+  case list {
+    [] -> return(initial)
+    [x, ..xs] -> {
+      use r <- bind(fun(initial, x))
+      list_fold(xs, r, fun)
+    }
+  }
 }
