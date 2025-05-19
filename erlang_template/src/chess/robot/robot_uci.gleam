@@ -2,6 +2,8 @@ import chess/game
 import chess/move
 import chess/player
 import chess/search
+import chess/search/evaluation
+import chess/search/search_state
 import chess/uci
 import gleam/bool
 import gleam/erlang/process.{type Subject}
@@ -49,9 +51,9 @@ pub type RobotMessage {
 type RobotState {
   RobotState(
     game: Option(game.Game),
-    best_evaluation: Option(search.Evaluation),
+    best_evaluation: Option(evaluation.Evaluation),
     searcher: #(Option(process.Pid), Subject(search.SearchMessage)),
-    search_state: search.SearchState,
+    search_state: search_state.SearchState,
     subject: Subject(RobotMessage),
   )
 }
@@ -65,7 +67,7 @@ fn create_robot_thread() -> Subject(RobotMessage) {
       let robot_subject: Subject(RobotMessage) = process.new_subject()
       process.send(reply_subject, robot_subject)
 
-      let search_state = search.state_new(timestamp.system_time())
+      let search_state = search_state.new(timestamp.system_time())
       // The search_subject will be used by searchers to update new best moves found
       let search_subject: Subject(search.SearchMessage) = process.new_subject()
 
@@ -140,7 +142,7 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
             search.SearchUpdate(best_evaluation:, game:) -> {
               case option.map(state.game, game.equal(_, game)) {
                 Some(True) -> {
-                  let search.Evaluation(
+                  let evaluation.Evaluation(
                     score:,
                     node_type:,
                     best_move:,
@@ -152,9 +154,9 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
                         n: xint.to_int(score) |> result.unwrap(0),
                       ),
                       ..case node_type {
-                        search.PV -> []
-                        search.Cut -> [uci.ScoreLowerbound]
-                        search.All -> [uci.ScoreUpperbound]
+                        evaluation.PV -> []
+                        evaluation.Cut -> [uci.ScoreLowerbound]
+                        evaluation.All -> [uci.ScoreUpperbound]
                       }
                     ]
                     uci.GUICmdInfo([
@@ -181,7 +183,8 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
               // We don't respond to this if there's no search active
               case state.searcher.0 {
                 Some(pid) -> {
-                  let search.Evaluation(_, _, best_move, _) = best_evaluation
+                  let evaluation.Evaluation(_, _, best_move, _) =
+                    best_evaluation
                   option.map(best_move, fn(best_move) {
                     uci.GUICmdBestMove(
                       move: move.to_lan(best_move),
@@ -242,7 +245,7 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
           case state.searcher.0 {
             Some(pid) -> {
               case state.best_evaluation {
-                Some(search.Evaluation(
+                Some(evaluation.Evaluation(
                   score: _,
                   node_type: _,
                   best_move: Some(move),
