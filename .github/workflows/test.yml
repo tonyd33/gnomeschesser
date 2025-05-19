@@ -90,8 +90,6 @@ jobs:
       ImageOS: ubuntu24
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: true
 
       - uses: erlef/setup-beam@v1
         with:
@@ -167,8 +165,6 @@ jobs:
           logout: true
 
       - uses: actions/checkout@v4
-        with:
-          submodules: true
 
       - uses: erlef/setup-beam@v1
         with:
