@@ -9,13 +9,14 @@ run_challenger="$repo_root_path/dev_utils/scripts/start-uci.sh"
 run_defender="$repo_root_path/dev_utils/scripts/start-docker-uci.sh"
 
 fastchess_event_name="Fastchess Tournament"
-rounds=3
+rounds=5
 # run (half #cores - 2) games at a time.
 # yes, we're piping into deno just for this. yes, it's cursed
 concurrency=$(echo "Math.min(($(nproc)/2) - 2)" | NO_COLOR=1 deno repl -q)
 games=2
 results_dir="$repo_root_path/results"
 system=$(uname -sm)
+book="$repo_root_path/opening_books/8moves_v3.pgn"
 
 case "$system" in
   "Darwin arm64")
@@ -95,11 +96,12 @@ mkdir -p "$results_dir"
     -engine \
       cmd="$run_defender" \
       name=defender \
-      st=6 \
+      st=3 \
     -engine \
       cmd="$run_challenger" \
       name=challenger \
-      st=6 \
+      st=3 \
     -rounds "$rounds" -games "$games" -concurrency "$concurrency" -maxmoves 100 \
     -pgnout file="$results_dir/regression.pgn" \
-    -log file="$results_dir/fastchess-regression.log" level=trace
+    -log file="$results_dir/fastchess-regression.log" level=trace \
+    -openings file=$book format=pgn order=random

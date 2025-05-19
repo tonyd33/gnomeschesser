@@ -26,7 +26,7 @@ type RobotState {
     game: game.Game,
     best_evaluation: Option(search.Evaluation),
     searcher: #(Option(process.Pid), Subject(search.SearchMessage)),
-    memo: search.TranspositionTable,
+    search_state: search.SearchState,
   )
 }
 
@@ -99,18 +99,23 @@ fn create_robot_thread() -> Subject(RobotMessage) {
       let assert Ok(game): Result(game.Game, Nil) =
         game.load_fen(game.start_fen)
 
-      let memo = search.tt_new(timestamp.system_time())
+      let search_state = search.state_new(timestamp.system_time())
       // The search_subject will be used by searchers to update new best moves found
       let search_subject: Subject(search.SearchMessage) = process.new_subject()
       let search_pid =
-        search.new(game, memo, search_subject, search.default_search_opts)
+        search.new(
+          game,
+          search_state,
+          search_subject,
+          search.default_search_opts,
+        )
 
       main_loop(
         RobotState(
           game:,
           best_evaluation: None,
           searcher: #(Some(search_pid), search_subject),
-          memo:,
+          search_state:,
         ),
         // This selector allows is to merge the different subjects (like from the searcher) into one selector
         process.new_selector()
@@ -153,25 +158,20 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
     // Handles any updates from the searcher
     SearcherMessage(message) ->
       case message {
-        search.SearchUpdate(best_evaluation:, game:, transposition: memo) ->
+        search.SearchUpdate(best_evaluation:, game:)
+        | search.SearchDone(best_evaluation:, game:) ->
           case game.equal(game, state.game) {
-            True ->
-              RobotState(..state, best_evaluation: Some(best_evaluation), memo:)
+            True -> RobotState(..state, best_evaluation: Some(best_evaluation))
             False -> {
               echo "received best move for incorrect game"
-              RobotState(..state, memo:)
+              state
             }
           }
         // TODO: We might want to send a response early
-        search.SearchDone(best_evaluation:, game:, transposition: memo) ->
-          case game.equal(game, state.game) {
-            True ->
-              RobotState(..state, best_evaluation: Some(best_evaluation), memo:)
-            False -> {
-              echo "received best move for incorrect game"
-              RobotState(..state, memo:)
-            }
-          }
+        // We could have a signal for the searcher to indicate
+        // How confident it thinks a move is
+        search.SearchStateUpdate(search_state:) ->
+          RobotState(..state, search_state:)
       }
   }
 
@@ -188,10 +188,17 @@ fn update_state_with_new_game(state: RobotState, game: game.Game) -> RobotState 
   })
 
   let search_pid =
-    search.new(game, state.memo, state.searcher.1, search.default_search_opts)
+    search.new(
+      game,
+      state.search_state,
+      state.searcher.1,
+      search.default_search_opts,
+    )
 
   // TODO: check for collision before adding to state
-  let best_evaluation = case dict.get(state.memo.dict, game.hash(game)) {
+  let best_evaluation = case
+    dict.get(state.search_state.transposition, game.hash(game))
+  {
     Ok(search.TranspositionEntry(_, best_evaluation, _)) ->
       Some(best_evaluation)
     Error(Nil) -> None
