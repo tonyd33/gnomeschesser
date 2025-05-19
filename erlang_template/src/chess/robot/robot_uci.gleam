@@ -124,28 +124,34 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
             best_evaluation: None,
           )
         }
-        ApplyMove(lan:) -> {
-          // insert the previous game into the previous_games of search_state
-          // so that we can check it for 3 fold repetition
-          let search_state =
-            option.map(state.game, fn(game) {
-              let search_state = state.search_state
+        ApplyMove(lan:) ->
+          {
+            use game <- option.then(state.game)
+            use valid_move <- option.map(
+              move.from_lan(lan)
+              |> game.validate_move(game)
+              |> option.from_result,
+            )
+            let search_state = {
+              // we can clear the previous game if there is a capture/promotion
+              // as there's no way a 3 fold can reach that state back
+              let material_change =
+                move.get_promotion(valid_move) |> option.is_some
+                || move.get_context(valid_move).capture |> option.is_some
               let previous_games =
-                search_state.previous_games
+                case material_change {
+                  True -> dict.new()
+                  False -> state.search_state.previous_games
+                }
                 |> dict.insert(game.hash(game), game)
-              search_state.SearchState(..search_state, previous_games:)
-            })
-            |> option.unwrap(state.search_state)
-          let game =
-            state.game
-            |> option.then(fn(game) {
-              case game.validate_move(move.from_lan(lan), game) {
-                Ok(valid_move) -> Some(game.apply(game, valid_move))
-                Error(Nil) -> None
-              }
-            })
-          RobotState(..state, game:, search_state:)
-        }
+
+              search_state.SearchState(..state.search_state, previous_games:)
+            }
+            let game = game.apply(game, valid_move) |> Some
+            RobotState(..state, game:, search_state:)
+          }
+          |> option.unwrap(state)
+
         IsReady -> {
           io.println(uci.serialize_gui_cmd(uci.GUICmdReadyOk))
           state

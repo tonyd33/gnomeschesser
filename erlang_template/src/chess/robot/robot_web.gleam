@@ -192,14 +192,18 @@ fn update_state_with_new_game(state: RobotState, game: game.Game) -> RobotState 
   })
 
   let search_state = {
-    let search_state = state.search_state
-    // insert the old game into the previous_games search_state
+    // we can clear the previous game if there is a capture
+    // as there's no way a 3 fold can reach that state back
+    let material_change =
+      game.board(game) |> dict.size != game.board(state.game) |> dict.size
     let previous_games =
-      search_state.previous_games
+      case material_change {
+        True -> dict.new()
+        False -> state.search_state.previous_games
+      }
       |> dict.insert(game.hash(state.game), state.game)
-    search_state.SearchState(..search_state, previous_games:)
+    search_state.SearchState(..state.search_state, previous_games:)
   }
-
   let search_pid =
     search.new(game, search_state, state.searcher.1, search.default_search_opts)
 
