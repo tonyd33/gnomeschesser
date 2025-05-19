@@ -112,8 +112,8 @@ jobs:
         run: deno install
         working-directory: dev_utils/ci/sprt
 
-      - name: Run SPRT against Stockfish
-        run: dev_utils/ci/sprt/stockfish.sh
+      - name: Run SPRT against Stockfish Level 3
+        run: dev_utils/ci/sprt/stockfish.sh --sf-skill 3
 
       - name: Upload results
         env:
@@ -121,7 +121,7 @@ jobs:
         run: >-
           deno run -A upload-report.ts \
             --pgn "${{ github.workspace }}/results/stockfish.pgn" \
-            --title "Us vs. Stockfish" > "${{ github.workspace }}/results/us-vs-stockfish.md"
+            --title "Us vs. Stockfish Level 3" > "${{ github.workspace }}/results/us-vs-stockfish.md"
         working-directory: dev_utils/ci/sprt
 
       - name: Find existing PR comment

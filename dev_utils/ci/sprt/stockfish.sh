@@ -17,6 +17,7 @@ stockfish_skill_level=20
 stockfish_depth=24
 engine_cmd="$start_uci"
 results_dir="$repo_root_path/results"
+book="$repo_root_path/opening_books/8moves_v3.pgn"
 system=$(uname -sm)
 
 case "$system" in
@@ -109,7 +110,7 @@ mkdir -p "$results_dir"
     -engine \
       cmd="$start_uci" \
       name=gnomes \
-      st=6 \
+      st=5 \
     -engine \
       cmd="$run_stockfish" \
       name=stockfish \
@@ -118,4 +119,5 @@ mkdir -p "$results_dir"
       "option.Skill Level=$stockfish_skill_level" \
     -rounds "$rounds" -games "$games" -concurrency "$concurrency" -maxmoves 100 \
     -pgnout file="$results_dir/stockfish.pgn" \
-    -log file="$results_dir/fastchess-stockfish.log" level=trace
+    -log file="$results_dir/fastchess-stockfish.log" level=trace \
+    -openings file=$book format=pgn order=random
