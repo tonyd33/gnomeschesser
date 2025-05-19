@@ -1,10 +1,10 @@
+import bencher
 import chess/game
 import chess/search
+import gleam/dict
 import gleam/erlang/process
 import gleam/option
 import gleam/time/timestamp
-import glychee/benchmark
-import glychee/configuration
 import util/yielder
 
 type Arguments {
@@ -12,31 +12,25 @@ type Arguments {
 }
 
 pub fn main() {
-  configuration.initialize()
-  configuration.set_pair(configuration.Warmup, 2)
-  configuration.set_pair(configuration.Parallel, 2)
-
   let assert Ok(starting) = game.load_fen(game.start_fen)
   let assert Ok(game2) =
     game.load_fen(
       "1nrq1rk1/3nppbp/p2pb1p1/8/2pNP3/1PN1B3/P2QBPPP/2RR2K1 w - - 0 16",
     )
-
-  // Run the benchmarks
-  benchmark.run(
-    [
-      benchmark.Function(label: "search", callable: fn(test_data: Arguments) {
-        fn() { search_game_to_depth(test_data.game, test_data.depth) }
+  bencher.run(
+    dict.from_list([
+      #("search", fn(args: Arguments) {
+        search_game_to_depth(args.game, args.depth)
       }),
-    ],
+    ]),
     [
-      benchmark.Data(
-        label: "starting",
-        data: Arguments(game: starting, depth: 2),
-      ),
-      benchmark.Data(
-        label: "some position",
-        data: Arguments(game: game2, depth: 2),
+      bencher.Warmup(2),
+      bencher.Parallel(2),
+      bencher.Inputs(
+        dict.from_list([
+          #("depth 4: starting pos", Arguments(game: starting, depth: 4)),
+          #("depth 4: game2", Arguments(game: game2, depth: 4)),
+        ]),
       ),
     ],
   )
