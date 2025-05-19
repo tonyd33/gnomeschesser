@@ -7,15 +7,19 @@ import chess/square
 import gleam/bool
 import gleam/int
 import gleam/list
+import gleam/option
 import gleam/result
 import util/result_addons
 import util/xint.{type ExtendedInt}
+
+pub type Score =
+  ExtendedInt
 
 /// Evaluates the score of the game position
 /// > 0 means white is winning
 /// < 0 means black is winning
 ///
-pub fn game(game: game.Game) -> ExtendedInt {
+pub fn game(game: game.Game) -> Score {
   let us = game.turn(game)
   // evaluate material score
   let material_score =

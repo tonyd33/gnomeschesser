@@ -1,6 +1,7 @@
 import bencher
 import chess/game
 import chess/search
+import chess/search/search_state
 import gleam/dict
 import gleam/erlang/process
 import gleam/option
@@ -37,7 +38,7 @@ pub fn main() {
 }
 
 fn search_game_to_depth(game: game.Game, depth: Int) {
-  let memo = search.state_new(timestamp.system_time())
+  let memo = search_state.new(timestamp.system_time())
   let subject = process.new_subject()
   let _search_pid =
     search.new(

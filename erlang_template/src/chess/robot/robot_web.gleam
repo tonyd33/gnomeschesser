@@ -1,6 +1,9 @@
 import chess/game
 import chess/move
 import chess/search
+import chess/search/evaluation
+import chess/search/search_state
+import chess/search/transposition
 import gleam/bool
 import gleam/dict
 import gleam/erlang/process.{type Subject}
@@ -18,15 +21,15 @@ type RobotMessage {
   ApplyMove(move: move.Move(move.ValidInContext))
   UpdateGame(game: game.Game)
   SearcherMessage(message: search.SearchMessage)
-  GetBestEvaluation(response: Subject(Result(search.Evaluation, Nil)))
+  GetBestEvaluation(response: Subject(Result(evaluation.Evaluation, Nil)))
 }
 
 type RobotState {
   RobotState(
     game: game.Game,
-    best_evaluation: Option(search.Evaluation),
+    best_evaluation: Option(evaluation.Evaluation),
     searcher: #(Option(process.Pid), Subject(search.SearchMessage)),
-    search_state: search.SearchState,
+    search_state: search_state.SearchState,
   )
 }
 
@@ -99,7 +102,7 @@ fn create_robot_thread() -> Subject(RobotMessage) {
       let assert Ok(game): Result(game.Game, Nil) =
         game.load_fen(game.start_fen)
 
-      let search_state = search.state_new(timestamp.system_time())
+      let search_state = search_state.new(timestamp.system_time())
       // The search_subject will be used by searchers to update new best moves found
       let search_subject: Subject(search.SearchMessage) = process.new_subject()
       let search_pid =
@@ -146,7 +149,7 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
 
       // We should do any cleanup or extra calculations while the opponent has their turn
       case state.best_evaluation {
-        Some(search.Evaluation(_, _, Some(best_move), _)) -> {
+        Some(evaluation.Evaluation(_, _, Some(best_move), _)) -> {
           // We can be certain that it's the correct move for the game
           // otherwise we wouldn't have updated it previously
           let new_game = game.apply(state.game, best_move)
@@ -199,8 +202,7 @@ fn update_state_with_new_game(state: RobotState, game: game.Game) -> RobotState 
   let best_evaluation = case
     dict.get(state.search_state.transposition, game.hash(game))
   {
-    Ok(search.TranspositionEntry(_, best_evaluation, _)) ->
-      Some(best_evaluation)
+    Ok(transposition.Entry(_, best_evaluation, _)) -> Some(best_evaluation)
     Error(Nil) -> None
   }
 
