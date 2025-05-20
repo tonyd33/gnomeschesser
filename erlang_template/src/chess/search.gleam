@@ -8,15 +8,12 @@ import chess/search/transposition
 import gleam/bool
 import gleam/dict
 import gleam/erlang/process
-import gleam/float
 import gleam/int
 import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/order
-import gleam/pair
 import gleam/result
-import gleam/time/duration
 import gleam/time/timestamp
 import util/state.{type State, State}
 import util/xint.{type ExtendedInt}
@@ -25,8 +22,12 @@ import util/xint.{type ExtendedInt}
 const max_tt_size = 100_000
 
 /// When pruning the transposition table, how recent of entries do we decide to
-/// keep? In ms
+/// keep?
 const max_tt_recency = 50_000
+
+const default_prune_when = search_state.LargerThan(max_tt_size)
+
+const default_prune_do = search_state.ByRecency(max_tt_recency)
 
 pub type SearchMessage {
   SearchStateUpdate(search_state: SearchState)
@@ -50,7 +51,7 @@ pub fn new(
     fn() {
       {
         let now = timestamp.system_time()
-        use _ <- state.do(search_state.stats_checkpoint_time(now))
+        use _ <- state.do(search_state.stats_rezero(now))
         search(search_subject, game, 1, opts)
       }
       |> state.go(initial: search_state)
@@ -91,19 +92,19 @@ fn search(
   })
 
   use _ <- state.do(search_state.transposition_prune(
-    when: search_state.LargerThan(max_tt_size),
-    do: search_state.ByRecency(max_tt_recency),
+    when: default_prune_when,
+    do: default_prune_do,
   ))
 
   let now = timestamp.system_time()
   // TODO: use a logging library for this?
-  // use info <- state.do(
-  //   search_state.stats_to_string(_, now)
-  //   |> state.select,
-  // )
-  // io.print_error(info)
+  use info <- state.do(
+    search_state.stats_to_string(_, now)
+    |> state.select,
+  )
+  io.print_error(info)
 
-  use _ <- state.do(search_state.stats_checkpoint_time(now))
+  use _ <- state.do(search_state.stats_rezero(now))
 
   // a janky way of selecting a random move if we don't have a best move
   // this can currently happen if there's a forced checkmate scenario
@@ -202,6 +203,7 @@ fn negamax_alphabeta_failsoft(
   alpha: ExtendedInt,
   beta: ExtendedInt,
 ) -> State(SearchState, Evaluation) {
+  use _ <- state.do(search_state.stats_increment_nodes_searched())
   let game_hash = game.hash(game)
   // TODO: check for cache collision here
   // return early if we find an entry in the transposition table
@@ -239,10 +241,9 @@ fn negamax_alphabeta_failsoft(
   use _ <- state.do(
     search_state.transposition_insert(game_hash, #(depth, evaluation)),
   )
-  use _ <- state.do(search_state.stats_increment_nodes_searched())
   use _ <- state.do(search_state.transposition_prune(
-    when: search_state.LargerThan(max_tt_size),
-    do: search_state.ByRecency(max_tt_recency),
+    when: default_prune_when,
+    do: default_prune_do,
   ))
 
   state.return(evaluation)

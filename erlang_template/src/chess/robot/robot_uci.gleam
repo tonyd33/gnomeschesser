@@ -12,7 +12,6 @@ import gleam/function
 import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import gleam/pair
 import gleam/result
 import gleam/time/timestamp
 import util/xint
@@ -171,9 +170,12 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
                   ) = best_evaluation
                   option.map(best_move, fn(best_move) {
                     let info_score_list = [
-                      uci.ScoreCentipawns(
-                        n: xint.to_int(score) |> result.unwrap(0),
-                      ),
+                      case score {
+                        // TODO: Give proper mate score
+                        xint.PosInf -> uci.ScoreMate(1)
+                        xint.Finite(score) -> uci.ScoreCentipawns(n: score)
+                        xint.NegInf -> uci.ScoreMate(1)
+                      },
                       ..case node_type {
                         evaluation.PV -> []
                         evaluation.Cut -> [uci.ScoreLowerbound]
@@ -188,7 +190,42 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
                       ),
                     ])
                     |> uci.serialize_gui_cmd
-                    |> io.println
+                    // HACK: When we detect a mate, we're done searching
+                    // immediately and we emit a single info line. Fastchess
+                    // seems to miss this sometimes so we print it out a
+                    // couple of times lol.
+                    |> fn(s) {
+                      case score {
+                        xint.Finite(_) -> io.println(s)
+                        _ -> {
+                          io.println(s)
+                          io.println(s)
+                          io.println(s)
+                          io.println(s)
+                          io.println(s)
+                          io.println(s)
+                          io.println(s)
+                          io.println(s)
+                          io.println(s)
+                          io.println(s)
+                          io.println(s)
+                          io.println(s)
+                          io.println(s)
+                          io.println(s)
+                          io.println(s)
+                          io.println(s)
+                          io.println(s)
+                          io.println(s)
+                          io.println(s)
+                          io.println(s)
+                          io.println(s)
+                          io.println(s)
+                          io.println(s)
+                          io.println(s)
+                          io.println(s)
+                        }
+                      }
+                    }
                   })
 
                   use <- bool.guard(option.is_none(best_move), state)

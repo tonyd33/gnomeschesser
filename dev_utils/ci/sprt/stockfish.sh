@@ -18,6 +18,7 @@ stockfish_depth=24
 engine_cmd="$start_uci"
 results_dir="$repo_root_path/results"
 book="$repo_root_path/opening_books/8moves_v3.pgn"
+fastchess_log_level="warn"
 system=$(uname -sm)
 
 case "$system" in
@@ -46,6 +47,8 @@ Options:
   --sf-depth    depth       stockfish search depth. default $stockfish_depth
   --engine-cmd  cmd         command to start our engine. default $engine_cmd
   --results     dir         directory to store results. default $results_dir
+  --book        book        opening book. default $book
+  --fc-level    level       fastchess log level: trace, warn, info, err, fatal. default "$fastchess_log_level"
 
 EOF
 }
@@ -59,6 +62,7 @@ while [ "$#" -gt 0 ]; do
     --concurrency) concurrency="$2"; shift 2;;
     --sf-skill)    stockfish_skill_level="$2"; shift 2;;
     --sf-depth)    stockfish_depth="$2"; shift 2;;
+    --fc-level)    fastchess_log_level="$2"; shift 2;;
     --engine-cmd)  engine_cmd="$(realpath "$working_dir/$2")"; shift 2;;
     *)             usage; exit 1;
   esac
@@ -74,6 +78,8 @@ stockfish_skill_level="$stockfish_skill_level"
 stockfish_depth="$stockfish_depth"
 engine_cmd="$engine_cmd"
 results_dir="$results_dir"
+book="$book"
+fastchess_log_level="$fastchess_log_level"
 system="$system"
 
 EOF
@@ -109,6 +115,7 @@ mkdir -p "$results_dir"
     -event "$fastchess_event_name" \
     -engine \
       cmd="$start_uci" \
+      args="--log $repo_root_path/logs/uci.log --random-suffix" \
       name=gnomes \
       st=5 \
     -engine \
@@ -119,5 +126,5 @@ mkdir -p "$results_dir"
       "option.Skill Level=$stockfish_skill_level" \
     -rounds "$rounds" -games "$games" -concurrency "$concurrency" -maxmoves 100 \
     -pgnout file="$results_dir/stockfish.pgn" \
-    -log file="$results_dir/fastchess-stockfish.log" level=trace \
-    -openings file=$book format=pgn order=random
+    -log file="$results_dir/fastchess-stockfish.log" level="$fastchess_log_level" \
+    -openings file="$book" format=pgn order=random

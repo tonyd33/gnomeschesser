@@ -6,13 +6,13 @@ import chess/square
 import gleam/dict
 import gleam/float
 import gleam/int
-import gleam/option.{type Option, None, Some}
+import gleam/io
+import gleam/list
 import gleam/result
-import gleam/set
+import gleam/string
 import gleam/time/duration
 import gleam/time/timestamp
 import util/state.{type State, State}
-import util/xint.{type ExtendedInt}
 
 pub type SearchState {
   SearchState(
@@ -32,6 +32,10 @@ pub fn new(now: timestamp.Timestamp) {
       nodes_searched: 0,
       nodes_searched_at_init_time: 0,
       init_time: now,
+      times_pruned: 0,
+      prune_stats: [],
+      cache_hits: 0,
+      cache_misses: 0,
     ),
   )
 }
@@ -88,17 +92,23 @@ pub fn transposition_get(
 ) -> State(SearchState, Result(transposition.Entry, Nil)) {
   use search_state: SearchState <- State(run: _)
   let transposition = search_state.transposition
+  let stats = search_state.stats
   let entry = dict.get(transposition, hash)
-  let transposition = case entry {
+  let #(transposition, stats) = case entry {
     Ok(entry) -> {
       let last_accessed = search_state.stats.nodes_searched
       let entry = transposition.Entry(..entry, last_accessed:)
 
-      dict.insert(transposition, hash, entry)
+      let transposition = dict.insert(transposition, hash, entry)
+      let stats = SearchStats(..stats, cache_hits: stats.cache_hits + 1)
+      #(transposition, stats)
     }
-    _ -> transposition
+    _ -> #(
+      transposition,
+      SearchStats(..stats, cache_misses: stats.cache_misses + 1),
+    )
   }
-  #(entry, SearchState(..search_state, transposition:))
+  #(entry, SearchState(..search_state, transposition:, stats:))
 }
 
 pub fn transposition_insert(
@@ -125,6 +135,8 @@ pub fn transposition_prune(
   case policy_met {
     True -> {
       use search_state: SearchState <- state.modify
+      let size_before = dict.size(search_state.transposition)
+      let stats = search_state.stats
       let transposition = case method {
         ByRecency(max_recency:) ->
           search_state.transposition
@@ -133,7 +145,21 @@ pub fn transposition_prune(
             <= max_recency
           })
       }
-      SearchState(..search_state, transposition:)
+      let size_after = dict.size(transposition)
+      // TODO: Prefer not to do this; it violates purity while everything else
+      // is completely pure. It might be useful now to see how much pruning is
+      // done in the searcher before it gets killed and the work is lost though
+      {
+        io.println_error("Pruned.")
+        io.println_error("  Size before: " <> int.to_string(size_before))
+        io.println_error("  Size after: " <> int.to_string(size_after))
+      }
+      let stats =
+        SearchStats(..stats, times_pruned: stats.times_pruned + 1, prune_stats: [
+          PruneStats(size_before, size_after, stats.nodes_searched),
+          ..stats.prune_stats
+        ])
+      SearchState(..search_state, transposition:, stats:)
     }
     False -> state.return(Nil)
   }
@@ -159,7 +185,18 @@ pub type SearchStats {
     // Same with this. The only reason we store this is so calculate the
     // number of nodes searched per second (nps).
     init_time: timestamp.Timestamp,
+    // How many times have we pruned the table?
+    times_pruned: Int,
+    prune_stats: List(PruneStats),
+    // How many times have we hit the cache?
+    cache_hits: Int,
+    // How many times have we missed the cache?
+    cache_misses: Int,
   )
+}
+
+pub type PruneStats {
+  PruneStats(before: Int, after: Int, when: Int)
 }
 
 pub fn stats_increment_nodes_searched() -> State(SearchState, Nil) {
@@ -176,9 +213,7 @@ pub fn stats_increment_nodes_searched() -> State(SearchState, Nil) {
 /// In particular, this is used when we want to reset the initial time for
 /// the NPS measure.
 ///
-pub fn stats_checkpoint_time(
-  now: timestamp.Timestamp,
-) -> State(SearchState, Nil) {
+pub fn stats_rezero(now: timestamp.Timestamp) -> State(SearchState, Nil) {
   use search_state: SearchState <- state.modify
   let nodes_searched_at_init_time = search_state.stats.nodes_searched
   let stats =
@@ -186,6 +221,7 @@ pub fn stats_checkpoint_time(
       ..search_state.stats,
       init_time: now,
       nodes_searched_at_init_time:,
+      // prune_stats: [],
     )
   SearchState(..search_state, stats:)
 }
@@ -214,6 +250,50 @@ pub fn stats_to_string(
   <> "\n"
   <> "  Size: "
   <> dict.size(transposition) |> int.to_string
+  <> "\n"
+  <> "  Times Pruned: "
+  <> stats.times_pruned |> int.to_string
+  <> "\n"
+  <> "  Cache hits/Cache misses: "
+  <> {
+    stats.cache_hits |> int.to_string
+    <> "/"
+    <> stats.cache_misses |> int.to_string
+    <> " ("
+    <> {
+      {
+        int.to_float(stats.cache_hits * 100)
+        /. { int.to_float(int.max(stats.cache_hits + stats.cache_misses, 1)) }
+      }
+      |> float.to_precision(2)
+      |> float.to_string
+    }
+    <> "% hit, "
+    <> {
+      int.to_float(stats.cache_misses * 100)
+      /. { int.to_float(int.max(stats.cache_hits + stats.cache_misses, 1)) }
+    }
+    |> float.to_precision(2)
+    |> float.to_string
+    <> "% misses)"
+  }
+  <> "\n"
+  <> "  Prune stats: "
+  <> {
+    "["
+    <> stats.prune_stats
+    |> list.map(fn(x) {
+      let PruneStats(before, after, when) = x
+      "("
+      <> int.to_string(before)
+      <> " -> "
+      <> int.to_string(after)
+      <> ")@"
+      <> int.to_string(when)
+    })
+    |> string.join("; ")
+    <> "]"
+  }
   <> "\n"
 }
 
