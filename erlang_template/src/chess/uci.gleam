@@ -224,7 +224,7 @@ pub fn engine_cmd() -> Parser(UCIEngineCommand) {
         |> p.flat,
       )
 
-      p.return(PositionFEN(fen))
+      p.return(PositionFEN(fen |> string.trim))
     }
     let p_startpos = p.map(p.str("startpos"), fn(_) { PositionStartPos })
     let moves = {
