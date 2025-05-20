@@ -69,6 +69,20 @@ pub fn uci_engine_cmd_test() {
       ),
     ),
   )
+  uci.engine_cmd()
+  |> p.run(
+    "position fen r2r2k1/p1p1bppp/bpnq1n2/3p4/3P4/2QNPBP1/PP1N1PKP/R1B2R2 b - - 10 15 moves d8e8 f3e2 e8d8",
+  )
+  |> should.equal(
+    Ok(
+      uci.EngCmdPosition(
+        uci.PositionFEN(
+          "r2r2k1/p1p1bppp/bpnq1n2/3p4/3P4/2QNPBP1/PP1N1PKP/R1B2R2 b - - 10 15",
+        ),
+        ["d8e8", "f3e2", "e8d8"],
+      ),
+    ),
+  )
 
   uci.engine_cmd()
   |> p.run("go movetime 1000 depth 5")
