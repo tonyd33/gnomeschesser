@@ -628,7 +628,7 @@ pub fn apply_basic_1_test() {
   let game = game.apply(game, move_e4)
 
   game.to_fen(game)
-  |> should.equal("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1")
+  |> should.equal("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1")
   game.turn(game) |> should.equal(player.Black)
   game.hash(game) |> should.equal(game.compute_zobrist_hash(game))
 }
