@@ -50,7 +50,7 @@ pub fn new(
     fn() {
       {
         let now = timestamp.system_time()
-        use _ <- state.do(search_state.set_stats_zero(now))
+        use _ <- state.do(search_state.stats_checkpoint_time(now))
         search(search_subject, game, 1, opts)
       }
       |> state.go(initial: search_state)
@@ -66,9 +66,7 @@ fn search(
   opts: SearchOpts,
 ) -> State(SearchState, Nil) {
   let game_hash = game.hash(game)
-  use cached_evaluation <- state.do(search_state.get_transposition_entry(
-    game_hash,
-  ))
+  use cached_evaluation <- state.do(search_state.transposition_get(game_hash))
 
   // perform the search at each depth, the negamax function will handle sorting and caching
   use best_evaluation <- state.do(case cached_evaluation {
@@ -92,20 +90,20 @@ fn search(
       )
   })
 
-  use _ <- state.do(search_state.prune_transposition_table(
+  use _ <- state.do(search_state.transposition_prune(
     when: search_state.LargerThan(max_tt_size),
     do: search_state.ByRecency(max_tt_recency),
   ))
 
   let now = timestamp.system_time()
   // TODO: use a logging library for this?
-  use info <- state.do(
-    search_state.get_stat_string(_, now)
-    |> state.select,
-  )
-  io.print_error(info)
+  // use info <- state.do(
+  //   search_state.stats_to_string(_, now)
+  //   |> state.select,
+  // )
+  // io.print_error(info)
 
-  use _ <- state.do(search_state.set_stats_zero(now))
+  use _ <- state.do(search_state.stats_checkpoint_time(now))
 
   // a janky way of selecting a random move if we don't have a best move
   // this can currently happen if there's a forced checkmate scenario
@@ -205,11 +203,10 @@ fn negamax_alphabeta_failsoft(
   beta: ExtendedInt,
 ) -> State(SearchState, Evaluation) {
   let game_hash = game.hash(game)
-
   // TODO: check for cache collision here
   // return early if we find an entry in the transposition table
   use cached_evaluation <- state.do(
-    search_state.get_transposition_entry(game_hash)
+    search_state.transposition_get(game_hash)
     |> state.map(fn(x) {
       use transposition.Entry(cached_depth, evaluation, _) <- result.try(x)
       use <- bool.guard(cached_depth < depth, Error(Nil))
@@ -240,10 +237,10 @@ fn negamax_alphabeta_failsoft(
   ))
 
   use _ <- state.do(
-    search_state.insert_transposition_entry(game_hash, #(depth, evaluation)),
+    search_state.transposition_insert(game_hash, #(depth, evaluation)),
   )
-  use _ <- state.do(search_state.increment_nodes_searched())
-  use _ <- state.do(search_state.prune_transposition_table(
+  use _ <- state.do(search_state.stats_increment_nodes_searched())
+  use _ <- state.do(search_state.transposition_prune(
     when: search_state.LargerThan(max_tt_size),
     do: search_state.ByRecency(max_tt_recency),
   ))
@@ -263,10 +260,7 @@ fn do_negamax_alphabeta_failsoft(
     |> state.return
   })
 
-  use moves <- state.do({
-    use search_state: SearchState <- state.select
-    sorted_moves(game, search_state.transposition)
-  })
+  use moves <- state.do(sorted_moves(game))
 
   use <- bool.lazy_guard(list.is_empty(moves), fn() {
     // if checkmate/stalemate
@@ -288,18 +282,37 @@ fn do_negamax_alphabeta_failsoft(
     ))
     use #(best_evaluation, alpha): #(Evaluation, ExtendedInt) <- state.map({
       let game = game.apply(game, move)
-      use evaluation <- state.do(negamax_alphabeta_failsoft(
-        game,
-        depth - 1,
-        xint.negate(beta),
-        xint.negate(alpha),
-      ))
+
+      use evaluation <- state.map({
+        use is_previous_game <- state.do(search_state.is_previous_game(game))
+        // 3 fold repetition
+        // If we've encountered this position before, we can assume we're in a 3 fold loop
+        // and that this position will resolve to a 0
+        use <- bool.guard(is_previous_game, {
+          Evaluation(
+            score: 0 |> xint.from_int,
+            node_type: evaluation.PV,
+            best_move: None,
+            best_line: [],
+          )
+          |> state.return
+        })
+
+        use evaluation <- state.map(negamax_alphabeta_failsoft(
+          game,
+          depth - 1,
+          xint.negate(beta),
+          xint.negate(alpha),
+        ))
+        evaluation.negate(evaluation)
+      })
+
       let evaluation =
-        Evaluation(
-          ..evaluation.negate(evaluation),
-          best_move: Some(move),
-          best_line: [move, ..evaluation.best_line],
-        )
+        Evaluation(..evaluation, best_move: Some(move), best_line: [
+          move,
+          ..evaluation.best_line
+        ])
+
       let best_evaluation = case
         xint.gt(evaluation.score, best_evaluation.score)
       {
@@ -307,7 +320,7 @@ fn do_negamax_alphabeta_failsoft(
         False -> best_evaluation
       }
       let alpha = xint.max(alpha, evaluation.score)
-      state.return(#(best_evaluation, alpha))
+      #(best_evaluation, alpha)
     })
     // beta-cutoff
     case xint.gte(best_evaluation.score, beta) {
@@ -368,16 +381,17 @@ fn quiesce(
 /// sort moves from best to worse, which improves alphabeta pruning
 fn sorted_moves(
   game: game.Game,
-  transposition: transposition.Table,
-) -> List(move.Move(move.ValidInContext)) {
+) -> State(SearchState, List(move.Move(move.ValidInContext))) {
+  use entry <- state.map(search_state.transposition_get(game.hash(game)))
   // the cached PV move
-  let best_move = case dict.get(transposition, game.hash(game)) {
+  let best_move = case entry {
     Ok(transposition.Entry(_, evaluation, _)) -> evaluation.best_move
     Error(Nil) -> None
   }
 
   // retrieve the cached transposition table data
   let valid_moves = game.valid_moves(game)
+
   let #(best_move, capture_promotion_moves, quiet_moves) =
     list.fold(valid_moves, #(None, [], []), fn(acc, move) {
       // TODO: also count checking moves?

@@ -318,12 +318,12 @@ pub fn to_fen(game: Game) -> String {
 /// equality used for threefold repetition:
 /// https://en.wikipedia.org/wiki/Threefold_repetition
 ///
-/// TODO: use zobrist once we generate it for every game
 pub fn equal(g1: Game, g2: Game) -> Bool {
-  let g1_fen = to_fen(g1)
-  let g2_fen = to_fen(g2)
-  list.take(string.split(g1_fen, " "), 4)
-  == list.take(string.split(g2_fen, " "), 4)
+  use <- bool.guard(g1.hash != g2.hash, False)
+  g1.active_color == g2.active_color
+  && g1.en_passant_target_square == g2.en_passant_target_square
+  && g1.castling_availability == g2.castling_availability
+  && g1.board == g2.board
 }
 
 pub fn piece_at(game: Game, square: square.Square) -> Result(piece.Piece, Nil) {
