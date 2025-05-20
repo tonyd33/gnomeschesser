@@ -21,7 +21,7 @@ pub fn main() {
   configuration.set_pair(configuration.Time, 5)
 
   // Change this as you need
-  list_array_flat_map()
+  list_array_map()
 }
 
 /// Findings:
@@ -30,18 +30,21 @@ pub fn main() {
 pub fn list_array_map() {
   let lst_10 = list.range(1, 10)
   let arr_10 = iv.from_list(lst_10)
+  let dict_10 = dict.from_list(list.map(lst_10, fn(x) { #(x, x) }))
 
   let lst_100 = list.range(1, 100)
   let arr_100 = iv.from_list(lst_100)
+  let dict_100 = dict.from_list(list.map(lst_100, fn(x) { #(x, x) }))
 
   let lst_1000 = list.range(1, 1000)
   let arr_1000 = iv.from_list(lst_1000)
+  let dict_1000 = dict.from_list(list.map(lst_1000, fn(x) { #(x, x) }))
 
   benchmark.run(
     [
       benchmark.Function(
         label: "list map",
-        callable: fn(test_data: #(List(Int), Array(Int))) {
+        callable: fn(test_data: #(List(Int), Array(Int), dict.Dict(Int, Int))) {
           fn() {
             test_data.0
             |> list.map(fn(x) { x * 2 })
@@ -51,7 +54,7 @@ pub fn list_array_map() {
       ),
       benchmark.Function(
         label: "array map",
-        callable: fn(test_data: #(List(Int), Array(Int))) {
+        callable: fn(test_data: #(List(Int), Array(Int), dict.Dict(Int, Int))) {
           fn() {
             test_data.1
             |> iv.map(fn(x) { x * 2 })
@@ -59,11 +62,21 @@ pub fn list_array_map() {
           }
         },
       ),
+      benchmark.Function(
+        label: "dict map",
+        callable: fn(test_data: #(List(Int), Array(Int), dict.Dict(Int, Int))) {
+          fn() {
+            test_data.2
+            |> dict.map_values(fn(_, x) { x * 2 })
+            Nil
+          }
+        },
+      ),
     ],
     [
-      benchmark.Data(label: "10", data: #(lst_10, arr_10)),
-      benchmark.Data(label: "100", data: #(lst_100, arr_100)),
-      benchmark.Data(label: "1000", data: #(lst_1000, arr_1000)),
+      benchmark.Data(label: "10", data: #(lst_10, arr_10, dict_10)),
+      benchmark.Data(label: "100", data: #(lst_100, arr_100, dict_100)),
+      benchmark.Data(label: "1000", data: #(lst_1000, arr_1000, dict_1000)),
     ],
   )
 }
@@ -75,18 +88,21 @@ pub fn list_array_map() {
 pub fn list_array_filter() {
   let lst_10 = list.range(1, 10)
   let arr_10 = iv.from_list(lst_10)
+  let dict_10 = dict.from_list(list.map(lst_10, fn(x) { #(x, x) }))
 
   let lst_100 = list.range(1, 100)
   let arr_100 = iv.from_list(lst_100)
+  let dict_100 = dict.from_list(list.map(lst_100, fn(x) { #(x, x) }))
 
   let lst_1000 = list.range(1, 1000)
   let arr_1000 = iv.from_list(lst_1000)
+  let dict_1000 = dict.from_list(list.map(lst_1000, fn(x) { #(x, x) }))
 
   benchmark.run(
     [
       benchmark.Function(
         label: "list filter",
-        callable: fn(test_data: #(List(Int), Array(Int))) {
+        callable: fn(test_data: #(List(Int), Array(Int), dict.Dict(Int, Int))) {
           fn() {
             test_data.0
             |> list.filter(fn(x) { x % 2 == 0 })
@@ -96,7 +112,7 @@ pub fn list_array_filter() {
       ),
       benchmark.Function(
         label: "array filter",
-        callable: fn(test_data: #(List(Int), Array(Int))) {
+        callable: fn(test_data: #(List(Int), Array(Int), dict.Dict(Int, Int))) {
           fn() {
             test_data.1
             |> iv.filter(fn(x) { x % 2 == 0 })
@@ -104,11 +120,21 @@ pub fn list_array_filter() {
           }
         },
       ),
+      benchmark.Function(
+        label: "dict filter",
+        callable: fn(test_data: #(List(Int), Array(Int), dict.Dict(Int, Int))) {
+          fn() {
+            test_data.2
+            |> dict.filter(fn(_, x) { x % 2 == 0 })
+            Nil
+          }
+        },
+      ),
     ],
     [
-      benchmark.Data(label: "10", data: #(lst_10, arr_10)),
-      benchmark.Data(label: "100", data: #(lst_100, arr_100)),
-      benchmark.Data(label: "1000", data: #(lst_1000, arr_1000)),
+      benchmark.Data(label: "10", data: #(lst_10, arr_10, dict_10)),
+      benchmark.Data(label: "100", data: #(lst_100, arr_100, dict_100)),
+      benchmark.Data(label: "1000", data: #(lst_1000, arr_1000, dict_1000)),
     ],
   )
 }

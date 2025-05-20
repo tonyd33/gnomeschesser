@@ -1,3 +1,4 @@
+import iv
 import chess/piece
 import chess/player
 import gleam/bool
@@ -243,12 +244,12 @@ pub fn piece_attacking(
 
 pub fn get_squares_attacking_at(
   board: dict.Dict(Square, piece.Piece),
+  pieces_arr: iv.Array(#(Square, piece.Piece)),
   at: Square,
   by: player.Player,
 ) -> List(Square) {
-  board
-  |> dict.to_list
-  |> list.fold([], fn(acc, piece) {
+  pieces_arr
+  |> iv.fold([], fn(acc, piece) {
     let #(from, piece) = piece
     // We only consider attacks by a certain player
     use <- bool.guard(piece.player != by, acc)
@@ -305,11 +306,11 @@ pub fn get_squares_attacking_at(
 
 pub fn is_attacked_at(
   board: dict.Dict(Square, piece.Piece),
+  pieces: List(#(Square, piece.Piece)),
   at: Square,
   by: player.Player,
 ) -> Bool {
-  board
-  |> dict.to_list
+  pieces
   |> list.any(fn(piece) {
     let #(from, piece) = piece
     // We only consider attacks by a certain player
@@ -360,13 +361,13 @@ pub fn is_attacked_at(
 /// Returns a list of attackers as well as pinned piece if it exists
 pub fn attacks_and_pins_to(
   board: dict.Dict(Square, piece.Piece),
-  pieces_yielder: yielder.Yielder(#(Square, piece.Piece)),
+  pieces_arr: iv.Array(#(Square, piece.Piece)),
   at: Square,
   by: player.Player,
 ) -> List(#(Square, option.Option(Square))) {
   let _attacks_and_pins =
-    pieces_yielder
-    |> yielder.fold([], fn(acc, piece) {
+    pieces_arr
+    |> iv.fold([], fn(acc, piece) {
       let #(from, piece) = piece
       // We only consider attacks by a certain player
       use <- bool.guard(piece.player != by, acc)

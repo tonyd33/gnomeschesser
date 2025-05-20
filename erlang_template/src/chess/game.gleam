@@ -417,11 +417,16 @@ pub fn find_piece(game: Game, piece: piece.Piece) -> List(square.Square) {
 }
 
 pub fn is_check(game: Game, player: player.Player) -> Bool {
+  let pieces = game.board |> dict.to_list
   let assert Ok(#(king_position, _king_piece)) =
-    game.board
-    |> dict.to_list
+    pieces
     |> list.find(fn(x) { x.1 == piece.Piece(player, piece.King) })
-  square.is_attacked_at(game.board, king_position, player.opponent(player))
+  square.is_attacked_at(
+    game.board,
+    pieces,
+    king_position,
+    player.opponent(player),
+  )
 }
 
 pub fn is_checkmate(game: Game) -> Bool {
@@ -900,11 +905,12 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
 }
 
 pub fn find_player_king(game: Game, player: player.Player) {
-  pieces(game)
-  |> list.find(fn(x) {
-    let #(_, piece) = x
+  game.board
+  |> dict.filter(fn(_, piece) {
     piece.symbol == piece.King && piece.player == player
   })
+  |> dict.to_list
+  |> list.first
 }
 
 // TODO: bring back explicitly validating it
@@ -915,7 +921,7 @@ pub fn validate_move(
   valid_moves(game) |> list.find(move.equal(_, move))
 }
 
-fn generate_castle_move(game: Game, castle_player, castle) {
+fn generate_castle_move(game: Game, pieces, castle_player, castle) {
   let us = game.active_color
   let them = player.opponent(us)
 
@@ -926,7 +932,7 @@ fn generate_castle_move(game: Game, castle_player, castle) {
   use <- bool.guard(occupancy_blocked, Error(Nil))
   let attacked_somewhere =
     castle.unattacked_squares(us, castle)
-    |> list.any(square.is_attacked_at(game.board, _, them))
+    |> list.any(square.is_attacked_at(game.board, pieces, _, them))
   use <- bool.guard(attacked_somewhere, Error(Nil))
 
   let rank = square.player_rank(us)
@@ -946,29 +952,21 @@ fn generate_castle_move(game: Game, castle_player, castle) {
   move.new_valid(from:, to:, promotion: None, context:) |> Ok
 }
 
-// Zobrist below
-
 /// generate valid moves
 pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
   let us = game.active_color
   let them = player.opponent(us)
 
   let pieces = game.board |> dict.to_list
-  let pieces_yielder = pieces |> yielder.from_list
+  let pieces_arr = pieces |> iv.from_list
 
   let king_piece = piece.Piece(us, piece.King)
-  // let king_position = find_player_king(game, us)
-  let assert [king_position] = find_piece(game, king_piece)
+  let assert Ok(#(king_position, _)) = find_player_king(game, us)
 
   // find attacks and pins to the king
   let #(king_attackers, king_blockers) = {
     let #(attackers, pins) =
-      square.attacks_and_pins_to(
-        game.board,
-        pieces_yielder,
-        king_position,
-        them,
-      )
+      square.attacks_and_pins_to(game.board, pieces_arr, king_position, them)
       |> list.partition(fn(x) { x.1 |> option.is_none })
     let attackers = list.map(attackers, pair.first)
     let blockers =
@@ -985,32 +983,43 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
     let board_without_king =
       game.board
       |> dict.delete(king_position)
+    let pieces_without_king = dict.to_list(board_without_king)
     square.piece_attack_offsets(king_piece)
-    |> list.filter_map(fn(offset) {
-      use to <- result.try(square.add(king_position, offset))
-      let hit_piece = dict.get(game.board, to)
-      // return early if we hit our own piece
-      use <- bool.guard(
-        hit_piece
-          |> result.map(fn(x) { x.player == us })
-          |> result.unwrap(False),
-        Error(Nil),
-      )
-      // check if new square is attacked
-      use <- bool.guard(
-        square.is_attacked_at(board_without_king, to, them),
-        Error(Nil),
-      )
+    |> iv.from_list
+    |> iv.fold([], fn(acc, offset) {
+      case square.add(king_position, offset) {
+        Ok(to) -> {
+          let hit_piece = dict.get(game.board, to)
+          // return early if we hit our own piece
+          use <- bool.guard(
+            hit_piece
+              |> result.map(fn(x) { x.player == us })
+              |> result.unwrap(False),
+            acc,
+          )
+          // check if new square is attacked
+          use <- bool.guard(
+            square.is_attacked_at(
+              board_without_king,
+              pieces_without_king,
+              to,
+              them,
+            ),
+            acc,
+          )
 
-      let move_context =
-        move.Context(
-          capture: result.map(hit_piece, pair.new(to, _))
-            |> option.from_result,
-          piece: king_piece,
-          castling: None,
-        )
-        |> Some
-      move.new_valid(king_position, to, None, move_context) |> Ok
+          let move_context =
+            move.Context(
+              capture: result.map(hit_piece, pair.new(to, _))
+                |> option.from_result,
+              piece: king_piece,
+              castling: None,
+            )
+            |> Some
+          [move.new_valid(king_position, to, None, move_context), ..acc]
+        }
+        Error(_) -> acc
+      }
     })
   }
 
@@ -1031,7 +1040,12 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
       Ok(x) if x.symbol == piece.Knight || x.symbol == piece.Pawn -> {
         let assert [attacker_square] = king_attackers
         let assert Ok(attacker_piece) = dict.get(game.board, attacker_square)
-        square.get_squares_attacking_at(game.board, attacker_square, us)
+        square.get_squares_attacking_at(
+          game.board,
+          pieces_arr,
+          attacker_square,
+          us,
+        )
         |> list.filter_map(fn(defender_square) {
           let assert Ok(piece) = dict.get(game.board, defender_square)
           use <- bool.guard(piece.symbol == piece.King, Error(Nil))
@@ -1119,8 +1133,7 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
     let sat = fn(x) {
       attackable_square_predicate(x) || movable_square_predicate(x)
     }
-    pieces
-    |> iv.from_list
+    pieces_arr
     |> iv.fold([], fn(acc1, x) {
       let #(from, piece) = x
       use <- bool.guard(piece.player != us, acc1)
@@ -1166,7 +1179,6 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
               True,
               attackable_square_predicate,
             )
-          // |> list.filter(attackable_square_predicate)
           list.append([small_move, big_move] |> result.values, x_move)
         }
         // We already do king move generation separately
@@ -1196,11 +1208,10 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
             move.Context(capture:, piece:, castling: None)
             |> Some
 
+          let to_rank = square.rank(to)
           let promotions = {
-            case
-              square.rank(to) == square.pawn_promotion_rank(us),
-              piece.symbol
-            {
+            // Pawns can't move backwards so we don't even care about color
+            case { to_rank == 7 || to_rank == 0 }, piece.symbol {
               True, piece.Pawn -> [
                 Some(piece.Rook),
                 Some(piece.Knight),
@@ -1245,8 +1256,9 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
           dict.delete(game.board, from)
           |> dict.delete(actual_big_pawn_square)
           |> dict.insert(to, us_pawn)
+        let new_pieces = dict.to_list(new_board)
         use <- bool.guard(
-          square.is_attacked_at(new_board, king_position, them),
+          square.is_attacked_at(new_board, new_pieces, king_position, them),
           Error(Nil),
         )
         let context =
@@ -1277,7 +1289,7 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
             black_kingside: _,
             black_queenside: _,
           ) ->
-            case generate_castle_move(game, player.White, KingSide) {
+            case generate_castle_move(game, pieces, player.White, KingSide) {
               Ok(m) -> [m]
               Error(_) -> []
             }
@@ -1287,7 +1299,7 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
             black_kingside: _,
             black_queenside: _,
           ) ->
-            case generate_castle_move(game, player.White, QueenSide) {
+            case generate_castle_move(game, pieces, player.White, QueenSide) {
               Ok(m) -> [m]
               Error(_) -> []
             }
@@ -1298,8 +1310,8 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
             black_queenside: _,
           ) ->
             case
-              generate_castle_move(game, player.White, KingSide),
-              generate_castle_move(game, player.White, QueenSide)
+              generate_castle_move(game, pieces, player.White, KingSide),
+              generate_castle_move(game, pieces, player.White, QueenSide)
             {
               Ok(m1), Ok(m2) -> [m1, m2]
               Ok(m1), Error(_) -> [m1]
@@ -1317,7 +1329,7 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
             black_kingside: True,
             black_queenside: False,
           ) ->
-            case generate_castle_move(game, player.Black, KingSide) {
+            case generate_castle_move(game, pieces, player.Black, KingSide) {
               Ok(m) -> [m]
               Error(_) -> []
             }
@@ -1327,7 +1339,7 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
             black_kingside: False,
             black_queenside: True,
           ) ->
-            case generate_castle_move(game, player.Black, QueenSide) {
+            case generate_castle_move(game, pieces, player.Black, QueenSide) {
               Ok(m) -> [m]
               Error(_) -> []
             }
@@ -1338,8 +1350,8 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
             black_queenside: True,
           ) ->
             case
-              generate_castle_move(game, player.Black, KingSide),
-              generate_castle_move(game, player.Black, QueenSide)
+              generate_castle_move(game, pieces, player.Black, KingSide),
+              generate_castle_move(game, pieces, player.Black, QueenSide)
             {
               Ok(m1), Ok(m2) -> [m1, m2]
               Ok(m1), Error(_) -> [m1]
@@ -1355,6 +1367,8 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
 
   list.flatten([king_moves, regular_moves, en_passant_move, castling_moves])
 }
+
+// Zobrist below
 
 pub type Hash =
   Int
