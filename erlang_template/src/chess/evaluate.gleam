@@ -19,7 +19,7 @@ pub type Score =
 /// > 0 means white is winning
 /// < 0 means black is winning
 ///
-pub fn game(game: game.Game) -> Score {
+pub fn game(game: game.Game) -> #(Score, List(move.Move(move.ValidInContext))) {
   let us = game.turn(game)
   // evaluate material score
   let material_score =
@@ -71,16 +71,19 @@ pub fn game(game: game.Game) -> Score {
   let king_safety_score = king_safety(game)
 
   // combine scores with weight
-  {
+  #(
     {
-      { material_score * 850 }
-      + { mobility_score * 10 }
-      + { pqst_score * 50 }
-      + { king_safety_score * 40 }
+      {
+        { material_score * 850 }
+        + { mobility_score * 10 }
+        + { pqst_score * 50 }
+        + { king_safety_score * 40 }
+      }
+      / { 850 + 10 + 50 + 40 }
     }
-    / { 850 + 10 + 50 + 40 }
-  }
-  |> xint.from_int
+      |> xint.from_int,
+    valid_moves,
+  )
 }
 
 /// Evaluate king safety score

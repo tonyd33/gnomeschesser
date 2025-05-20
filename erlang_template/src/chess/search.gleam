@@ -348,15 +348,16 @@ fn quiesce(
   alpha: ExtendedInt,
   beta: ExtendedInt,
 ) -> ExtendedInt {
+  let #(score, valid_moves) = evaluate.game(game)
   let score =
-    evaluate.game(game)
+    score
     |> xint.multiply({ evaluate.player(game.turn(game)) |> xint.from_int })
 
   use <- bool.guard(xint.gte(score, beta), score)
   let alpha = xint.max(alpha, score)
 
   let #(best_score, _) =
-    game.valid_moves(game)
+    valid_moves
     |> list.fold_until(#(score, alpha), fn(acc, move) {
       let move_context = move.get_context(move)
       // If game isn't capture, continue
