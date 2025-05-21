@@ -217,7 +217,7 @@ pub fn stats_to_string(
   <> "\n"
 }
 
-fn stats_nodes_per_second(
+pub fn stats_nodes_per_second(
   search_state: SearchState,
   now: timestamp.Timestamp,
 ) -> Float {

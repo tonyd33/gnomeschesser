@@ -30,7 +30,14 @@ const max_tt_recency = 50_000
 
 pub type SearchMessage {
   SearchStateUpdate(search_state: SearchState)
-  SearchUpdate(best_evaluation: Evaluation, game: game.Game, depth: Int)
+  SearchUpdate(
+    best_evaluation: Evaluation,
+    game: game.Game,
+    depth: Int,
+    time: Int,
+    nodes_searched: Int,
+    nps: Int,
+  )
   SearchDone(best_evaluation: Evaluation, game: game.Game)
 }
 
@@ -90,21 +97,6 @@ fn search(
       )
   })
 
-  use _ <- state.do(search_state.transposition_prune(
-    when: search_state.LargerThan(max_tt_size),
-    do: search_state.ByRecency(max_tt_recency),
-  ))
-
-  let now = timestamp.system_time()
-  // TODO: use a logging library for this?
-  // use info <- state.do(
-  //   search_state.stats_to_string(_, now)
-  //   |> state.select,
-  // )
-  // io.print_error(info)
-
-  use _ <- state.do(search_state.stats_checkpoint_time(now))
-
   // a janky way of selecting a random move if we don't have a best move
   // this can currently happen if there's a forced checkmate scenario
   let best_evaluation = case best_evaluation.best_move {
@@ -124,9 +116,38 @@ fn search(
     }
   }
 
-  use search_state <- state.do(state.get_state())
+  use search_state: SearchState <- state.do(state.get_state())
+  let now = timestamp.system_time()
+  let dt =
+    timestamp.difference(search_state.stats.init_time, now)
+    |> duration.to_seconds
+    |> float.multiply(1000.0)
+    |> float.round
+  use nps <- state.do(
+    state.select(search_state.stats_nodes_per_second(_, now))
+    |> state.map(float.round),
+  )
+
+  // TODO: use a logging library for this?
+  // use info <- state.do(
+  //   search_state.stats_to_string(_, now)
+  //   |> state.select,
+  // )
+  // io.print_error(info)
+
+  use _ <- state.do(search_state.stats_checkpoint_time(now))
   process.send(search_subject, SearchStateUpdate(search_state:))
-  process.send(search_subject, SearchUpdate(best_evaluation:, game:, depth: current_depth))
+  process.send(
+    search_subject,
+    SearchUpdate(
+      best_evaluation:,
+      game:,
+      depth: current_depth,
+      time: dt,
+      nodes_searched: search_state.stats.nodes_searched,
+      nps:,
+    ),
+  )
 
   case opts.max_depth {
     Some(max_depth) if current_depth >= max_depth -> {

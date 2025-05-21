@@ -160,7 +160,14 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
         // Messages we receive from the Searcher process
         SearcherMessage(message) ->
           case message {
-            search.SearchUpdate(best_evaluation:, game:, depth:) -> {
+            search.SearchUpdate(
+              best_evaluation:,
+              game:,
+              depth:,
+              time:,
+              nodes_searched:,
+              nps:,
+            ) -> {
               case option.map(state.game, game.equal(_, game)) {
                 Some(True) -> {
                   let evaluation.Evaluation(
@@ -196,6 +203,11 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
                     uci.GUICmdInfo([
                       uci.InfoDepth(depth),
                       uci.InfoScore(info_score_list),
+                      uci.InfoNodes(nodes_searched),
+                      uci.InfoTime(time),
+                      uci.InfoNodesPerSecond(nps),
+                      // TODO: Keep track of this
+                      uci.InfoHashFull(0),
                       uci.InfoPrincipalVariation(list.map(
                         best_line,
                         move.to_lan,
