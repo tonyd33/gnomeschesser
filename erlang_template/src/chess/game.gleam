@@ -22,7 +22,6 @@ pub const start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
 pub opaque type Game {
   Game(
-    board: Dict(square.Square, piece.Piece),
     joe_mama: iv.Array(Option(piece.Piece)),
     active_color: player.Player,
     castling_availability: castle.CastlingAvailability,
@@ -104,7 +103,6 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
     })
 
   use pieces <- result.try(pieces)
-  let board = dict.from_list(pieces)
   let joe_mama =
     pieces
     |> list.fold(iv.repeat(None, 64), fn(acc, x) {
@@ -172,7 +170,6 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
     )
 
   Game(
-    board:,
     joe_mama:,
     active_color:,
     castling_availability:,
@@ -325,7 +322,7 @@ pub fn equal(g1: Game, g2: Game) -> Bool {
   g1.active_color == g2.active_color
   && g1.en_passant_target_square == g2.en_passant_target_square
   && g1.castling_availability == g2.castling_availability
-  && g1.board == g2.board
+  && g1.joe_mama == g2.joe_mama
 }
 
 pub fn piece_at(game: Game, square: square.Square) -> Result(piece.Piece, Nil) {
@@ -654,7 +651,7 @@ type GameOp {
 fn map_bbh(bbh, op) {
   case op {
     BoardDeletion(square, piece) -> {
-      let #(board, joe_mama, hash) = bbh
+      let #(joe_mama, hash) = bbh
       let assert Ok(joe_mama) =
         iv.set(
           joe_mama,
@@ -662,14 +659,13 @@ fn map_bbh(bbh, op) {
           None,
         )
       #(
-        dict.delete(board, square),
         joe_mama,
         // (un)XOR squares out
         int.bitwise_exclusive_or(hash, zobrist.piece_hash(square, piece)),
       )
     }
     BoardInsertion(square, piece) -> {
-      let #(board, joe_mama, hash) = bbh
+      let #(joe_mama, hash) = bbh
       let assert Ok(joe_mama) =
         iv.set(
           joe_mama,
@@ -677,7 +673,6 @@ fn map_bbh(bbh, op) {
           Some(piece),
         )
       #(
-        dict.insert(board, square, piece),
         joe_mama,
         // XOR squares in
         int.bitwise_exclusive_or(hash, zobrist.piece_hash(square, piece)),
@@ -696,7 +691,6 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
   let promotion = move.get_promotion(move)
   let move_context = move.get_context(move)
   let Game(
-    board:,
     joe_mama:,
     castling_availability:,
     active_color: us,
@@ -707,10 +701,10 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
   ) = game
   let prev_castling_availability = castling_availability
   let them = player.opponent(us)
-  let assert Ok(piece) = dict.get(board, from)
+  let assert Ok(piece) = board_get(joe_mama, from)
 
   // Updates to the board.
-  let #(board, joe_mama, hash) = {
+  let #(joe_mama, hash) = {
     // update the piece if it's a promotion
     let new_piece =
       promotion
@@ -725,7 +719,7 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
 
     // Over the course of hundreds of thousands of nodes, manually doing this
     // rather than folding over a list is marginally but measurably faster.
-    let bbh = #(board, joe_mama, hash)
+    let bbh = #(joe_mama, hash)
     let bbh = map_bbh(bbh, BoardDeletion(from, move_context.piece))
     let bbh = case move_context.capture {
       Some(x) -> map_bbh(bbh, BoardDeletion(x.0, x.1))
@@ -893,7 +887,6 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
   }
 
   Game(
-    board:,
     joe_mama:,
     active_color: them,
     castling_availability:,
