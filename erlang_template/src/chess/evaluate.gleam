@@ -16,7 +16,6 @@ pub type Score =
 /// < 0 means black is winning
 ///
 pub fn game(game: game.Game) -> Score {
-  let us = game.turn(game)
   let board = game.board(game)
   let pieces = game.pieces(game)
   // TODO: use a cached version of getting moves somehow?

@@ -162,8 +162,7 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
     // Handles any updates from the searcher
     SearcherMessage(message) ->
       case message {
-        search.SearchUpdate(best_evaluation:, game:, ..)
-        | search.SearchDone(best_evaluation:, game:) ->
+        search.SearchUpdate(best_evaluation:, game:, ..) ->
           case game.equal(game, state.game) {
             True -> RobotState(..state, best_evaluation: Some(best_evaluation))
             False -> {
@@ -174,6 +173,8 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
         // TODO: We might want to send a response early
         // We could have a signal for the searcher to indicate
         // How confident it thinks a move is
+        search.SearchDone ->
+          panic as "The searcher can't be done on the web version"
         search.SearchStateUpdate(search_state:) ->
           RobotState(..state, search_state:)
       }

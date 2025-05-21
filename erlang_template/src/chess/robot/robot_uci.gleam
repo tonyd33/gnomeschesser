@@ -156,7 +156,6 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
           io.println(uci.serialize_gui_cmd(uci.GUICmdReadyOk))
           state
         }
-
         // Messages we receive from the Searcher process
         SearcherMessage(message) ->
           case message {
@@ -176,46 +175,42 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
                     best_move:,
                     best_line:,
                   ) = best_evaluation
-                  option.map(best_move, fn(best_move) {
-                    let info_score_list =
-                      [
-                        // TODO: Give proper mate score
-                        // Why are we sending these scores for the infinite
-                        // cases? Idk I think it stops fastchess warnings lol
-                        case score {
-                          xint.PosInf -> [
-                            uci.ScoreMate(1),
-                            uci.ScoreCentipawns(n: 1),
-                          ]
-                          xint.Finite(score) -> [uci.ScoreCentipawns(n: score)]
-                          xint.NegInf -> [
-                            uci.ScoreMate(1),
-                            uci.ScoreCentipawns(n: 1),
-                          ]
-                        },
-                        case node_type {
-                          evaluation.PV -> []
-                          evaluation.Cut -> [uci.ScoreLowerbound]
-                          evaluation.All -> [uci.ScoreUpperbound]
-                        },
-                      ]
-                      |> list.flatten
-                    uci.GUICmdInfo([
-                      uci.InfoDepth(depth),
-                      uci.InfoScore(info_score_list),
-                      uci.InfoNodes(nodes_searched),
-                      uci.InfoTime(time),
-                      uci.InfoNodesPerSecond(nps),
-                      // TODO: Keep track of this
-                      uci.InfoHashFull(0),
-                      uci.InfoPrincipalVariation(list.map(
-                        best_line,
-                        move.to_lan,
-                      )),
-                    ])
-                    |> uci.serialize_gui_cmd
-                    |> io.println
-                  })
+
+                  let info_score_list =
+                    [
+                      // TODO: Give proper mate score
+                      // Why are we sending these scores for the infinite
+                      // cases? Idk I think it stops fastchess warnings lol
+                      case score {
+                        xint.PosInf -> [
+                          uci.ScoreMate(1),
+                          uci.ScoreCentipawns(n: 1),
+                        ]
+                        xint.Finite(score) -> [uci.ScoreCentipawns(n: score)]
+                        xint.NegInf -> [
+                          uci.ScoreMate(1),
+                          uci.ScoreCentipawns(n: 1),
+                        ]
+                      },
+                      case node_type {
+                        evaluation.PV -> []
+                        evaluation.Cut -> [uci.ScoreLowerbound]
+                        evaluation.All -> [uci.ScoreUpperbound]
+                      },
+                    ]
+                    |> list.flatten
+                  uci.GUICmdInfo([
+                    uci.InfoDepth(depth),
+                    uci.InfoScore(info_score_list),
+                    uci.InfoNodes(nodes_searched),
+                    uci.InfoTime(time),
+                    uci.InfoNodesPerSecond(nps),
+                    // TODO: Keep track of this
+                    uci.InfoHashFull(0),
+                    uci.InfoPrincipalVariation(list.map(best_line, move.to_lan)),
+                  ])
+                  |> uci.serialize_gui_cmd
+                  |> io.println
 
                   use <- bool.guard(option.is_none(best_move), state)
                   RobotState(..state, best_evaluation: Some(best_evaluation))
@@ -226,27 +221,9 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
                 }
               }
             }
-            search.SearchDone(best_evaluation:, game: _) -> {
-              // We don't respond to this if there's no search active
-              case state.searcher.0 {
-                Some(pid) -> {
-                  let evaluation.Evaluation(_, _, best_move, _) =
-                    best_evaluation
-                  option.map(best_move, fn(best_move) {
-                    uci.GUICmdBestMove(
-                      move: move.to_lan(best_move),
-                      ponder: None,
-                    )
-                    |> uci.serialize_gui_cmd
-                    |> io.println
-                  })
-                  process.unlink(pid)
-                  process.kill(pid)
-
-                  RobotState(..state, searcher: #(None, state.searcher.1))
-                }
-                None -> state
-              }
+            search.SearchDone -> {
+              process.send(state.subject, Stop)
+              state
             }
             search.SearchStateUpdate(search_state:) ->
               RobotState(..state, search_state:)
@@ -288,29 +265,30 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
         }
         GoInfinite -> start_searcher(state, search.default_search_opts)
         Stop -> {
-          // We don't respond to this if there's no search active
-          case state.searcher.0 {
-            Some(pid) -> {
-              case state.best_evaluation {
-                Some(evaluation.Evaluation(
-                  score: _,
-                  node_type: _,
-                  best_move: Some(move),
-                  best_line: _,
-                )) ->
-                  uci.GUICmdBestMove(move: move.to_lan(move), ponder: None)
-                  |> uci.serialize_gui_cmd
-                  |> io.println
+          option.map(state.searcher.0, fn(pid) {
+            process.unlink(pid)
+            process.kill(pid)
+          })
 
-                _ -> Nil
-              }
-              process.unlink(pid)
-              process.kill(pid)
-
-              RobotState(..state, searcher: #(None, state.searcher.1))
-            }
-            None -> state
+          case state.best_evaluation {
+            Some(evaluation.Evaluation(
+              score: _,
+              node_type: _,
+              best_move: Some(move),
+              best_line: _,
+            )) ->
+              uci.GUICmdBestMove(move: move.to_lan(move), ponder: None)
+              |> uci.serialize_gui_cmd
+              |> io.println
+            _ -> Nil
           }
+
+          RobotState(
+            ..state,
+            searcher: #(None, state.searcher.1),
+            game: None,
+            best_evaluation: None,
+          )
         }
       }
     }
