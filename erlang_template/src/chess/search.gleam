@@ -30,7 +30,7 @@ const max_tt_recency = 50_000
 
 pub type SearchMessage {
   SearchStateUpdate(search_state: SearchState)
-  SearchUpdate(best_evaluation: Evaluation, game: game.Game)
+  SearchUpdate(best_evaluation: Evaluation, game: game.Game, depth: Int)
   SearchDone(best_evaluation: Evaluation, game: game.Game)
 }
 
@@ -126,7 +126,7 @@ fn search(
 
   use search_state <- state.do(state.get_state())
   process.send(search_subject, SearchStateUpdate(search_state:))
-  process.send(search_subject, SearchUpdate(best_evaluation:, game:))
+  process.send(search_subject, SearchUpdate(best_evaluation:, game:, depth: current_depth))
 
   case opts.max_depth {
     Some(max_depth) if current_depth >= max_depth -> {

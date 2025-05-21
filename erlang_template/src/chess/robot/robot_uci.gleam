@@ -160,7 +160,7 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
         // Messages we receive from the Searcher process
         SearcherMessage(message) ->
           case message {
-            search.SearchUpdate(best_evaluation:, game:) -> {
+            search.SearchUpdate(best_evaluation:, game:, depth:) -> {
               case option.map(state.game, game.equal(_, game)) {
                 Some(True) -> {
                   let evaluation.Evaluation(
@@ -170,22 +170,36 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
                     best_line:,
                   ) = best_evaluation
                   option.map(best_move, fn(best_move) {
-                    let info_score_list = [
-                      uci.ScoreCentipawns(
-                        n: xint.to_int(score) |> result.unwrap(0),
-                      ),
-                      ..case node_type {
-                        evaluation.PV -> []
-                        evaluation.Cut -> [uci.ScoreLowerbound]
-                        evaluation.All -> [uci.ScoreUpperbound]
-                      }
-                    ]
+                    let info_score_list =
+                      [
+                        // TODO: Give proper mate score
+                        // Why are we sending these scores for the infinite
+                        // cases? Idk I think it stops fastchess warnings lol
+                        case score {
+                          xint.PosInf -> [
+                            uci.ScoreMate(1),
+                            uci.ScoreCentipawns(n: 1),
+                          ]
+                          xint.Finite(score) -> [uci.ScoreCentipawns(n: score)]
+                          xint.NegInf -> [
+                            uci.ScoreMate(1),
+                            uci.ScoreCentipawns(n: 1),
+                          ]
+                        },
+                        case node_type {
+                          evaluation.PV -> []
+                          evaluation.Cut -> [uci.ScoreLowerbound]
+                          evaluation.All -> [uci.ScoreUpperbound]
+                        },
+                      ]
+                      |> list.flatten
                     uci.GUICmdInfo([
-                      uci.InfoPrincipalVariation([move.to_lan(best_move)]),
+                      uci.InfoDepth(depth),
                       uci.InfoScore(info_score_list),
-                      uci.InfoPrincipalVariation(
-                        best_line |> list.map(move.to_lan),
-                      ),
+                      uci.InfoPrincipalVariation(list.map(
+                        best_line,
+                        move.to_lan,
+                      )),
                     ])
                     |> uci.serialize_gui_cmd
                     |> io.println
