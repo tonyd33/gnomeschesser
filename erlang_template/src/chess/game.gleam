@@ -892,11 +892,14 @@ fn board_get(board: Array(Option(piece.Piece)), square: square.Square) {
 }
 
 pub fn find_player_king(game: Game, player: player.Player) {
-  pieces(game)
-  |> list.find(fn(x) {
-    let #(_, piece) = x
-    piece.symbol == piece.King && piece.player == player
+  game.joe_mama
+  |> iv.find_index(fn(piece) {
+    case piece {
+      Some(piece) -> piece.symbol == piece.King && piece.player == player
+      None -> False
+    }
   })
+  |> result.map(fn(x) { #(x, piece.Piece(player, piece.King)) })
 }
 
 // TODO: bring back explicitly validating it
@@ -948,8 +951,6 @@ pub fn valid_moves(
 ) -> List(move.Move(move.ValidInContext)) {
   let us = game.active_color
   let them = player.opponent(us)
-
-  let pieces = game |> board |> dict.to_list
 
   let king_piece = piece.Piece(us, piece.King)
   // let king_position = find_player_king(game, us)
@@ -1108,93 +1109,106 @@ pub fn valid_moves(
         _ -> panic
       }
     }
-    pieces
-    |> list.flat_map(fn(x) {
-      let #(from, piece) = x
-      use <- bool.guard(piece.player != us, [])
-      // if this piece is pinned, we need to especially consider it
-      let to_squares = case piece.symbol {
-        piece.Knight | piece.Bishop | piece.Queen | piece.Rook ->
-          square.piece_attacking(game.joe_mama, from, piece, True)
-          |> list.filter(fn(x) {
-            attackable_square_predicate(x) || movable_square_predicate(x)
-          })
+    game.joe_mama
+    |> iv.index_fold([], fn(acc, piece, from_64) {
+      case piece {
+        Some(piece) -> {
+          let assert Ok(from) = square.square64_to_ox88(from_64)
+          use <- bool.guard(piece.player != us, acc)
+          // if this piece is pinned, we need to especially consider it
+          let to_squares = case piece.symbol {
+            piece.Knight | piece.Bishop | piece.Queen | piece.Rook ->
+              square.piece_attacking(game.joe_mama, from, piece, True)
+              |> list.filter(fn(x) {
+                attackable_square_predicate(x) || movable_square_predicate(x)
+              })
 
-        piece.Pawn -> {
-          let pawn_direction = piece.pawn_direction(us)
-          let small_move =
-            square.move(from, pawn_direction, 1)
-            |> result.try(fn(x) {
-              case movable_square_predicate(x) {
-                True -> Ok(x)
-                False -> Error(Nil)
+            piece.Pawn -> {
+              let pawn_direction = piece.pawn_direction(us)
+              let small_move =
+                square.move(from, pawn_direction, 1)
+                |> result.try(fn(x) {
+                  case movable_square_predicate(x) {
+                    True -> Ok(x)
+                    False -> Error(Nil)
+                  }
+                })
+              let big_move = {
+                use <- bool.guard(
+                  square.rank(from) != square.pawn_start_rank(us),
+                  Error(Nil),
+                )
+                square.move(from, pawn_direction, 1)
+                |> result.try(fn(square) {
+                  case board_get(game.joe_mama, square) {
+                    Ok(_) -> Error(Nil)
+                    Error(Nil) -> Ok(square)
+                  }
+                })
+                |> result.try(square.move(_, pawn_direction, 1))
+                |> result.try(fn(x) {
+                  case movable_square_predicate(x) {
+                    True -> Ok(x)
+                    False -> Error(Nil)
+                  }
+                })
               }
-            })
-          let big_move = {
-            use <- bool.guard(
-              square.rank(from) != square.pawn_start_rank(us),
-              Error(Nil),
-            )
-            square.move(from, pawn_direction, 1)
-            |> result.try(fn(square) {
-              case board_get(game.joe_mama, square) {
-                Ok(_) -> Error(Nil)
-                Error(Nil) -> Ok(square)
-              }
-            })
-            |> result.try(square.move(_, pawn_direction, 1))
-            |> result.try(fn(x) {
-              case movable_square_predicate(x) {
-                True -> Ok(x)
-                False -> Error(Nil)
-              }
-            })
+              let x_move =
+                square.piece_attacking(game.joe_mama, from, piece, True)
+                |> list.filter(attackable_square_predicate)
+              list.append([small_move, big_move] |> result.values, x_move)
+            }
+            // We already do king move generation separately
+            piece.King -> []
           }
-          let x_move =
-            square.piece_attacking(game.joe_mama, from, piece, True)
-            |> list.filter(attackable_square_predicate)
-          list.append([small_move, big_move] |> result.values, x_move)
+
+          // if we are pinned down, check if the target square is along the line
+          let ret =
+            dict.get(king_blockers, from)
+            |> result.map(fn(pinner) {
+              let from_offset: Int =
+                square.ray_to_offset(from: pinner, to: from).0
+              to_squares
+              |> list.filter(fn(to) {
+                to == pinner
+                // if the to square is still along the same direction
+                || from_offset == square.ray_to_offset(from: pinner, to: to).0
+              })
+            })
+            |> result.unwrap(to_squares)
+            |> list.flat_map(fn(to) {
+              let capture =
+                board_get(game.joe_mama, to)
+                |> result.map(pair.new(to, _))
+                |> option.from_result
+              let context =
+                move.Context(capture:, piece:, castling: None)
+                |> Some
+
+              let promotions = {
+                case
+                  square.rank(to) == square.pawn_promotion_rank(us),
+                  piece.symbol
+                {
+                  True, piece.Pawn -> [
+                    Some(piece.Rook),
+                    Some(piece.Knight),
+                    Some(piece.Bishop),
+                    Some(piece.Queen),
+                  ]
+                  _, _ -> [None]
+                }
+              }
+              promotions
+              |> list.map(move.new_valid(from:, to:, promotion: _, context:))
+            })
+
+          [ret, ..acc]
         }
-        // We already do king move generation separately
-        piece.King -> []
+        _ -> acc
       }
-
-      // if we are pinned down, check if the target square is along the line
-      dict.get(king_blockers, from)
-      |> result.map(fn(pinner) {
-        let from_offset: Int = square.ray_to_offset(from: pinner, to: from).0
-        to_squares
-        |> list.filter(fn(to) {
-          to == pinner
-          // if the to square is still along the same direction
-          || from_offset == square.ray_to_offset(from: pinner, to: to).0
-        })
-      })
-      |> result.unwrap(to_squares)
-      |> list.flat_map(fn(to) {
-        let capture =
-          board_get(game.joe_mama, to)
-          |> result.map(pair.new(to, _))
-          |> option.from_result
-        let context =
-          move.Context(capture:, piece:, castling: None)
-          |> Some
-
-        let promotions = {
-          case square.rank(to) == square.pawn_promotion_rank(us), piece.symbol {
-            True, piece.Pawn -> [
-              Some(piece.Rook),
-              Some(piece.Knight),
-              Some(piece.Bishop),
-              Some(piece.Queen),
-            ]
-            _, _ -> [None]
-          }
-        }
-        promotions
-        |> list.map(move.new_valid(from:, to:, promotion: _, context:))
-      })
     })
+    |> list.flatten
   }
 
   // also check en passant explicitly, and see if it puts us in check
