@@ -1,4 +1,3 @@
-import chess/bitboard
 import chess/constants/zobrist
 import chess/game/castle.{type Castle, KingSide, QueenSide}
 import chess/move
@@ -23,7 +22,6 @@ pub const start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 pub opaque type Game {
   Game(
     board: Dict(square.Square, piece.Piece),
-    // bitboard: bitboard.GameBitboard,
     active_color: player.Player,
     castling_availability: castle.CastlingAvailability,
     en_passant_target_square: Option(#(player.Player, square.Square)),
@@ -31,10 +29,6 @@ pub opaque type Game {
     fullmove_number: Int,
     hash: Hash,
   )
-}
-
-pub fn get_game_bitboard(game: Game) {
-  todo
 }
 
 pub fn load_fen(fen: String) -> Result(Game, Nil) {
@@ -149,7 +143,6 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
     "b" -> player.Black
     _ -> panic
   }
-  // let bitboard = bitboard.from_pieces(pieces)
   let en_passant_target_square =
     square.from_string(en_passant_target_square)
     |> result.map(pair.new(player.opponent(active_color), _))
@@ -160,14 +153,12 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
     compute_zobrist_hash_impl(
       active_color,
       board,
-      // bitboard,
       castling_availability,
       en_passant_target_square,
     )
 
   Game(
     board:,
-    // bitboard:,
     active_color:,
     castling_availability:,
     en_passant_target_square:,
@@ -361,7 +352,9 @@ fn validate_en_passant(
     |> result.try(square.move(_, dir, 1))
     |> result.unwrap(0x0)
 
-  let can_attack = dict.has_key(board, x_left) || dict.has_key(board, x_right)
+  let can_attack =
+    dict.get(board, x_left) == Ok(piece.Piece(us, piece.Pawn))
+    || dict.get(board, x_right) == Ok(piece.Piece(us, piece.Pawn))
 
   case can_attack {
     True -> Some(en_passant_target_square)
@@ -620,12 +613,6 @@ fn map_bbh(bbh, op) {
       let #(board, hash) = bbh
       #(
         dict.delete(board, square),
-        // mask it out
-        // bitboard.and(
-        //   bitboard,
-        //   piece,
-        //   int.bitwise_not(bitboard.from_square(square)),
-        // ),
         // (un)XOR squares out
         int.bitwise_exclusive_or(hash, zobrist.piece_hash(square, piece)),
       )
@@ -634,8 +621,6 @@ fn map_bbh(bbh, op) {
       let #(board, hash) = bbh
       #(
         dict.insert(board, square, piece),
-        // mask it in
-        // bitboard.or(bitboard, piece, bitboard.from_square(square)),
         // XOR squares in
         int.bitwise_exclusive_or(hash, zobrist.piece_hash(square, piece)),
       )
@@ -654,7 +639,6 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
   let move_context = move.get_context(move)
   let Game(
     board:,
-    // bitboard:,
     castling_availability:,
     active_color: us,
     en_passant_target_square: prev_en_passant_target_square,
@@ -851,7 +835,6 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
 
   Game(
     board:,
-    // bitboard:,
     active_color: them,
     castling_availability:,
     en_passant_target_square:,
@@ -1315,7 +1298,6 @@ pub fn compute_zobrist_hash(game: Game) {
   compute_zobrist_hash_impl(
     game.active_color,
     game.board,
-    // game.bitboard,
     game.castling_availability,
     game.en_passant_target_square,
   )
@@ -1329,7 +1311,6 @@ pub fn compute_zobrist_hash(game: Game) {
 fn compute_zobrist_hash_impl(
   us: player.Player,
   board: Dict(square.Square, piece.Piece),
-  // bb: bitboard.GameBitboard,
   castling_availability: castle.CastlingAvailability,
   en_passant_target_square: Option(#(player.Player, square.Square)),
 ) -> Hash {
