@@ -51,7 +51,7 @@ fn search_game_to_depth(game: game.Game, depth: Int) {
   yielder.repeat(subject)
   |> yielder.take_while(fn(subject) {
     case process.receive_forever(subject) {
-      search.SearchDone(_, _) -> False
+      search.SearchDone(..) -> False
       search.SearchUpdate(..) -> True
       search.SearchStateUpdate(_) -> True
     }
