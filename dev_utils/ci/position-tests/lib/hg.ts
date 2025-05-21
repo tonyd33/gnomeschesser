@@ -19,7 +19,7 @@ const tests: TestCase[] = [
 ];
 
 const suite: TestSuite = {
-  name: "Advantage",
+  name: "Hanging",
   comment: "A suite of tests for hanging pieces. We should always pass these.",
   tests,
 };

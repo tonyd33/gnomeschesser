@@ -274,7 +274,7 @@ const tests: TestCase[] = [
 ];
 
 const suite: TestSuite = {
-  name: "Advantage",
+  name: "Zugzwang",
   comment:
     "[Zugzwang test suite](https://www.stmintz.com/ccc/index.php?id=392369) from 2004",
   tests,

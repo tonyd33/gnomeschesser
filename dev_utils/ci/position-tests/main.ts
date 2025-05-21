@@ -128,7 +128,7 @@ function generateReport(suites: TestSuite[], results: TestResult[]): string {
     R.join("\n\n"),
   ]);
 
-  return `# 🧪 Evaluation Test Results
+  return `# 🧪 Position Test Results
 
 * ✅ ${numPassed} passed
 * ❌ ${numFailed} failed
