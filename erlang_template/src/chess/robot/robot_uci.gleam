@@ -1,8 +1,10 @@
 import chess/game
 import chess/move
+import chess/piece
 import chess/player
 import chess/search
 import chess/search/evaluation
+import chess/search/game_history
 import chess/search/search_state
 import chess/uci
 import gleam/bool
@@ -56,6 +58,7 @@ type RobotState {
     searcher: #(Option(process.Pid), Subject(search.SearchMessage)),
     search_state: search_state.SearchState,
     subject: Subject(RobotMessage),
+    game_history: game_history.GameHistory,
   )
 }
 
@@ -79,6 +82,7 @@ fn create_robot_thread() -> Subject(RobotMessage) {
           searcher: #(None, search_subject),
           search_state:,
           subject: robot_subject,
+          game_history: game_history.new(),
         ),
         // This selector allows is to merge the different subjects (like from the searcher) into one selector
         process.new_selector()
@@ -108,19 +112,24 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
         // Update the current game position
         SetFen(fen:) -> {
           let game = game.load_fen(fen) |> option.from_result
-          RobotState(..state, game:, best_evaluation: None)
+          let game_history = game_history.new()
+          let game_history =
+            game
+            |> option.map(game_history.insert(game_history, _))
+            |> option.unwrap(game_history)
+          RobotState(..state, game:, best_evaluation: None, game_history:)
         }
         Clear -> {
           option.map(state.searcher.0, fn(pid) {
             process.unlink(pid)
             process.kill(pid)
           })
-          let search_state = search_state.new(timestamp.system_time())
           RobotState(
             ..state,
-            search_state:,
+            search_state: search_state.new(timestamp.system_time()),
             searcher: #(None, state.searcher.1),
             game: None,
+            game_history: game_history.new(),
             best_evaluation: None,
           )
         }
@@ -132,23 +141,10 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
               |> game.validate_move(game)
               |> option.from_result,
             )
-            let search_state = {
-              // we can clear the previous game if there is a capture/promotion
-              // as there's no way a 3 fold can reach that state back
-              let material_change =
-                move.get_promotion(valid_move) |> option.is_some
-                || move.get_context(valid_move).capture |> option.is_some
-              let previous_games =
-                case material_change {
-                  True -> dict.new()
-                  False -> state.search_state.previous_games
-                }
-                |> dict.insert(game.hash(game), game)
+            let game = game.apply(game, valid_move)
+            let game_history = game_history.insert(state.game_history, game)
 
-              search_state.SearchState(..state.search_state, previous_games:)
-            }
-            let game = game.apply(game, valid_move) |> Some
-            RobotState(..state, game:, search_state:)
+            RobotState(..state, game: Some(game), game_history:)
           }
           |> option.unwrap(state)
 
@@ -286,7 +282,6 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
           RobotState(
             ..state,
             searcher: #(None, state.searcher.1),
-            game: None,
             best_evaluation: None,
           )
         }
@@ -312,7 +307,13 @@ fn start_searcher(
         [] -> panic as "Search requested on a position with no valid moves!"
         _ -> {
           let search_pid =
-            search.new(game, state.search_state, state.searcher.1, search_opts)
+            search.new(
+              game,
+              state.search_state,
+              state.searcher.1,
+              search_opts,
+              state.game_history,
+            )
             |> Some
           RobotState(
             ..state,

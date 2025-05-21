@@ -17,7 +17,6 @@ import util/xint.{type ExtendedInt}
 pub type SearchState {
   SearchState(
     transposition: transposition.Table,
-    previous_games: dict.Dict(game.Hash, game.Game),
     history: dict.Dict(#(square.Square, piece.Piece), Int),
     stats: SearchStats,
   )
@@ -27,21 +26,12 @@ pub fn new(now: timestamp.Timestamp) {
   SearchState(
     transposition: dict.new(),
     history: dict.new(),
-    previous_games: dict.new(),
     stats: SearchStats(
       nodes_searched: 0,
       nodes_searched_at_init_time: 0,
       init_time: now,
     ),
   )
-}
-
-pub fn is_previous_game(game: game.Game) -> State(SearchState, Bool) {
-  use search_state: SearchState <- state.select()
-  search_state.previous_games
-  |> dict.get(game.hash(game))
-  |> result.map(game.equal(_, game))
-  |> result.unwrap(False)
 }
 
 const max_history: Int = 50
