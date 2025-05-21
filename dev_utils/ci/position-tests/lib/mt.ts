@@ -1,10 +1,5 @@
-import { TestCase } from "./types.ts";
+import { TestCase, TestSuite } from "./types.ts";
 
-/**
- * A suite of tests to test mating. Failing to pass these may indicate
- * something seriously wrong with our engine: maybe we aren't searching
- * deep enough.
- */
 const tests: TestCase[] = [
   {
     fen: "6k1/P6p/5Kp1/2p5/1P3P2/2r5/8/8 w - - 0 1",
@@ -33,4 +28,11 @@ const tests: TestCase[] = [
   },
 ];
 
-export default tests;
+const suite: TestSuite = {
+  name: "Mate",
+  comment:
+    "A suite of tests to test mating. Failing to pass these may indicate something seriously wrong with our engine: maybe we aren't searching deep enough.",
+  tests,
+};
+
+export default suite;

@@ -1,4 +1,4 @@
-import { TestCase } from "./types.ts";
+import { TestCase, TestSuite } from "./types.ts";
 
 /**
  * https://www.stmintz.com/ccc/index.php?id=392369
@@ -273,4 +273,11 @@ const tests: TestCase[] = [
   },
 ];
 
-export default tests;
+const suite: TestSuite = {
+  name: "Advantage",
+  comment:
+    "[Zugzwang test suite](https://www.stmintz.com/ccc/index.php?id=392369) from 2004",
+  tests,
+};
+
+export default suite;

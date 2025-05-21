@@ -10,8 +10,9 @@ import wac from "./lib/wac.ts";
 import yargs from "yargs";
 import zpts from "./lib/zpts.ts";
 import { Engine } from "node-uci";
-import { TestCase } from "./lib/types.ts";
+import { TestCase, TestSuite } from "./lib/types.ts";
 import { hideBin } from "yargs/helpers";
+import * as R from "ramda";
 
 type TestResult = {
   ok: boolean;
@@ -21,15 +22,15 @@ type TestResult = {
   got: string;
 };
 
-const testCases: TestCase[] = [
-  ...bk,
-  ...wac,
-  ...sbd,
-  ...colditz,
-  ...zpts,
-  ...hg,
-  ...mt,
-  ...av,
+const suites: TestSuite[] = [
+  bk,
+  wac,
+  sbd,
+  colditz,
+  zpts,
+  hg,
+  mt,
+  av,
 ];
 
 function chunk<A>(n: number, xs: A[]): A[][] {
@@ -54,26 +55,39 @@ function mulberry32(seed: number) {
   };
 }
 
-function generateReport(results: TestResult[]): string {
+function generateSuiteSummary(
+  suite: TestSuite,
+  results: TestResult[],
+): string {
   const numPassed = results.filter((x) => x.ok).length;
   const numFailed = results.length - numPassed;
-  const failedTableRows = results
-    .filter((x) => !x.ok)
-    .map((x) => `| ${x.id} | ${x.input} | ${x.expected} | ${x.got} |`)
-    .join("\n");
+  const failedTableRows = R.flow(results, [
+    R.sortBy((x: TestResult) => x.id),
+    R.filter((x: TestResult) => !x.ok),
+    R.map((x: TestResult) =>
+      `| ${x.id} | ${x.input} | ${x.expected} | ${x.got} |`
+    ),
+    R.join("\n"),
+  ]);
 
   const failureDetails = `
-## 📚 Detailed failure report
+<details>
 
-For more information on each test id, see the [Bratko-Kopec test wiki](https://www.chessprogramming.org/Bratko-Kopec_Test#EPD-Record) and see the tests at \`dev_utils/ci/bratko-kopec/main.ts\`
+<summary>
+  <h3>🔎 Failure details</h3>
+</summary>
 
 | id | input | expected | got |
 | -- |  --   |    --    | --  |
 ${failedTableRows}
+</details>
 `;
-  let output = `# 📝 Bratko-Kopec Report
 
-## 📍 Summary
+  let output = `## 📝 ${suite.name} Report
+
+${suite.comment}
+
+### 📍 Summary
 
 * ✅ ${numPassed} passed
 * ❌ ${numFailed} failed
@@ -86,6 +100,43 @@ ${failedTableRows}
   }
 
   return output;
+}
+
+function generateReport(suites: TestSuite[], results: TestResult[]): string {
+  const numPassed = results.filter((x) => x.ok).length;
+  const numFailed = results.length - numPassed;
+
+  // Map each test id to its suite name
+  const idToSuiteName = Object.fromEntries(
+    suites.flatMap((suite) => suite.tests.map((test) => [test.id, suite.name])),
+  );
+  const nameToSuite: Record<string, TestSuite> = R.flow(suites, [
+    R.map((suite) => [suite.name, suite]),
+    Object.fromEntries,
+  ]);
+
+  const suiteReports = R.flow(results, [
+    // Group results by suite name
+    R.groupBy((x) => idToSuiteName[x.id]),
+    Object.entries,
+    // Sort by suite name
+    R.sortBy(([x]) => x),
+    // Inject suite information
+    R.map(([name, results]) => [nameToSuite[name], results]),
+    // Generate summaries
+    R.map(R.apply(generateSuiteSummary)),
+    R.join("\n\n"),
+  ]);
+
+  return `# 🧪 Evaluation Test Results
+
+* ✅ ${numPassed} passed
+* ❌ ${numFailed} failed
+* 💡 ${results.length} total
+* 🧮 ${(numPassed * 100 / results.length).toFixed(2)}% success
+
+
+${suiteReports}`;
 }
 
 async function runTestCase(
@@ -218,6 +269,7 @@ async function main() {
     process.exit(1);
   }
 
+  const testCases = suites.flatMap((suite) => suite.tests);
   let testsToRun = testCases;
   {
     const testRegexes = opts.match.map((re) => new RegExp(re));
@@ -253,7 +305,7 @@ async function main() {
     .then((xss) =>
       xss.flat().sort((x, y) => x.id == y.id ? 0 : (x.id < y.id ? -1 : 1))
     );
-  process.stdout.write(generateReport(results) + "\n");
+  process.stdout.write(generateReport(suites, results) + "\n");
   process.exit(0);
 }
 

@@ -1,8 +1,5 @@
-import { TestCase } from "./types.ts";
+import { TestCase, TestSuite } from "./types.ts";
 
-/**
- * A suite of tests to test gaining an advantage.
- */
 const tests: TestCase[] = [
   {
     // Win the queen for a rook
@@ -26,4 +23,10 @@ const tests: TestCase[] = [
   },
 ];
 
-export default tests;
+const suite: TestSuite = {
+  name: "Advantage",
+  comment: "A suite of tests to test gaining an advantage.",
+  tests,
+};
+
+export default suite;

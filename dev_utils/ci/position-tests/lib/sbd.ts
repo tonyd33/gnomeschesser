@@ -1,4 +1,4 @@
-import { TestCase } from "./types.ts";
+import { TestCase, TestSuite } from "./types.ts";
 
 const tests: TestCase[] = [
   {
@@ -948,4 +948,11 @@ const tests: TestCase[] = [
   },
 ];
 
-export default tests;
+const suite: TestSuite = {
+  name: "Silent but Deadly",
+  comment:
+    "Test suite to help tune chess engines. See [Silent but Deadly wiki](https://www.chessprogramming.org/Silent_but_Deadly)",
+  tests,
+};
+
+export default suite;

@@ -1,8 +1,6 @@
-import { TestCase } from "./types.ts";
+import { TestCase, TestSuite } from "./types.ts";
 
-/**
- * https://www.chessprogramming.org/Bratko-Kopec_Test
- */
+/** */
 const tests: TestCase[] = [
   {
     fen: "1k1r4/pp1b1R2/3q2pp/4p3/2B5/4Q3/PPP2B2/2K5 b - - 0 1",
@@ -127,4 +125,11 @@ const tests: TestCase[] = [
   },
 ];
 
-export default tests;
+const suite: TestSuite = {
+  name: "Bratko-Kopec",
+  comment:
+    "See the [Bratko-Kopec test wiki](https://www.chessprogramming.org/Bratko-Kopec_Test).",
+  tests,
+};
+
+export default suite;

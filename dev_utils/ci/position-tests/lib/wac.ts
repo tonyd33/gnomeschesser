@@ -1,7 +1,7 @@
-import { TestCase } from "./types.ts";
+import { TestCase, TestSuite } from "./types.ts";
 
 /**
- * https://www.chessprogramming.org/Win_at_Chess
+ * 
  */
 const tests: TestCase[] = [
   {
@@ -2159,4 +2159,11 @@ const tests: TestCase[] = [
   },
 ];
 
-export default tests;
+const suite: TestSuite = {
+  name: "Win at Chess",
+  comment: "From Fred Reinfeld's [Win at Chess](https://www.chessprogramming.org/Win_at_Chess).",
+  tests,
+};
+
+
+export default suite;

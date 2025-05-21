@@ -7,3 +7,8 @@ export type TestCase = {
   comment?: string;
 };
 
+export type TestSuite = {
+  name: string;
+  comment: string;
+  tests: TestCase[];
+};

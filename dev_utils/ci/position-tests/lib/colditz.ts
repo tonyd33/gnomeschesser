@@ -1,8 +1,6 @@
-import { TestCase } from "./types.ts";
+import { TestCase, TestSuite } from "./types.ts";
 
-/**
- * https://www.talkchess.com/forum/viewtopic.php?t=62659
- */
+/** */
 const tests: TestCase[] = [
   {
     fen: "3r2k1/p3R1p1/1pq2pQp/8/8/1P4P1/PB3P1P/3b2K1 b - - 0 1",
@@ -240,4 +238,11 @@ const tests: TestCase[] = [
   },
 ];
 
-export default tests;
+const suite: TestSuite = {
+  name: "Colditz",
+  comment:
+    "See [forum post](https://www.talkchess.com/forum/viewtopic.php?t=62659).",
+  tests,
+};
+
+export default suite;

@@ -1,8 +1,5 @@
-import { TestCase } from "./types.ts";
+import { TestCase, TestSuite } from "./types.ts";
 
-/**
- * A suite of tests for hanging pieces. We should always pass these.
- */
 const tests: TestCase[] = [
   {
     fen: "3k4/8/4q3/8/3N4/8/1R4R1/3K4 w - - 0 1",
@@ -21,4 +18,10 @@ const tests: TestCase[] = [
   },
 ];
 
-export default tests;
+const suite: TestSuite = {
+  name: "Advantage",
+  comment: "A suite of tests for hanging pieces. We should always pass these.",
+  tests,
+};
+
+export default suite;
