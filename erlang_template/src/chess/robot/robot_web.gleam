@@ -162,7 +162,7 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
     // Handles any updates from the searcher
     SearcherMessage(message) ->
       case message {
-        search.SearchUpdate(best_evaluation:, game:)
+        search.SearchUpdate(best_evaluation:, game:, ..)
         | search.SearchDone(best_evaluation:, game:) ->
           case game.equal(game, state.game) {
             True -> RobotState(..state, best_evaluation: Some(best_evaluation))

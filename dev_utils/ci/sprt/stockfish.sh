@@ -46,6 +46,8 @@ Options:
   --sf-depth    depth       stockfish search depth. default $stockfish_depth
   --engine-cmd  cmd         command to start our engine. default $engine_cmd
   --results     dir         directory to store results. default $results_dir
+  --book        book        opening book. default $book
+  --fc-level    level       fastchess log level: trace, warn, info, err, fatal. default "$fastchess_log_level"
 
 EOF
 }
@@ -59,6 +61,7 @@ while [ "$#" -gt 0 ]; do
     --concurrency) concurrency="$2"; shift 2;;
     --sf-skill)    stockfish_skill_level="$2"; shift 2;;
     --sf-depth)    stockfish_depth="$2"; shift 2;;
+    --fc-level)    fastchess_log_level="$2"; shift 2;;
     --engine-cmd)  engine_cmd="$(realpath "$working_dir/$2")"; shift 2;;
     *)             usage; exit 1;
   esac
