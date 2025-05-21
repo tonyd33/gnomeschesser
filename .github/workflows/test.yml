@@ -60,8 +60,8 @@ jobs:
         run: |-
           deno task test \
             --engine ../../scripts/start-uci.sh \
-            --workers 4 \
-            --timeout 10000 \
+            --workers 6 \
+            --timeout 5000 \
             --depth 8 > ${{ github.workspace }}/results/position-tests.md
         working-directory: dev_utils/ci/position-tests
 
