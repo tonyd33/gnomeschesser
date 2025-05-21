@@ -107,12 +107,7 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
     pieces
     |> list.fold(iv.repeat(None, 64), fn(acc, x) {
       let #(square, piece) = x
-      let assert Ok(acc) =
-        iv.set(
-          acc,
-          square.to_othersquare(square) |> square.othersquare_to64,
-          Some(piece),
-        )
+      let assert Ok(acc) = iv.set(acc, square.to_64(square), Some(piece))
       acc
     })
   use halfmove_clock <- result.try(int.parse(halfmove_clock))
@@ -383,7 +378,7 @@ pub fn find_piece(game: Game, piece: piece.Piece) -> List(square.Square) {
     case p {
       Some(p) if piece == p -> {
         let assert Ok(square) =
-          square.make_othersquare(square) |> square.from_othersquare
+          square.make_square64(square) |> square.square64_to_ox88
         [square, ..acc]
       }
       _ -> acc
@@ -472,7 +467,7 @@ pub fn pieces(game: Game) -> List(#(square.Square, piece.Piece)) {
     case piece {
       Some(piece) -> {
         let assert Ok(square) =
-          square.make_othersquare(square) |> square.from_othersquare
+          square.make_square64(square) |> square.square64_to_ox88
         [#(square, piece), ..acc]
       }
       _ -> acc
@@ -652,12 +647,7 @@ fn map_bbh(bbh, op) {
   case op {
     BoardDeletion(square, piece) -> {
       let #(joe_mama, hash) = bbh
-      let assert Ok(joe_mama) =
-        iv.set(
-          joe_mama,
-          square.to_othersquare(square) |> square.othersquare_to64,
-          None,
-        )
+      let assert Ok(joe_mama) = iv.set(joe_mama, square.to_64(square), None)
       #(
         joe_mama,
         // (un)XOR squares out
@@ -667,11 +657,7 @@ fn map_bbh(bbh, op) {
     BoardInsertion(square, piece) -> {
       let #(joe_mama, hash) = bbh
       let assert Ok(joe_mama) =
-        iv.set(
-          joe_mama,
-          square.to_othersquare(square) |> square.othersquare_to64,
-          Some(piece),
-        )
+        iv.set(joe_mama, square.to_64(square), Some(piece))
       #(
         joe_mama,
         // XOR squares in
@@ -898,7 +884,7 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
 }
 
 fn board_get(board: Array(Option(piece.Piece)), square: square.Square) {
-  let d64 = square.to_othersquare(square) |> square.othersquare_to64
+  let d64 = square.to_64(square)
   case iv.get(board, d64) {
     Ok(Some(piece)) -> Ok(piece)
     _ -> Error(Nil)
@@ -988,10 +974,7 @@ pub fn valid_moves(
   let king_moves = {
     let assert Ok(joe_mama_without_king) =
       game.joe_mama
-      |> iv.set(
-        square.to_othersquare(king_position) |> square.othersquare_to64,
-        None,
-      )
+      |> iv.set(square.to_64(king_position), None)
     square.piece_attack_offsets(king_piece)
     |> list.filter_map(fn(offset) {
       use to <- result.try(square.add(king_position, offset))
@@ -1233,22 +1216,9 @@ pub fn valid_moves(
         use piece <- result.try(board_get(game.joe_mama, from))
         use <- bool.guard(piece != piece.Piece(us, piece.Pawn), Error(Nil))
         let assert Ok(new_joe_mama) =
-          iv.set(
-            game.joe_mama,
-            square.to_othersquare(from) |> square.othersquare_to64,
-            None,
-          )
-          |> result.then(iv.set(
-            _,
-            square.to_othersquare(actual_big_pawn_square)
-              |> square.othersquare_to64,
-            None,
-          ))
-          |> result.then(iv.set(
-            _,
-            square.to_othersquare(to) |> square.othersquare_to64,
-            Some(us_pawn),
-          ))
+          iv.set(game.joe_mama, square.to_64(from), None)
+          |> result.then(iv.set(_, square.to_64(actual_big_pawn_square), None))
+          |> result.then(iv.set(_, square.to_64(to), Some(us_pawn)))
 
         use <- bool.guard(
           square.is_attacked_at(new_joe_mama, king_position, them, store),
@@ -1392,7 +1362,7 @@ fn compute_zobrist_hash_impl(
       case piece {
         Some(piece) -> {
           let assert Ok(square) =
-            square.make_othersquare(square) |> square.from_othersquare
+            square.make_square64(square) |> square.square64_to_ox88
           int.bitwise_exclusive_or(acc, zobrist.piece_hash(square, piece))
         }
         _ -> acc

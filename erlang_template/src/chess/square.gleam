@@ -31,9 +31,8 @@ pub opaque type Square {
   Square(ox88: Int)
 }
 
-pub opaque type OtherSquare {
-  OtherSquare(s: Int)
-}
+pub type Square64 =
+  Int
 
 /// See chess.js reference:
 /// https://github.com/jhlywa/chess.js/blob/d68055f4dae7c06d100f21d385906743dce47abc/src/chess.ts#L205
@@ -45,23 +44,19 @@ pub fn to_ox88(square: Square) -> Int {
 
 /// Get the 64-based representation of the square
 ///
-pub fn to_othersquare(square: Square) -> OtherSquare {
+pub fn to_64(square: Square) -> Square64 {
   let file = file(square)
   let rank = rank(square)
-  OtherSquare({ 8 * rank } + file)
+  { 8 * rank } + file
 }
 
-pub fn from_othersquare(square: OtherSquare) -> Result(Square, Nil) {
-  let #(rank, file) = #(square.s / 8, square.s % 8)
+pub fn square64_to_ox88(square: Square64) -> Result(Square, Nil) {
+  let #(rank, file) = #(square / 8, square % 8)
   from_rank_file(rank, file)
 }
 
-pub fn make_othersquare(x: Int) {
-  OtherSquare(x)
-}
-
-pub fn othersquare_to64(square: OtherSquare) -> Int {
-  square.s
+pub fn make_square64(x: Int) {
+  x
 }
 
 pub fn get_squares() -> List(Square) {
@@ -263,12 +258,12 @@ pub fn get_squares_attacking_at(
   by: player.Player,
 ) -> List(Square) {
   board
-  |> iv.index_fold([], fn(acc, piece, from64) {
+  |> iv.index_fold([], fn(acc, piece, from_64: Square64) {
     case piece {
       None -> acc
       Some(piece) -> {
-        let from64 = OtherSquare(from64)
-        let assert Ok(from) = from_othersquare(from64)
+        let from64 = from_64
+        let assert Ok(from) = square64_to_ox88(from64)
         // We only consider attacks by a certain player
         use <- bool.guard(piece.player != by, acc)
 
@@ -333,9 +328,8 @@ pub fn is_attacked_at(
   store: ConstantsStore,
 ) -> Bool {
   store.range_64
-  |> iv.any(fn(from64) {
-    let from64 = OtherSquare(from64)
-    let assert Ok(from) = from_othersquare(from64)
+  |> iv.any(fn(from_64) {
+    let assert Ok(from) = square64_to_ox88(from_64)
     case board_get(board, from) {
       Ok(piece) -> {
         // We only consider attacks by a certain player
@@ -386,7 +380,7 @@ pub fn is_attacked_at(
 }
 
 fn board_get(board: Array(Option(piece.Piece)), square: Square) {
-  let d64 = to_othersquare(square).s
+  let d64 = to_64(square)
   case iv.get(board, d64) {
     Ok(Some(piece)) -> Ok(piece)
     _ -> Error(Nil)
@@ -407,8 +401,8 @@ pub fn attacks_and_pins_to(
     |> iv.index_fold([], fn(acc, piece, from64) {
       case piece {
         Some(piece) -> {
-          let from64 = OtherSquare(from64)
-          let assert Ok(from) = from_othersquare(from64)
+          let from64 = make_square64(from64)
+          let assert Ok(from) = square64_to_ox88(from64)
           // We only consider attacks by a certain player
           use <- bool.guard(piece.player != by, acc)
 

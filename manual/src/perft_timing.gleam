@@ -1,3 +1,4 @@
+import chess/constants_store
 import bencher
 import chess/game
 import chess/util/perft
@@ -21,9 +22,10 @@ pub fn main() {
     game.load_fen(
       "rnb1kb1r/pp3ppp/2ppp3/4P1N1/3P4/3B1P2/PPP4P/RN1QK2n b Qkq - 1 10",
     )
+  let store = constants_store.new()
   bencher.run(
     dict.from_list([
-      #("perft", fn(args: Arguments) { perft.perft(args.game, args.depth) }),
+      #("perft", fn(args: Arguments) { perft.perft(args.game, args.depth, store) }),
     ]),
     [
       bencher.Warmup(2),
