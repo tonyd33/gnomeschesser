@@ -3,7 +3,8 @@ import chess/evaluate/endgame
 import chess/evaluate/midgame
 import chess/game
 import chess/piece
-import gleam/int
+import chess/player
+import gleam/dict
 import gleam/list
 import util/xint.{type ExtendedInt}
 
@@ -16,31 +17,37 @@ pub type Score =
 ///
 pub fn game(game: game.Game) -> Score {
   let us = game.turn(game)
+  let board = game.board(game)
   let pieces = game.pieces(game)
   // TODO: use a cached version of getting moves somehow?
   let valid_moves = game.valid_moves(game)
 
+  // TODO: scale this gradually
   let game_stage = case
-    pieces
-    |> list.filter(fn(x) { { x.1 }.symbol == piece.Queen })
+    board
+    |> dict.filter(fn(_square, piece) { piece.symbol == piece.Queen })
+    |> dict.is_empty
   {
-    [] -> common.EndGame
-    _ -> common.MidGame
+    True -> common.EndGame
+    False -> common.MidGame
   }
 
   // evaluate material score
+  // TODO: we can combine the material score with the PSQT to squeeze out performance
+  // but we could just do that at the very end after we tune it
   let material_score =
     game.pieces(game)
-    |> list.map(fn(square_piece) { common.piece(square_piece.1) })
-    |> list.fold(0, int.add)
+    |> list.fold(0, fn(acc, square_piece) { common.piece(square_piece.1) + acc })
+
   let pqst_score = case game_stage {
     common.MidGame -> midgame.psqt(pieces)
     common.EndGame -> endgame.psqt(pieces)
   }
   // TODO: change these based on the state of the game
-  let mobility_score = midgame.mobility(valid_moves, us)
-  let king_safety_score = midgame.king_pawn_shield(game)
-
+  let mobility_score = midgame.mobility(valid_moves)
+  let king_safety_score =
+    midgame.king_pawn_shield(game, player.White)
+    + midgame.king_pawn_shield(game, player.Black)
   // combine scores with weight
   {
     {

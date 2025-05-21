@@ -26,50 +26,46 @@ pub fn psqt(pieces: List(#(square.Square, piece.Piece))) {
 /// This is implemented in a similar fashion: for every move, it counts
 /// positively towards the mobility score and is weighted by the piece.
 /// TODO: do both side's mobility
-pub fn mobility(
-  moves: List(move.Move(move.ValidInContext)),
-  side: player.Player,
-) -> Int {
-  // TODO: use a cached version of getting moves somehow?
-  list.fold(moves, 0, fn(mobility_score, move) {
-    let move_context = move.get_context(move)
-    case move_context.piece.symbol {
+pub fn mobility(moves: List(move.Move(move.ValidInContext))) -> Int {
+  list.fold(moves, 0, fn(acc, move) {
+    let piece = move.get_context(move).piece
+    case piece.symbol {
       piece.Pawn | piece.Knight | piece.King -> 0
       piece.Bishop -> 125
       piece.Rook -> 60
       piece.Queen -> 25
     }
-    + mobility_score
+    * common.player(piece.player)
+    + acc
   })
-  * common.player(side)
   / 10
 }
 
 /// Evaluate king safety score with a pawn shield
-/// TODO: check both sides
-pub fn king_pawn_shield(game: game.Game) -> Int {
-  let us = game.turn(game)
-  let assert Ok(#(king_square, _)) = game.find_player_king(game, us)
+/// Positive is good for white, negative is good for black
+pub fn king_pawn_shield(game: game.Game, side: player.Player) -> Int {
+  let assert Ok(#(king_square, _)) = game.find_player_king(game, side)
 
   // Pawn shield: When the king has castled, it is important to preserve
   // pawns next to it, in order to protect it against the assault. Generally
   // speaking, it is best to keep the pawns unmoved or possibly moved up one
   // square. The lack of a shielding pawn deserves a penalty, even more so if
   // there is an open file next to the king.
-  let pawn_shield_score = {
-    // If we haven't even castled, no bonus or penalty will be applied for
+  {
+    // If we haven't even castled, no bonus will be applied for
     // the pawn shield score
-    use <- bool.guard(!game.has_castled(game, us), 0)
+    // TODO: this currently just check castling availability
+    // We could have this be part of a more general king safety term?
+    use <- bool.guard(!game.has_castled(game, side), 0)
     let king_rank = square.rank(king_square)
     let king_file = square.file(king_square)
-    let rank_offset = case us {
-      player.Black -> 1
-      player.White -> -1
+    let rank_offset = case side {
+      player.Black -> -1
+      player.White -> 1
     }
-    let our_pawn = piece.Piece(us, piece.Pawn)
+    let our_pawn = piece.Piece(side, piece.Pawn)
 
     // TODO: Consider doing a smarter bitboard mask for these
-
     // This is the number of pawns that are 1 square away vertically
     let num_pawns_around_king_close =
       [
@@ -77,51 +73,31 @@ pub fn king_pawn_shield(game: game.Game) -> Int {
         square.from_rank_file(king_rank + rank_offset, king_file),
         square.from_rank_file(king_rank + rank_offset, king_file + 1),
       ]
-      |> list.filter_map(fn(rs) {
-        result.map(rs, game.piece_exists_at(game, our_pawn, _))
-        |> result_addons.expect_or(fn(x) { x }, fn(_) { Nil })
+      |> list.count(fn(pawn_square) {
+        pawn_square
+        |> result.map(game.piece_exists_at(game, our_pawn, _))
+        |> result.unwrap(False)
       })
-      |> list.length
     // This is the number of pawns that are 2 squares away vertically
-    // We start to give small penalties at this point
     let num_pawns_around_king_far =
       [
-        square.from_rank_file(king_rank + rank_offset + 1, king_file - 1),
-        square.from_rank_file(king_rank + rank_offset + 1, king_file),
-        square.from_rank_file(king_rank + rank_offset + 1, king_file + 1),
+        square.from_rank_file(king_rank + rank_offset * 2, king_file - 1),
+        square.from_rank_file(king_rank + rank_offset * 2, king_file),
+        square.from_rank_file(king_rank + rank_offset * 2, king_file + 1),
       ]
-      |> list.filter_map(fn(rs) {
-        result.map(rs, game.piece_exists_at(game, our_pawn, _))
-        |> result_addons.expect_or(fn(x) { x }, fn(_) { Nil })
+      |> list.count(fn(pawn_square) {
+        pawn_square
+        |> result.map(game.piece_exists_at(game, our_pawn, _))
+        |> result.unwrap(False)
       })
-      |> list.length
-    let num_pawns_around_king =
-      num_pawns_around_king_close + num_pawns_around_king_far
 
-    // TODO: Simplify math
-    let penalty = case num_pawns_around_king_close {
-      // If all three pawns are hugging the king closely, then no penalty is
-      // incurred
-      3 -> 0
-      _ ->
-        case num_pawns_around_king {
-          // If all three pawns are still around the king, then some penalty is
-          // incurred for the pawns that are far
-          3 -> num_pawns_around_king_far
-          // This means there are pawns that are very distant from the king!
-          // For each pawn very distant from the king, apply a *harsh* penalty.
-          _ -> {
-            let num_pawns_distant = 3 - num_pawns_around_king
+    // instead of doing a penalty, we do a bonus
+    // this also encourages the king to castle more rather than punishes
 
-            { num_pawns_distant * 10 } + num_pawns_around_king_far
-          }
-        }
-    }
-
-    // Score is -penalty
-    int.negate(penalty)
+    // all 3 pawns close to the king would be about 120 centipawns
+    { num_pawns_around_king_close * 40 }
+    // all 3 pawns 1 away from the king would be about 30 centipawns
+    + { num_pawns_around_king_far * 10 }
   }
-
-  // let's ballpark the pawn shield should range around 100-200 centipawns
-  pawn_shield_score * 60
+  * common.player(side)
 }

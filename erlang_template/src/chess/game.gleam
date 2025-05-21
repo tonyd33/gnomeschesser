@@ -335,34 +335,33 @@ pub fn piece_exists_at(
   piece: piece.Piece,
   square: square.Square,
 ) -> Bool {
-  let bit =
-    int.bitwise_shift_left(1, square.rank(square) * 8 + square.file(square))
+  let bit = bitboard.from_square(square)
   case piece {
     piece.Piece(player.White, piece.Pawn) ->
-      int.bitwise_or(game.bitboard.white_pawns, bit)
+      int.bitwise_and(game.bitboard.white_pawns, bit)
     piece.Piece(player.White, piece.Knight) ->
-      int.bitwise_or(game.bitboard.white_knights, bit)
+      int.bitwise_and(game.bitboard.white_knights, bit)
     piece.Piece(player.White, piece.Bishop) ->
-      int.bitwise_or(game.bitboard.white_bishops, bit)
+      int.bitwise_and(game.bitboard.white_bishops, bit)
     piece.Piece(player.White, piece.Rook) ->
-      int.bitwise_or(game.bitboard.white_rooks, bit)
+      int.bitwise_and(game.bitboard.white_rooks, bit)
     piece.Piece(player.White, piece.Queen) ->
-      int.bitwise_or(game.bitboard.white_queens, bit)
+      int.bitwise_and(game.bitboard.white_queens, bit)
     piece.Piece(player.White, piece.King) ->
-      int.bitwise_or(game.bitboard.white_king, bit)
+      int.bitwise_and(game.bitboard.white_king, bit)
 
     piece.Piece(player.Black, piece.Pawn) ->
-      int.bitwise_or(game.bitboard.black_pawns, bit)
+      int.bitwise_and(game.bitboard.black_pawns, bit)
     piece.Piece(player.Black, piece.Knight) ->
-      int.bitwise_or(game.bitboard.black_knights, bit)
+      int.bitwise_and(game.bitboard.black_knights, bit)
     piece.Piece(player.Black, piece.Bishop) ->
-      int.bitwise_or(game.bitboard.black_bishops, bit)
+      int.bitwise_and(game.bitboard.black_bishops, bit)
     piece.Piece(player.Black, piece.Rook) ->
-      int.bitwise_or(game.bitboard.black_rooks, bit)
+      int.bitwise_and(game.bitboard.black_rooks, bit)
     piece.Piece(player.Black, piece.Queen) ->
-      int.bitwise_or(game.bitboard.black_queens, bit)
+      int.bitwise_and(game.bitboard.black_queens, bit)
     piece.Piece(player.Black, piece.King) ->
-      int.bitwise_or(game.bitboard.black_king, bit)
+      int.bitwise_and(game.bitboard.black_king, bit)
   }
   != 0
 }
