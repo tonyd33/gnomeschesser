@@ -29,7 +29,7 @@ jobs:
       - run: gleam format --check src test
         working-directory: erlang_template
 
-  evaluation_test:
+  position_test:
     runs-on: [self-hosted, linux, x64]
     env:
       ImageOS: ubuntu24
@@ -55,15 +55,15 @@ jobs:
 
       - run: mkdir -p results
 
-      - name: Run Bratko-Kopec
+      - name: Run position tests
         # TODO: Tune depth higher as we can search more efficiently
         run: |-
           deno task test \
             --engine ../../scripts/start-uci.sh \
-            --workers 4 \
-            --timeout 10000 \
-            --depth 8 > ${{ github.workspace }}/results/bratko-kopec.md
-        working-directory: dev_utils/ci/bratko-kopec
+            --workers 6 \
+            --timeout 5000 \
+            --depth 8 > ${{ github.workspace }}/results/position-tests.md
+        working-directory: dev_utils/ci/position-tests
 
       - name: Find existing PR comment
         if: github.event_name == 'pull_request'
@@ -72,7 +72,7 @@ jobs:
         with:
           issue-number: ${{ github.event.pull_request.number }}
           comment-author: 'github-actions[bot]'
-          body-includes: 'Bratko-Kopec Report'
+          body-includes: 'Position Test'
 
       - name: Post or update PR comment
         if: github.event_name == 'pull_request'
@@ -81,7 +81,7 @@ jobs:
           edit-mode: replace
           token: ${{ secrets.GITHUB_TOKEN }}
           issue-number: ${{ github.event.pull_request.number }}
-          body-file: results/bratko-kopec.md
+          body-file: results/position-tests.md
           comment-id: ${{ steps.find-comment.outputs.comment-id }}
 
   sprt-stockfish:

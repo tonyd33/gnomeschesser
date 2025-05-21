@@ -1,10 +1,19 @@
-import process from "node:process";
+import av from "./lib/av.ts";
+import bk from "./lib/bk.ts";
+import colditz from "./lib/colditz.ts";
+import hg from "./lib/hg.ts";
+import mt from "./lib/mt.ts";
 import path from "node:path";
+import process from "node:process";
+import sbd from "./lib/sbd.ts";
+import wac from "./lib/wac.ts";
 import yargs from "yargs";
-import { hideBin } from "yargs/helpers";
+import zpts from "./lib/zpts.ts";
 import { Engine } from "node-uci";
+import { TestCase, TestSuite } from "./lib/types.ts";
+import { hideBin } from "yargs/helpers";
+import * as R from "ramda";
 
-type TestCase = { fen: string; bms: string[]; id: string };
 type TestResult = {
   ok: boolean;
   id: string;
@@ -13,204 +22,15 @@ type TestResult = {
   got: string;
 };
 
-const bkTests: TestCase[] = [
-  {
-    fen: "1k1r4/pp1b1R2/3q2pp/4p3/2B5/4Q3/PPP2B2/2K5 b - - 0 1",
-    bms: ["d6d1"],
-    id: "BK.01",
-  },
-  {
-    fen: "3r1k2/4npp1/1ppr3p/p6P/P2PPPP1/1NR5/5K2/2R5 w - - 0 1",
-    bms: ["d4d5"],
-    id: "BK.02",
-  },
-  {
-    fen: "2q1rr1k/3bbnnp/p2p1pp1/2pPp3/PpP1P1P1/1P2BNNP/2BQ1PRK/7R b - - 0 1",
-    bms: ["f6f5"],
-    id: "BK.03",
-  },
-  {
-    fen: "rnbqkb1r/p3pppp/1p6/2ppP3/3N4/2P5/PPP1QPPP/R1B1KB1R w KQkq - 0 1",
-    bms: ["e5e6"],
-    id: "BK.04",
-  },
-  {
-    fen: "r1b2rk1/2q1b1pp/p2ppn2/1p6/3QP3/1BN1B3/PPP3PP/R4RK1 w - - 0 1",
-    bms: ["c3d5", "a2a4"],
-    id: "BK.05",
-  },
-  {
-    fen: "2r3k1/pppR1pp1/4p3/4P1P1/5P2/1P4K1/P1P5/8 w - - 0 1",
-    bms: ["g5g6"],
-    id: "BK.06",
-  },
-  {
-    fen: "1nk1r1r1/pp2n1pp/4p3/q2pPp1N/b1pP1P2/B1P2R2/2P1B1PP/R2Q2K1 w - - 0 1",
-    bms: ["h5f6"],
-    id: "BK.07",
-  },
-  {
-    fen: "4b3/p3kp2/6p1/3pP2p/2pP1P2/4K1P1/P3N2P/8 w - - 0 1",
-    bms: ["f4f5"],
-    id: "BK.08",
-  },
-  {
-    fen: "2kr1bnr/pbpq4/2n1pp2/3p3p/3P1P1B/2N2N1Q/PPP3PP/2KR1B1R w - - 0 1",
-    bms: ["f4f5"],
-    id: "BK.09",
-  },
-  {
-    fen: "3rr1k1/pp3pp1/1qn2np1/8/3p4/PP1R1P2/2P1NQPP/R1B3K1 b - - 0 1",
-    bms: ["c6e5"],
-    id: "BK.10",
-  },
-  {
-    fen: "2r1nrk1/p2q1ppp/bp1p4/n1pPp3/P1P1P3/2PBB1N1/4QPPP/R4RK1 w - - 0 1",
-    bms: ["f2f4"],
-    id: "BK.11",
-  },
-  {
-    fen: "r3r1k1/ppqb1ppp/8/4p1NQ/8/2P5/PP3PPP/R3R1K1 b - - 0 1",
-    bms: ["d7f5"],
-    id: "BK.12",
-  },
-  {
-    fen: "r2q1rk1/4bppp/p2p4/2pP4/3pP3/3Q4/PP1B1PPP/R3R1K1 w - - 0 1",
-    bms: ["b2b4"],
-    id: "BK.13",
-  },
-  {
-    fen: "rnb2r1k/pp2p2p/2pp2p1/q2P1p2/8/1Pb2NP1/PB2PPBP/R2Q1RK1 w - - 0 1",
-    bms: ["d1d2", "d1e1"],
-    id: "BK.14",
-  },
-  {
-    fen: "2r3k1/1p2q1pp/2b1pr2/p1pp4/6Q1/1P1PP1R1/P1PN2PP/5RK1 w - - 0 1",
-    bms: ["g4g7"],
-    id: "BK.15",
-  },
-  {
-    fen: "r1bqkb1r/4npp1/p1p4p/1p1pP1B1/8/1B6/PPPN1PPP/R2Q1RK1 w kq - 0 1",
-    bms: ["d2e4"],
-    id: "BK.16",
-  },
-  {
-    fen:
-      "r2q1rk1/1ppnbppp/p2p1nb1/3Pp3/2P1P1P1/2N2N1P/PPB1QP2/R1B2RK1 b - - 0 1",
-    bms: ["h7h5"],
-    id: "BK.17",
-  },
-  {
-    fen: "r1bq1rk1/pp2ppbp/2np2p1/2n5/P3PP2/N1P2N2/1PB3PP/R1B1QRK1 b - - 0 1",
-    bms: ["c5b3"],
-    id: "BK.18",
-  },
-  {
-    fen: "3rr3/2pq2pk/p2p1pnp/8/2QBPP2/1P6/P5PP/4RRK1 b - - 0 1",
-    bms: ["e8e4"],
-    id: "BK.19",
-  },
-  {
-    fen: "r4k2/pb2bp1r/1p1qp2p/3pNp2/3P1P2/2N3P1/PPP1Q2P/2KRR3 w - - 0 1",
-    bms: ["g3g4"],
-    id: "BK.20",
-  },
-  {
-    fen: "3rn2k/ppb2rpp/2ppqp2/5N2/2P1P3/1P5Q/PB3PPP/3RR1K1 w - - 0 1",
-    bms: ["f5h6"],
-    id: "BK.21",
-  },
-  {
-    fen: "2r2rk1/1bqnbpp1/1p1ppn1p/pP6/N1P1P3/P2B1N1P/1B2QPP1/R2R2K1 b - - 0 1",
-    bms: ["b7e4"],
-    id: "BK.22",
-  },
-  {
-    fen: "r1bqk2r/pp2bppp/2p5/3pP3/P2Q1P2/2N1B3/1PP3PP/R4RK1 b kq - 0 1",
-    bms: ["f7f6"],
-    id: "BK.23",
-  },
-  {
-    fen: "r2qnrnk/p2b2b1/1p1p2pp/2pPpp2/1PP1P3/PRNBB3/3QNPPP/5RK1 w - - 0 1",
-    bms: ["f2f4"],
-    id: "BK.24",
-  },
-];
-
-const hangingTests: TestCase[] = [
-  {
-    fen: "3k4/8/4q3/8/3N4/8/1R4R1/3K4 w - - 0 1",
-    bms: ["d4e6"],
-    id: "HG.01",
-  },
-  {
-    fen: "rnb1kbnr/ppp1pppp/8/3p4/4P3/4q3/PPPP1PPP/RNBQKBNR w KQkq - 0 1",
-    bms: ["d2e3", "f2e3"],
-    id: "HG.02",
-  },
-  {
-    fen: "rnb1kbnr/ppp1pppp/8/1q1p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1",
-    bms: ["f1b5"],
-    id: "HG.03",
-  },
-];
-
-const advantageTests: TestCase[] = [
-  {
-    // Win the queen for a rook
-    // https://lichess.org/training/jIJhw
-    fen: "1r1r2k1/6pp/3pq3/3Rp3/2Q1P3/1p3P2/PPP3PP/1K1R4 b - - 0 26",
-    bms: ["d8c8"],
-    id: "AV.01",
-  },
-  {
-    // Win a queen and a knight
-    // https://lichess.org/training/RwQxm
-    fen: "r4r2/pp2Bpk1/2qP2p1/2p1n3/2Bb2Q1/5R2/PP5P/R6K w - - 9 25",
-    bms: ["e7f6"],
-    id: "AV.02",
-  },
-  {
-    // https://lichess.org/training/rCkOs
-    fen: "2kr1b1r/ppp2pp1/8/3pnP1p/4N1nq/7P/PPP1BPP1/R1BQ1RK1 w - - 0 13",
-    bms: ["c1g5"],
-    id: "AV.03",
-  },
-];
-
-const mateTests: TestCase[] = [
-  {
-    fen: "6k1/P6p/5Kp1/2p5/1P3P2/2r5/8/8 w - - 0 1",
-    bms: ["a7a8q", "a7a8r"],
-    id: "MT.01",
-  },
-  {
-    // Mate in 4
-    // https://lichess.org/training/VL81U
-    fen: "4rn1k/1r2q1bp/3pB1p1/p2Pp1P1/Np2PP1R/1Pp1Q3/P1P5/1K5R b - - 0 28",
-    bms: ["e5f4"],
-    id: "MT.02",
-  },
-  {
-    // Mate in 3
-    // https://lichess.org/training/YqcxF
-    fen: "8/5k2/1PR2p2/5ppp/8/4PKPP/1r6/8 b - - 8 41",
-    bms: ["g5g4"],
-    id: "MT.03",
-  },
-  // Mate in 1
-  {
-    fen: "8/5k2/1PR2p2/5p2/5Kp1/4P1P1/1r6/8 b - - 1 43",
-    bms: ["b2f2"],
-    id: "MT.04",
-  },
-];
-
-const testCases: TestCase[] = [
-  ...bkTests,
-  ...hangingTests,
-  ...mateTests,
-  ...advantageTests,
+const suites: TestSuite[] = [
+  bk,
+  wac,
+  sbd,
+  colditz,
+  zpts,
+  hg,
+  mt,
+  av,
 ];
 
 function chunk<A>(n: number, xs: A[]): A[][] {
@@ -235,26 +55,39 @@ function mulberry32(seed: number) {
   };
 }
 
-function generateReport(results: TestResult[]): string {
+function generateSuiteSummary(
+  suite: TestSuite,
+  results: TestResult[],
+): string {
   const numPassed = results.filter((x) => x.ok).length;
   const numFailed = results.length - numPassed;
-  const failedTableRows = results
-    .filter((x) => !x.ok)
-    .map((x) => `| ${x.id} | ${x.input} | ${x.expected} | ${x.got} |`)
-    .join("\n");
+  const failedTableRows = R.flow(results, [
+    R.sortBy((x: TestResult) => x.id),
+    R.filter((x: TestResult) => !x.ok),
+    R.map((x: TestResult) =>
+      `| ${x.id} | ${x.input} | ${x.expected} | ${x.got} |`
+    ),
+    R.join("\n"),
+  ]);
 
   const failureDetails = `
-## 📚 Detailed failure report
+<details>
 
-For more information on each test id, see the [Bratko-Kopec test wiki](https://www.chessprogramming.org/Bratko-Kopec_Test#EPD-Record) and see the tests at \`dev_utils/ci/bratko-kopec/main.ts\`
+<summary>
+  <h3>🔎 Failure details</h3>
+</summary>
 
 | id | input | expected | got |
 | -- |  --   |    --    | --  |
 ${failedTableRows}
+</details>
 `;
-  let output = `# 📝 Bratko-Kopec Report
 
-## 📍 Summary
+  let output = `## 📝 ${suite.name} Report
+
+${suite.comment}
+
+### 📍 Summary
 
 * ✅ ${numPassed} passed
 * ❌ ${numFailed} failed
@@ -267,6 +100,43 @@ ${failedTableRows}
   }
 
   return output;
+}
+
+function generateReport(suites: TestSuite[], results: TestResult[]): string {
+  const numPassed = results.filter((x) => x.ok).length;
+  const numFailed = results.length - numPassed;
+
+  // Map each test id to its suite name
+  const idToSuiteName = Object.fromEntries(
+    suites.flatMap((suite) => suite.tests.map((test) => [test.id, suite.name])),
+  );
+  const nameToSuite: Record<string, TestSuite> = R.flow(suites, [
+    R.map((suite) => [suite.name, suite]),
+    Object.fromEntries,
+  ]);
+
+  const suiteReports = R.flow(results, [
+    // Group results by suite name
+    R.groupBy((x) => idToSuiteName[x.id]),
+    Object.entries,
+    // Sort by suite name
+    R.sortBy(([x]) => x),
+    // Inject suite information
+    R.map(([name, results]) => [nameToSuite[name], results]),
+    // Generate summaries
+    R.map(R.apply(generateSuiteSummary)),
+    R.join("\n\n"),
+  ]);
+
+  return `# 🧪 Position Test Results
+
+* ✅ ${numPassed} passed
+* ❌ ${numFailed} failed
+* 💡 ${results.length} total
+* 🧮 ${(numPassed * 100 / results.length).toFixed(2)}% success
+
+
+${suiteReports}`;
 }
 
 async function runTestCase(
@@ -399,6 +269,7 @@ async function main() {
     process.exit(1);
   }
 
+  const testCases = suites.flatMap((suite) => suite.tests);
   let testsToRun = testCases;
   {
     const testRegexes = opts.match.map((re) => new RegExp(re));
@@ -434,7 +305,7 @@ async function main() {
     .then((xss) =>
       xss.flat().sort((x, y) => x.id == y.id ? 0 : (x.id < y.id ? -1 : 1))
     );
-  process.stdout.write(generateReport(results) + "\n");
+  process.stdout.write(generateReport(suites, results) + "\n");
   process.exit(0);
 }
 
