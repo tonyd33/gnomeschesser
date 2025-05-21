@@ -1,3 +1,4 @@
+import chess/constants_store
 import chess/game
 import chess/move
 import chess/search
@@ -49,7 +50,12 @@ pub fn get_best_move_from_fen_by(
   let assert Ok(game) = game.load_fen(fen)
   process.send(robot.main_subject, UpdateGame(game))
 
-  let valid_moves = game.valid_moves(game)
+  let valid_moves =
+    game.valid_moves(
+      game,
+      // TODO: Fuck
+      constants_store.new(),
+    )
   case valid_moves {
     [] -> Error(Nil)
     [one_move] -> {

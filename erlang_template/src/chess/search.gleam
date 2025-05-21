@@ -3,7 +3,7 @@ import chess/game
 import chess/move
 import chess/piece
 import chess/search/evaluation.{type Evaluation, Evaluation}
-import chess/search/search_state.{type SearchState}
+import chess/search/search_state.{type SearchState, SearchState}
 import chess/search/transposition
 import gleam/bool
 import gleam/dict
@@ -97,13 +97,14 @@ fn search(
       )
   })
 
+  use store <- state.do(search_state.get_store())
   // a janky way of selecting a random move if we don't have a best move
   // this can currently happen if there's a forced checkmate scenario
   let best_evaluation = case best_evaluation.best_move {
     Some(_) -> best_evaluation
     None -> {
       let valid_moves =
-        game.valid_moves(game)
+        game.valid_moves(game, store)
         |> list.shuffle()
       // get a random move if we are in checkmate
       let random_move = valid_moves |> list.first |> option.from_result
@@ -275,17 +276,19 @@ fn do_negamax_alphabeta_failsoft(
   alpha: ExtendedInt,
   beta: ExtendedInt,
 ) -> State(SearchState, Evaluation) {
+  use store <- state.do(search_state.get_store())
   use <- bool.lazy_guard(depth <= 0, fn() {
-    let score = quiesce(game, alpha, beta)
+    let score = quiesce(game, alpha, beta, store)
     Evaluation(score:, node_type: evaluation.PV, best_move: None, best_line: [])
     |> state.return
   })
 
   use moves <- state.do(sorted_moves(game))
+  use store <- state.do(search_state.get_store())
 
   use <- bool.lazy_guard(list.is_empty(moves), fn() {
     // if checkmate/stalemate
-    let score = case game.is_check(game, game.turn(game)) {
+    let score = case game.is_check(game, game.turn(game), store) {
       True -> xint.NegInf
       False -> xint.Finite(0)
     }
@@ -379,16 +382,17 @@ fn quiesce(
   game: game.Game,
   alpha: ExtendedInt,
   beta: ExtendedInt,
+  store,
 ) -> ExtendedInt {
   let score =
-    evaluate.game(game)
+    evaluate.game(game, store)
     |> xint.multiply({ evaluate.player(game.turn(game)) |> xint.from_int })
 
   use <- bool.guard(xint.gte(score, beta), score)
   let alpha = xint.max(alpha, score)
 
   let #(best_score, _) =
-    game.valid_moves(game)
+    game.valid_moves(game, store)
     |> list.fold_until(#(score, alpha), fn(acc, move) {
       let move_context = move.get_context(move)
       // If game isn't capture, continue
@@ -401,7 +405,12 @@ fn quiesce(
 
       let #(best_score, alpha) = acc
       let score =
-        xint.negate(quiesce(new_game, xint.negate(beta), xint.negate(alpha)))
+        xint.negate(quiesce(
+          new_game,
+          xint.negate(beta),
+          xint.negate(alpha),
+          store,
+        ))
 
       use <- bool.guard(xint.gte(score, beta), list.Stop(#(score, alpha)))
 
@@ -421,8 +430,9 @@ fn sorted_moves(
     Error(Nil) -> None
   }
 
+  use store <- state.do(search_state.get_store())
   // retrieve the cached transposition table data
-  let valid_moves = game.valid_moves(game)
+  let valid_moves = game.valid_moves(game, store)
 
   let #(best_move, capture_promotion_moves, quiet_moves) =
     list.fold(valid_moves, #(None, [], []), fn(acc, move) {

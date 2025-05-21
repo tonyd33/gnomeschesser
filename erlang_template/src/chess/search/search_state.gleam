@@ -1,3 +1,4 @@
+import chess/constants_store.{type ConstantsStore}
 import chess/game
 import chess/piece
 import chess/search/evaluation.{type Evaluation, Evaluation}
@@ -20,6 +21,7 @@ pub type SearchState {
     previous_games: dict.Dict(game.Hash, game.Game),
     history: dict.Dict(#(square.Square, piece.Piece), Int),
     stats: SearchStats,
+    store: ConstantsStore,
   )
 }
 
@@ -33,6 +35,7 @@ pub fn new(now: timestamp.Timestamp) {
       nodes_searched_at_init_time: 0,
       init_time: now,
     ),
+    store: constants_store.new(),
   )
 }
 
@@ -235,4 +238,9 @@ pub fn stats_nodes_per_second(
       nps
     }
   }
+}
+
+pub fn get_store() {
+  use SearchState(store:, ..) <- state.do(state.get_state())
+  state.return(store)
 }

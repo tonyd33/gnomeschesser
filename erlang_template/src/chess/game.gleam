@@ -1,4 +1,5 @@
 import chess/constants/zobrist
+import chess/constants_store.{type ConstantsStore}
 import chess/game/castle.{type Castle, KingSide, QueenSide}
 import chess/move
 import chess/move/disambiguation
@@ -14,14 +15,15 @@ import gleam/pair
 import gleam/result
 import gleam/set
 import gleam/string
+import iv.{type Array}
 import util/direction
-import util/yielder
 
 pub const start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
 pub opaque type Game {
   Game(
     board: Dict(square.Square, piece.Piece),
+    joe_mama: iv.Array(Option(piece.Piece)),
     active_color: player.Player,
     castling_availability: castle.CastlingAvailability,
     en_passant_target_square: Option(#(player.Player, square.Square)),
@@ -103,6 +105,18 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
 
   use pieces <- result.try(pieces)
   let board = dict.from_list(pieces)
+  let joe_mama =
+    pieces
+    |> list.fold(iv.repeat(None, 64), fn(acc, x) {
+      let #(square, piece) = x
+      let assert Ok(acc) =
+        iv.set(
+          acc,
+          square.to_othersquare(square) |> square.othersquare_to64,
+          Some(piece),
+        )
+      acc
+    })
   use halfmove_clock <- result.try(int.parse(halfmove_clock))
   use fullmove_number <- result.try(int.parse(fullmove_number))
 
@@ -147,18 +161,19 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
     square.from_string(en_passant_target_square)
     |> result.map(pair.new(player.opponent(active_color), _))
     |> option.from_result
-    |> option.then(validate_en_passant(active_color, board, _))
+    |> option.then(validate_en_passant(active_color, joe_mama, _))
 
   let hash =
     compute_zobrist_hash_impl(
       active_color,
-      board,
+      joe_mama,
       castling_availability,
       en_passant_target_square,
     )
 
   Game(
     board:,
+    joe_mama:,
     active_color:,
     castling_availability:,
     en_passant_target_square:,
@@ -174,7 +189,9 @@ pub fn turn(game: Game) -> player.Player {
 }
 
 pub fn board(game: Game) -> Dict(square.Square, piece.Piece) {
-  game.board
+  game
+  |> pieces
+  |> dict.from_list
 }
 
 pub fn hash(game: Game) -> Hash {
@@ -232,15 +249,9 @@ pub fn to_fen(game: Game) -> String {
             panic as "This isn't supposed to happen"
           })
 
-        let _piece_string = case dict.has_key(game.board, actual_square) {
-          True -> {
-            dict.get(game.board, actual_square)
-            |> result.lazy_unwrap(fn() {
-              panic as "This isn't supposed to happen"
-            })
-            |> piece.to_string()
-          }
-          False -> ""
+        let _piece_string = case board_get(game.joe_mama, actual_square) {
+          Ok(piece) -> piece.to_string(piece)
+          _ -> ""
         }
       })
       |> list.fold(#("", 0), fn(acc, val) {
@@ -318,7 +329,7 @@ pub fn equal(g1: Game, g2: Game) -> Bool {
 }
 
 pub fn piece_at(game: Game, square: square.Square) -> Result(piece.Piece, Nil) {
-  game.board |> dict.get(square)
+  board_get(game.joe_mama, square)
 }
 
 pub fn piece_exists_at(
@@ -326,7 +337,7 @@ pub fn piece_exists_at(
   piece: piece.Piece,
   square: square.Square,
 ) -> Bool {
-  case dict.get(game.board, square) {
+  case board_get(game.joe_mama, square) {
     Ok(p) -> p == piece
     _ -> False
   }
@@ -334,7 +345,7 @@ pub fn piece_exists_at(
 
 fn validate_en_passant(
   us: player.Player,
-  board: Dict(square.Square, piece.Piece),
+  joe_mama: Array(Option(piece.Piece)),
   en_passant_target_square: #(player.Player, square.Square),
 ) {
   let #(_, square) = en_passant_target_square
@@ -346,15 +357,15 @@ fn validate_en_passant(
   let x_left =
     square.move(square, direction.Left, 1)
     |> result.try(square.move(_, dir, 1))
-    |> result.unwrap(0x0)
+    |> result.try(board_get(joe_mama, _))
   let x_right =
     square.move(square, direction.Right, 1)
     |> result.try(square.move(_, dir, 1))
-    |> result.unwrap(0x0)
+    |> result.try(board_get(joe_mama, _))
 
   let can_attack =
-    dict.get(board, x_left) == Ok(piece.Piece(us, piece.Pawn))
-    || dict.get(board, x_right) == Ok(piece.Piece(us, piece.Pawn))
+    x_left == Ok(piece.Piece(us, piece.Pawn))
+    || x_right == Ok(piece.Piece(us, piece.Pawn))
 
   case can_attack {
     True -> Some(en_passant_target_square)
@@ -363,30 +374,48 @@ fn validate_en_passant(
 }
 
 pub fn empty_at(game: Game, square: square.Square) -> Bool {
-  !dict.has_key(game.board, square)
+  case board_get(game.joe_mama, square) {
+    Ok(_) -> False
+    _ -> True
+  }
 }
 
 pub fn find_piece(game: Game, piece: piece.Piece) -> List(square.Square) {
-  dict.filter(game.board, fn(_, p) { p == piece })
-  |> dict.keys()
+  game.joe_mama
+  |> iv.index_fold([], fn(acc, p, square) {
+    case p {
+      Some(p) if piece == p -> {
+        let assert Ok(square) =
+          square.make_othersquare(square) |> square.from_othersquare
+        [square, ..acc]
+      }
+      _ -> acc
+    }
+  })
 }
 
-pub fn is_check(game: Game, player: player.Player) -> Bool {
-  let assert Ok(#(king_position, _king_piece)) =
-    game.board
-    |> dict.to_list
-    |> list.find(fn(x) { x.1 == piece.Piece(player, piece.King) })
-  square.is_attacked_at(game.board, king_position, player.opponent(player))
+pub fn is_check(
+  game: Game,
+  player: player.Player,
+  store: ConstantsStore,
+) -> Bool {
+  let assert [king_position] = find_piece(game, piece.Piece(player, piece.King))
+  square.is_attacked_at(
+    game.joe_mama,
+    king_position,
+    player.opponent(player),
+    store,
+  )
 }
 
-pub fn is_checkmate(game: Game) -> Bool {
+pub fn is_checkmate(game: Game, store) -> Bool {
   let us = turn(game)
-  is_check(game, us)
+  is_check(game, us, store)
   && {
-    valid_moves(game)
+    valid_moves(game, store)
     |> list.all(fn(move) {
       // If every new move we try still result in a check, then it's checkmate
-      apply(game, move) |> is_check(us)
+      apply(game, move) |> is_check(us, store)
     })
   }
 }
@@ -400,16 +429,17 @@ pub fn is_checkmate(game: Game) -> Bool {
 //   todo
 // }
 
-pub fn is_stalemate(game: Game) -> Bool {
-  !is_check(game, game.active_color) && valid_moves(game) |> list.is_empty
+pub fn is_stalemate(game: Game, store) -> Bool {
+  !is_check(game, game.active_color, store)
+  && valid_moves(game, store) |> list.is_empty
 }
 
 pub fn is_draw(_game: Game) -> Bool {
   False
 }
 
-pub fn is_game_over(game: Game) -> Bool {
-  is_checkmate(game) || is_stalemate(game) || is_draw(game)
+pub fn is_game_over(game: Game, store) -> Bool {
+  is_checkmate(game, store) || is_stalemate(game, store) || is_draw(game)
 }
 
 pub fn ascii(game: Game) -> String {
@@ -423,7 +453,7 @@ pub fn ascii(game: Game) -> String {
         <> string.concat(
           list.map(list.range(0, 7), fn(file) {
             let assert Ok(square) = square.from_rank_file(rank, file)
-            case dict.get(game.board, square) {
+            case board_get(game.joe_mama, square) {
               Ok(piece) -> " " <> piece.to_string(piece) <> " "
               _ -> " . "
             }
@@ -440,7 +470,17 @@ pub fn ascii(game: Game) -> String {
 }
 
 pub fn pieces(game: Game) -> List(#(square.Square, piece.Piece)) {
-  game.board |> dict.to_list
+  game.joe_mama
+  |> iv.index_fold([], fn(acc, piece, square) {
+    case piece {
+      Some(piece) -> {
+        let assert Ok(square) =
+          square.make_othersquare(square) |> square.from_othersquare
+        [#(square, piece), ..acc]
+      }
+      _ -> acc
+    }
+  })
 }
 
 pub fn has_castled(game: Game, player: player.Player) {
@@ -472,12 +512,13 @@ pub type SAN =
 pub fn move_to_san(
   move: move.Move(move.ValidInContext),
   game: Game,
+  store,
 ) -> Result(SAN, Nil) {
   let us = game.active_color
   let them = player.opponent(us)
   let from = move.get_from(move)
   let to = move.get_to(move)
-  let assert Ok(us_piece) = dict.get(game.board, from)
+  let assert Ok(us_piece) = board_get(game.joe_mama, from)
   let new_game = apply(game, move)
 
   // We can assume `move` is legal from this point on
@@ -501,7 +542,7 @@ pub fn move_to_san(
 
   let undecorated_san = {
     let is_capture =
-      dict.get(game.board, to)
+      board_get(game.joe_mama, to)
       |> result.map(fn(x) { x.player == them })
       |> result.unwrap(False)
 
@@ -529,11 +570,13 @@ pub fn move_to_san(
       let other_ambiguous_moves =
         // find other valid_moves that have the same player and piece type that's targeting
         // don't include ourselves
-        valid_moves(game)
+        valid_moves(game, store)
         |> list.filter(fn(other_move) {
           move.get_to(other_move) == to
           && !move.equal(move, other_move)
-          && { dict.get(game.board, move.get_from(other_move)) == Ok(us_piece) }
+          && {
+            board_get(game.joe_mama, move.get_from(other_move)) == Ok(us_piece)
+          }
         })
 
       piece.symbol_to_string(us_piece.symbol)
@@ -581,7 +624,7 @@ pub fn move_to_san(
   }
   Ok(
     undecorated_san
-    <> case is_check(new_game, them), is_checkmate(new_game) {
+    <> case is_check(new_game, them, store), is_checkmate(new_game, store) {
       _, True -> "#"
       True, _ -> "+"
       _, _ -> ""
@@ -597,9 +640,10 @@ pub fn move_to_san(
 pub fn move_from_san(
   san: String,
   game: Game,
+  store,
 ) -> Result(move.Move(move.ValidInContext), Nil) {
-  valid_moves(game)
-  |> list.find(fn(x) { move_to_san(x, game) == Ok(san) })
+  valid_moves(game, store)
+  |> list.find(fn(x) { move_to_san(x, game, store) == Ok(san) })
 }
 
 type GameOp {
@@ -610,17 +654,31 @@ type GameOp {
 fn map_bbh(bbh, op) {
   case op {
     BoardDeletion(square, piece) -> {
-      let #(board, hash) = bbh
+      let #(board, joe_mama, hash) = bbh
+      let assert Ok(joe_mama) =
+        iv.set(
+          joe_mama,
+          square.to_othersquare(square) |> square.othersquare_to64,
+          None,
+        )
       #(
         dict.delete(board, square),
+        joe_mama,
         // (un)XOR squares out
         int.bitwise_exclusive_or(hash, zobrist.piece_hash(square, piece)),
       )
     }
     BoardInsertion(square, piece) -> {
-      let #(board, hash) = bbh
+      let #(board, joe_mama, hash) = bbh
+      let assert Ok(joe_mama) =
+        iv.set(
+          joe_mama,
+          square.to_othersquare(square) |> square.othersquare_to64,
+          Some(piece),
+        )
       #(
         dict.insert(board, square, piece),
+        joe_mama,
         // XOR squares in
         int.bitwise_exclusive_or(hash, zobrist.piece_hash(square, piece)),
       )
@@ -639,6 +697,7 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
   let move_context = move.get_context(move)
   let Game(
     board:,
+    joe_mama:,
     castling_availability:,
     active_color: us,
     en_passant_target_square: prev_en_passant_target_square,
@@ -651,7 +710,7 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
   let assert Ok(piece) = dict.get(board, from)
 
   // Updates to the board.
-  let #(board, hash) = {
+  let #(board, joe_mama, hash) = {
     // update the piece if it's a promotion
     let new_piece =
       promotion
@@ -666,7 +725,7 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
 
     // Over the course of hundreds of thousands of nodes, manually doing this
     // rather than folding over a list is marginally but measurably faster.
-    let bbh = #(board, hash)
+    let bbh = #(board, joe_mama, hash)
     let bbh = map_bbh(bbh, BoardDeletion(from, move_context.piece))
     let bbh = case move_context.capture {
       Some(x) -> map_bbh(bbh, BoardDeletion(x.0, x.1))
@@ -705,7 +764,7 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
         }
       _ -> None
     }
-    |> option.then(validate_en_passant(them, board, _))
+    |> option.then(validate_en_passant(them, joe_mama, _))
 
   // update castling availibility based on new game state
   let castling_availability = {
@@ -835,6 +894,7 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
 
   Game(
     board:,
+    joe_mama:,
     active_color: them,
     castling_availability:,
     en_passant_target_square:,
@@ -842,6 +902,14 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     halfmove_clock:,
     hash:,
   )
+}
+
+fn board_get(board: Array(Option(piece.Piece)), square: square.Square) {
+  let d64 = square.to_othersquare(square) |> square.othersquare_to64
+  case iv.get(board, d64) {
+    Ok(Some(piece)) -> Ok(piece)
+    _ -> Error(Nil)
+  }
 }
 
 pub fn find_player_king(game: Game, player: player.Player) {
@@ -856,22 +924,23 @@ pub fn find_player_king(game: Game, player: player.Player) {
 pub fn validate_move(
   move: move.Move(move.Pseudo),
   game: Game,
+  store,
 ) -> Result(move.Move(move.ValidInContext), Nil) {
-  valid_moves(game) |> list.find(move.equal(_, move))
+  valid_moves(game, store) |> list.find(move.equal(_, move))
 }
 
-fn generate_castle_move(game: Game, castle_player, castle) {
+fn generate_castle_move(game: Game, castle_player, castle, store) {
   let us = game.active_color
   let them = player.opponent(us)
 
   use <- bool.guard(castle_player != us, Error(Nil))
   let occupancy_blocked =
     castle.occupancy_squares(us, castle)
-    |> list.any(fn(square) { dict.get(game.board, square) |> result.is_ok })
+    |> list.any(fn(square) { board_get(game.joe_mama, square) |> result.is_ok })
   use <- bool.guard(occupancy_blocked, Error(Nil))
   let attacked_somewhere =
     castle.unattacked_squares(us, castle)
-    |> list.any(square.is_attacked_at(game.board, _, them))
+    |> list.any(square.is_attacked_at(game.joe_mama, _, them, store))
   use <- bool.guard(attacked_somewhere, Error(Nil))
 
   let rank = square.player_rank(us)
@@ -894,12 +963,14 @@ fn generate_castle_move(game: Game, castle_player, castle) {
 // Zobrist below
 
 /// generate valid moves
-pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
+pub fn valid_moves(
+  game: Game,
+  store: ConstantsStore,
+) -> List(move.Move(move.ValidInContext)) {
   let us = game.active_color
   let them = player.opponent(us)
 
-  let pieces = game.board |> dict.to_list
-  let pieces_yielder = pieces |> yielder.from_list
+  let pieces = game |> board |> dict.to_list
 
   let king_piece = piece.Piece(us, piece.King)
   // let king_position = find_player_king(game, us)
@@ -908,12 +979,7 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
   // find attacks and pins to the king
   let #(king_attackers, king_blockers) = {
     let #(attackers, pins) =
-      square.attacks_and_pins_to(
-        game.board,
-        pieces_yielder,
-        king_position,
-        them,
-      )
+      square.attacks_and_pins_to(game.joe_mama, king_position, them)
       |> list.partition(fn(x) { x.1 |> option.is_none })
     let attackers = list.map(attackers, pair.first)
     let blockers =
@@ -927,13 +993,16 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
 
   // We always generate king moves to squares not attacked
   let king_moves = {
-    let board_without_king =
-      game.board
-      |> dict.delete(king_position)
+    let assert Ok(joe_mama_without_king) =
+      game.joe_mama
+      |> iv.set(
+        square.to_othersquare(king_position) |> square.othersquare_to64,
+        None,
+      )
     square.piece_attack_offsets(king_piece)
     |> list.filter_map(fn(offset) {
       use to <- result.try(square.add(king_position, offset))
-      let hit_piece = dict.get(game.board, to)
+      let hit_piece = board_get(game.joe_mama, to)
       // return early if we hit our own piece
       use <- bool.guard(
         hit_piece
@@ -943,7 +1012,7 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
       )
       // check if new square is attacked
       use <- bool.guard(
-        square.is_attacked_at(board_without_king, to, them),
+        square.is_attacked_at(joe_mama_without_king, to, them, store),
         Error(Nil),
       )
 
@@ -971,19 +1040,15 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
     // if the king is attacked by a knight or a pawn, we only need to generate
     // moves that capture the attacker
     let only_capture_attacker_move = case
-      result.try(list.first(king_attackers), dict.get(game.board, _))
+      result.try(list.first(king_attackers), board_get(game.joe_mama, _))
     {
       Ok(x) if x.symbol == piece.Knight || x.symbol == piece.Pawn -> {
         let assert [attacker_square] = king_attackers
-        let assert Ok(attacker_piece) = dict.get(game.board, attacker_square)
-        square.get_squares_attacking_at(
-          game.board,
-          pieces_yielder,
-          attacker_square,
-          us,
-        )
+        let assert Ok(attacker_piece) =
+          board_get(game.joe_mama, attacker_square)
+        square.get_squares_attacking_at(game.joe_mama, attacker_square, us)
         |> list.filter_map(fn(defender_square) {
-          let assert Ok(piece) = dict.get(game.board, defender_square)
+          let assert Ok(piece) = board_get(game.joe_mama, defender_square)
           use <- bool.guard(piece.symbol == piece.King, Error(Nil))
           let can_capture = case dict.get(king_blockers, defender_square) {
             Ok(pinner_square) -> {
@@ -1056,13 +1121,13 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
         [] -> #(
           // otherwise, just check if the piece is theirs
           fn(square) {
-            case dict.get(game.board, square) {
+            case board_get(game.joe_mama, square) {
               Ok(piece.Piece(player, _)) if player == them -> True
               _ -> False
             }
           },
           // check if square is empty
-          fn(square) { dict.get(game.board, square) |> result.is_error },
+          fn(square) { board_get(game.joe_mama, square) |> result.is_error },
         )
         _ -> panic
       }
@@ -1074,7 +1139,7 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
       // if this piece is pinned, we need to especially consider it
       let to_squares = case piece.symbol {
         piece.Knight | piece.Bishop | piece.Queen | piece.Rook ->
-          square.piece_attacking(game.board, from, piece, True)
+          square.piece_attacking(game.joe_mama, from, piece, True)
           |> list.filter(fn(x) {
             attackable_square_predicate(x) || movable_square_predicate(x)
           })
@@ -1096,7 +1161,7 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
             )
             square.move(from, pawn_direction, 1)
             |> result.try(fn(square) {
-              case dict.get(game.board, square) {
+              case board_get(game.joe_mama, square) {
                 Ok(_) -> Error(Nil)
                 Error(Nil) -> Ok(square)
               }
@@ -1110,7 +1175,7 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
             })
           }
           let x_move =
-            square.piece_attacking(game.board, from, piece, True)
+            square.piece_attacking(game.joe_mama, from, piece, True)
             |> list.filter(attackable_square_predicate)
           list.append([small_move, big_move] |> result.values, x_move)
         }
@@ -1132,7 +1197,7 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
       |> result.unwrap(to_squares)
       |> list.flat_map(fn(to) {
         let capture =
-          dict.get(game.board, to)
+          board_get(game.joe_mama, to)
           |> result.map(pair.new(to, _))
           |> option.from_result
         let context =
@@ -1172,14 +1237,28 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
       square.piece_attack_offsets(them_pawn)
       |> list.filter_map(fn(offset) {
         use from <- result.try(square.add(to, offset))
-        use piece <- result.try(dict.get(game.board, from))
+        use piece <- result.try(board_get(game.joe_mama, from))
         use <- bool.guard(piece != piece.Piece(us, piece.Pawn), Error(Nil))
-        let new_board =
-          dict.delete(game.board, from)
-          |> dict.delete(actual_big_pawn_square)
-          |> dict.insert(to, us_pawn)
+        let assert Ok(new_joe_mama) =
+          iv.set(
+            game.joe_mama,
+            square.to_othersquare(from) |> square.othersquare_to64,
+            None,
+          )
+          |> result.then(iv.set(
+            _,
+            square.to_othersquare(actual_big_pawn_square)
+              |> square.othersquare_to64,
+            None,
+          ))
+          |> result.then(iv.set(
+            _,
+            square.to_othersquare(to) |> square.othersquare_to64,
+            Some(us_pawn),
+          ))
+
         use <- bool.guard(
-          square.is_attacked_at(new_board, king_position, them),
+          square.is_attacked_at(new_joe_mama, king_position, them, store),
           Error(Nil),
         )
         let context =
@@ -1210,7 +1289,7 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
             black_kingside: _,
             black_queenside: _,
           ) ->
-            case generate_castle_move(game, player.White, KingSide) {
+            case generate_castle_move(game, player.White, KingSide, store) {
               Ok(m) -> [m]
               Error(_) -> []
             }
@@ -1220,7 +1299,7 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
             black_kingside: _,
             black_queenside: _,
           ) ->
-            case generate_castle_move(game, player.White, QueenSide) {
+            case generate_castle_move(game, player.White, QueenSide, store) {
               Ok(m) -> [m]
               Error(_) -> []
             }
@@ -1231,8 +1310,8 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
             black_queenside: _,
           ) ->
             case
-              generate_castle_move(game, player.White, KingSide),
-              generate_castle_move(game, player.White, QueenSide)
+              generate_castle_move(game, player.White, KingSide, store),
+              generate_castle_move(game, player.White, QueenSide, store)
             {
               Ok(m1), Ok(m2) -> [m1, m2]
               Ok(m1), Error(_) -> [m1]
@@ -1250,7 +1329,7 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
             black_kingside: True,
             black_queenside: False,
           ) ->
-            case generate_castle_move(game, player.Black, KingSide) {
+            case generate_castle_move(game, player.Black, KingSide, store) {
               Ok(m) -> [m]
               Error(_) -> []
             }
@@ -1260,7 +1339,7 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
             black_kingside: False,
             black_queenside: True,
           ) ->
-            case generate_castle_move(game, player.Black, QueenSide) {
+            case generate_castle_move(game, player.Black, QueenSide, store) {
               Ok(m) -> [m]
               Error(_) -> []
             }
@@ -1271,8 +1350,8 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
             black_queenside: True,
           ) ->
             case
-              generate_castle_move(game, player.Black, KingSide),
-              generate_castle_move(game, player.Black, QueenSide)
+              generate_castle_move(game, player.Black, KingSide, store),
+              generate_castle_move(game, player.Black, QueenSide, store)
             {
               Ok(m1), Ok(m2) -> [m1, m2]
               Ok(m1), Error(_) -> [m1]
@@ -1297,7 +1376,7 @@ pub type Hash =
 pub fn compute_zobrist_hash(game: Game) {
   compute_zobrist_hash_impl(
     game.active_color,
-    game.board,
+    game.joe_mama,
     game.castling_availability,
     game.en_passant_target_square,
   )
@@ -1310,14 +1389,21 @@ pub fn compute_zobrist_hash(game: Game) {
 ///
 fn compute_zobrist_hash_impl(
   us: player.Player,
-  board: Dict(square.Square, piece.Piece),
+  joe_mama: Array(Option(piece.Piece)),
   castling_availability: castle.CastlingAvailability,
   en_passant_target_square: Option(#(player.Player, square.Square)),
 ) -> Hash {
   let piece_hash =
-    dict.to_list(board)
-    |> list.fold(0x0, fn(acc, x) {
-      int.bitwise_exclusive_or(acc, zobrist.piece_hash(x.0, x.1))
+    joe_mama
+    |> iv.index_fold(0x0, fn(acc, piece, square) {
+      case piece {
+        Some(piece) -> {
+          let assert Ok(square) =
+            square.make_othersquare(square) |> square.from_othersquare
+          int.bitwise_exclusive_or(acc, zobrist.piece_hash(square, piece))
+        }
+        _ -> acc
+      }
     })
 
   let castle_hash = castle_hash(castling_availability)
@@ -1326,7 +1412,7 @@ fn compute_zobrist_hash_impl(
   // validate this is legit
   let en_passant_hash =
     en_passant_target_square
-    |> option.then(validate_en_passant(us, board, _))
+    |> option.then(validate_en_passant(us, joe_mama, _))
     |> ep_hash
 
   let turn_hash = case us {
