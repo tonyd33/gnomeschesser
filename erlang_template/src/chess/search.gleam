@@ -38,7 +38,7 @@ pub type SearchMessage {
     nodes_searched: Int,
     nps: Int,
   )
-  SearchDone(best_evaluation: Evaluation, game: game.Game)
+  SearchDone
 }
 
 pub type SearchOpts {
@@ -151,7 +151,7 @@ fn search(
 
   case opts.max_depth {
     Some(max_depth) if current_depth >= max_depth -> {
-      process.send(search_subject, SearchDone(best_evaluation:, game:))
+      process.send(search_subject, SearchDone)
       state.return(Nil)
     }
     _ ->

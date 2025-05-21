@@ -1,20 +1,16 @@
+import chess/evaluate/common
 import chess/piece
 import chess/player
 import chess/square
 
-pub type PSQTPhase {
-  MidGame
-  EndGame
-}
-
 pub fn get_psq_score(
   piece: piece.Piece,
   square: square.Square,
-  phase: PSQTPhase,
+  phase: common.Stage,
 ) {
   case phase {
-    MidGame -> get_psq_score_midgame(piece, square)
-    EndGame -> get_psq_score_endgame(piece, square)
+    common.MidGame -> get_psq_score_midgame(piece, square)
+    common.EndGame -> get_psq_score_endgame(piece, square)
   }
 }
 

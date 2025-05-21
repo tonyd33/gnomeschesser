@@ -1,8 +1,9 @@
-import chess/evaluate
+import chess/evaluate/midgame
 import chess/game
+import chess/player
 import gleeunit/should
 
-pub fn king_safety_test() {
+pub fn king_pawn_shield_test() {
   // Pawns are all close to king after he castled
   //    +------------------------+
   //  8 | ♜  ♞  ♝  ♛  ♚  ♝  ♞  ♜ |
@@ -50,21 +51,29 @@ pub fn king_safety_test() {
     game.load_fen(
       "rnbqkbnr/pppppppp/8/8/6P1/2NB1P2/PPPPP2P/RNBQ1RK1 w kq - 0 1",
     )
-
-  { evaluate.king_safety(game1) >= evaluate.king_safety(game2) }
+  {
+    midgame.king_pawn_shield(game1, player.White)
+    > midgame.king_pawn_shield(game2, player.White)
+  }
   |> should.equal(True)
-  { evaluate.king_safety(game2) >= evaluate.king_safety(game3) }
+  {
+    midgame.king_pawn_shield(game2, player.White)
+    > midgame.king_pawn_shield(game3, player.White)
+  }
   |> should.equal(True)
 
   // Similar for black queenside castle
   let assert Ok(game1) =
     game.load_fen(
-      "2kr1bnr/pppppppp/8/4q3/5n2/2NB1b2/PPPPPPPP/RNBQ1RK1 b k - 0 1",
+      "2kr1bnr/pppppppp/8/4q3/5n2/2NB1b2/PPPPPPPP/RNBQ1RK1 b - - 0 1",
     )
   let assert Ok(game2) =
     game.load_fen(
-      "2kr1bnr/p3pppp/8/1pppq3/5n2/2NB1b2/PPPPPPPP/RNBQ1RK1 b k - 0 1",
+      "2kr1bnr/p3pppp/3p4/1pp1q3/5n2/2NB1b2/PPPPPPPP/RNBQ1RK1 b - - 0 1",
     )
-  { evaluate.king_safety(game1) >= evaluate.king_safety(game2) }
+  {
+    midgame.king_pawn_shield(game1, player.Black)
+    < midgame.king_pawn_shield(game2, player.Black)
+  }
   |> should.equal(True)
 }
