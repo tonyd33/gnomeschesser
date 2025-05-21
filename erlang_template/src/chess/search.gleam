@@ -3,6 +3,7 @@ import chess/game
 import chess/move
 import chess/piece
 import chess/search/evaluation.{type Evaluation, Evaluation}
+import chess/search/game_history
 import chess/search/search_state.{type SearchState}
 import chess/search/transposition
 import gleam/bool
@@ -10,11 +11,9 @@ import gleam/dict
 import gleam/erlang/process
 import gleam/float
 import gleam/int
-import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/order
-import gleam/pair
 import gleam/result
 import gleam/time/duration
 import gleam/time/timestamp
@@ -52,13 +51,14 @@ pub fn new(
   search_state: SearchState,
   search_subject: process.Subject(SearchMessage),
   opts: SearchOpts,
+  game_history: game_history.GameHistory,
 ) -> process.Pid {
   process.start(
     fn() {
       {
         let now = timestamp.system_time()
         use _ <- state.do(search_state.stats_checkpoint_time(now))
-        search(search_subject, game, 1, opts)
+        search(search_subject, game, 1, opts, game_history)
       }
       |> state.go(initial: search_state)
     },
@@ -71,6 +71,7 @@ fn search(
   game: game.Game,
   current_depth: evaluation.Depth,
   opts: SearchOpts,
+  game_history: game_history.GameHistory,
 ) -> State(SearchState, Nil) {
   let game_hash = game.hash(game)
   use cached_evaluation <- state.do(search_state.transposition_get(game_hash))
@@ -85,6 +86,7 @@ fn search(
         entry.eval.score |> xint.subtract(offset),
         entry.eval.score |> xint.add(offset),
         0,
+        game_history,
       )
     }
     Error(Nil) ->
@@ -94,6 +96,7 @@ fn search(
         xint.NegInf,
         xint.PosInf,
         0,
+        game_history,
       )
   })
 
@@ -158,7 +161,7 @@ fn search(
       case best_evaluation.score {
         // terminate the search if we detect we're in mate
         xint.PosInf | xint.NegInf -> state.return(Nil)
-        _ -> search(search_subject, game, current_depth + 1, opts)
+        _ -> search(search_subject, game, current_depth + 1, opts, game_history)
       }
   }
 }
@@ -171,12 +174,14 @@ fn search_with_widening_windows(
   alpha: ExtendedInt,
   beta: ExtendedInt,
   attempts: Int,
+  game_history: game_history.GameHistory,
 ) -> State(SearchState, Evaluation) {
   use best_evaluation <- state.do(negamax_alphabeta_failsoft(
     game,
     depth,
     alpha,
     beta,
+    game_history,
   ))
   case best_evaluation.score, best_evaluation.node_type {
     // if it's +/- Inf means it's already hit the highest bound
@@ -194,6 +199,7 @@ fn search_with_widening_windows(
         score |> xint.subtract(10 + attempts * 100 |> xint.from_int),
         beta,
         attempts + 1,
+        game_history,
       )
     }
     score, evaluation.Cut -> {
@@ -203,6 +209,7 @@ fn search_with_widening_windows(
         alpha,
         score |> xint.add(10 + attempts * 100 |> xint.from_int),
         attempts + 1,
+        game_history,
       )
     }
   }
@@ -222,8 +229,10 @@ fn negamax_alphabeta_failsoft(
   depth: evaluation.Depth,
   alpha: ExtendedInt,
   beta: ExtendedInt,
+  game_history: game_history.GameHistory,
 ) -> State(SearchState, Evaluation) {
   let game_hash = game.hash(game)
+
   // TODO: check for cache collision here
   // return early if we find an entry in the transposition table
   use cached_evaluation <- state.do(
@@ -250,12 +259,9 @@ fn negamax_alphabeta_failsoft(
 
   use <- result.lazy_unwrap(result.map(cached_evaluation, state.return))
 
-  use evaluation <- state.do(do_negamax_alphabeta_failsoft(
-    game,
-    depth,
-    alpha,
-    beta,
-  ))
+  use evaluation <- state.do({
+    do_negamax_alphabeta_failsoft(game, depth, alpha, beta, game_history)
+  })
 
   use _ <- state.do(
     search_state.transposition_insert(game_hash, #(depth, evaluation)),
@@ -274,6 +280,7 @@ fn do_negamax_alphabeta_failsoft(
   depth: evaluation.Depth,
   alpha: ExtendedInt,
   beta: ExtendedInt,
+  game_history: game_history.GameHistory,
 ) -> State(SearchState, Evaluation) {
   use <- bool.lazy_guard(depth <= 0, fn() {
     let score = quiesce(game, alpha, beta)
@@ -305,11 +312,10 @@ fn do_negamax_alphabeta_failsoft(
       let game = game.apply(game, move)
 
       use evaluation <- state.map({
-        use is_previous_game <- state.do(search_state.is_previous_game(game))
         // 3 fold repetition
         // If we've encountered this position before, we can assume we're in a 3 fold loop
         // and that this position will resolve to a 0
-        use <- bool.guard(is_previous_game, {
+        use <- bool.guard(game_history.is_previous_game(game_history, game), {
           Evaluation(
             score: 0 |> xint.from_int,
             node_type: evaluation.PV,
@@ -319,20 +325,24 @@ fn do_negamax_alphabeta_failsoft(
           |> state.return
         })
 
+        let game_history = game_history.insert(game_history, game)
+
         use evaluation <- state.map(negamax_alphabeta_failsoft(
           game,
           depth - 1,
           xint.negate(beta),
           xint.negate(alpha),
+          game_history,
         ))
         evaluation.negate(evaluation)
       })
 
       let evaluation =
-        Evaluation(..evaluation, best_move: Some(move), best_line: [
-          move,
-          ..evaluation.best_line
-        ])
+        Evaluation(
+          ..evaluation,
+          best_line: [move, ..evaluation.best_line],
+          best_move: Some(move),
+        )
 
       let best_evaluation = case
         xint.gt(evaluation.score, best_evaluation.score)
@@ -391,8 +401,8 @@ fn quiesce(
     game.valid_moves(game)
     |> list.fold_until(#(score, alpha), fn(acc, move) {
       let move_context = move.get_context(move)
-      // If game isn't capture, continue
 
+      // If game isn't capture, continue
       use <- bool.guard(
         move_context.capture |> option.is_none,
         list.Continue(acc),

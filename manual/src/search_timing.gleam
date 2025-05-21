@@ -1,6 +1,7 @@
 import bencher
 import chess/game
 import chess/search
+import chess/search/game_history
 import chess/search/search_state
 import gleam/dict
 import gleam/erlang/process
@@ -46,12 +47,13 @@ fn search_game_to_depth(game: game.Game, depth: Int) {
       memo,
       subject,
       search.SearchOpts(max_depth: option.Some(depth)),
+      game_history.new() |> game_history.insert(game),
     )
 
   yielder.repeat(subject)
   |> yielder.take_while(fn(subject) {
     case process.receive_forever(subject) {
-      search.SearchDone(_, _) -> False
+      search.SearchDone -> False
       search.SearchUpdate(..) -> True
       search.SearchStateUpdate(_) -> True
     }

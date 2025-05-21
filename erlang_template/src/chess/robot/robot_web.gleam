@@ -2,6 +2,7 @@ import chess/game
 import chess/move
 import chess/search
 import chess/search/evaluation
+import chess/search/game_history
 import chess/search/search_state
 import chess/search/transposition
 import gleam/bool
@@ -30,6 +31,7 @@ type RobotState {
     best_evaluation: Option(evaluation.Evaluation),
     searcher: #(Option(process.Pid), Subject(search.SearchMessage)),
     search_state: search_state.SearchState,
+    game_history: game_history.GameHistory,
   )
 }
 
@@ -101,16 +103,19 @@ fn create_robot_thread() -> Subject(RobotMessage) {
 
       let assert Ok(game): Result(game.Game, Nil) =
         game.load_fen(game.start_fen)
+      let game_history = game_history.new() |> game_history.insert(game)
 
       let search_state = search_state.new(timestamp.system_time())
       // The search_subject will be used by searchers to update new best moves found
       let search_subject: Subject(search.SearchMessage) = process.new_subject()
+
       let search_pid =
         search.new(
           game,
           search_state,
           search_subject,
           search.default_search_opts,
+          game_history,
         )
 
       main_loop(
@@ -119,6 +124,7 @@ fn create_robot_thread() -> Subject(RobotMessage) {
           best_evaluation: None,
           searcher: #(Some(search_pid), search_subject),
           search_state:,
+          game_history:,
         ),
         // This selector allows is to merge the different subjects (like from the searcher) into one selector
         process.new_selector()
@@ -192,21 +198,16 @@ fn update_state_with_new_game(state: RobotState, game: game.Game) -> RobotState 
     process.kill(pid)
   })
 
-  let search_state = {
-    // we can clear the previous game if there is a capture
-    // as there's no way a 3 fold can reach that state back
-    let material_change =
-      game.board(game) |> dict.size != game.board(state.game) |> dict.size
-    let previous_games =
-      case material_change {
-        True -> dict.new()
-        False -> state.search_state.previous_games
-      }
-      |> dict.insert(game.hash(state.game), state.game)
-    search_state.SearchState(..state.search_state, previous_games:)
-  }
+  let game_history = game_history.insert(state.game_history, game)
+
   let search_pid =
-    search.new(game, search_state, state.searcher.1, search.default_search_opts)
+    search.new(
+      game,
+      state.search_state,
+      state.searcher.1,
+      search.default_search_opts,
+      state.game_history,
+    )
 
   // TODO: check if the retrieved evaluation is actually valid for the given game
   // this could be false due to collision
@@ -223,6 +224,7 @@ fn update_state_with_new_game(state: RobotState, game: game.Game) -> RobotState 
     searcher: #(Some(search_pid), state.searcher.1),
     game:,
     best_evaluation:,
-    search_state:,
+    search_state: state.search_state,
+    game_history:,
   )
 }
