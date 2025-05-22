@@ -15,11 +15,11 @@ pub type Score =
 /// > 0 means white is winning
 /// < 0 means black is winning
 ///
-pub fn game(game: game.Game) -> Score {
+pub fn game(game: game.Game, store) -> Score {
   let board = game.board(game)
   let pieces = game.pieces(game)
   // TODO: use a cached version of getting moves somehow?
-  let valid_moves = game.valid_moves(game)
+  let valid_moves = game.valid_moves(game, store)
 
   // TODO: scale this gradually
   let game_stage = case

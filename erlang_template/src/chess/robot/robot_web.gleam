@@ -1,3 +1,4 @@
+import chess/constants_store
 import chess/game
 import chess/move
 import chess/search
@@ -42,7 +43,7 @@ pub fn init() -> Robot {
 /// Updates the robot to specified FEN and then
 /// waits a certain number of milliseconds before getting
 /// the best move
-/// If there's only 1 move the robot responds immediately 
+/// If there's only 1 move the robot responds immediately
 pub fn get_best_move_from_fen_by(
   robot: Robot,
   fen: String,
@@ -51,7 +52,12 @@ pub fn get_best_move_from_fen_by(
   let assert Ok(game) = game.load_fen(fen)
   process.send(robot.main_subject, UpdateGame(game))
 
-  let valid_moves = game.valid_moves(game)
+  let valid_moves =
+    game.valid_moves(
+      game,
+      // TODO: Fuuuuckk
+      constants_store.new(),
+    )
   case valid_moves {
     [] -> Error(Nil)
     [one_move] -> {

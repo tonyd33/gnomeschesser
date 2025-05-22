@@ -1,8 +1,10 @@
+import chess/constants_store
 import bencher
 import chess/game
 import gleam/dict
 
 pub fn main() {
+  let store = constants_store.new()
   // positions are from
   // https://www.chessprogramming.org/Perft_Results
   let assert Ok(starting) = game.load_fen(game.start_fen)
@@ -17,7 +19,7 @@ pub fn main() {
     game.load_fen(
       "rnb1kb1r/pp3ppp/2ppp3/4P1N1/3P4/3B1P2/PPP4P/RN1QK2n b Qkq - 1 10",
     )
-  bencher.run(dict.from_list([#("game.valid_moves", game.valid_moves)]), [
+  bencher.run(dict.from_list([#("game.valid_moves", game.valid_moves(_, store))]), [
     bencher.Warmup(2),
     bencher.Parallel(2),
     bencher.Inputs(

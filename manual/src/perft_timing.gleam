@@ -1,4 +1,5 @@
 import bencher
+import chess/constants_store
 import chess/game
 import chess/util/perft
 import gleam/dict
@@ -8,14 +9,7 @@ type Arguments {
 }
 
 pub fn main() {
-  // let assert Ok(game) =
-  //   game.load_fen(
-  //     "rnb1kb1r/pp3ppp/2ppp3/4P1N1/3P4/3B1P2/PPP4P/RN1QK2n b Qkq - 1 10",
-  //   )
-  // perft.perft(game, 4)
-
-  // let assert 4_865_609 = perft.perft(starting, 5)
-  // let assert 4_085_603 = perft.perft(kiwipete, 4)
+  let store = constants_store.new()
 
   // https://www.chessprogramming.org/Perft_Results
   let assert Ok(starting) = game.load_fen(game.start_fen)
@@ -32,7 +26,7 @@ pub fn main() {
     )
   bencher.run(
     dict.from_list([
-      #("perft", fn(args: Arguments) { perft.perft(args.game, args.depth) }),
+      #("perft", fn(args: Arguments) { perft.perft(args.game, args.depth, store) }),
     ]),
     [
       bencher.Warmup(2),

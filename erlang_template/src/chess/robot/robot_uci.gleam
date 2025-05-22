@@ -1,3 +1,4 @@
+import chess/constants_store
 import chess/game
 import chess/move
 import chess/piece
@@ -138,7 +139,11 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
             use game <- option.then(state.game)
             use valid_move <- option.map(
               move.from_lan(lan)
-              |> game.validate_move(game)
+              |> game.validate_move(
+                game,
+                // TODO: Fuuuuckk
+                constants_store.new(),
+              )
               |> option.from_result,
             )
             let game = game.apply(game, valid_move)
@@ -303,7 +308,13 @@ fn start_searcher(
   // don't bother running the search if there's no valid moves
   case state.game {
     Some(game) ->
-      case game.valid_moves(game) {
+      case
+        game.valid_moves(
+          game,
+          // TODO: Fuuuuckk
+          constants_store.new(),
+        )
+      {
         [] -> panic as "Search requested on a position with no valid moves!"
         _ -> {
           let search_pid =
