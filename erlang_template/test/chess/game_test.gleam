@@ -280,20 +280,20 @@ pub fn moves_queen_test() {
 ///  7 | .  .  .  .  .  .  .  . |
 ///  6 | .  .  .  .  .  .  .  . |
 ///  5 | .  .  .  .  .  .  .  . |
-///  4 | .  .  .  .  .  .  .  . |
+///  4 | .  .  .  .  .  .  p  . |
 ///  3 | .  P  p  .  p  .  .  . |
-///  2 | P  .  .  P  P  .  .  . |
+///  2 | P  .  .  P  P  .  P  . |
 ///  1 | .  .  .  .  .  .  .  K |
 ///    +------------------------+
 ///      a  b  c  d  e  f  g  h
 pub fn moves_pawn_test() {
-  let assert Ok(game) = load_fen("7k/8/8/8/8/1Pp1p3/P2PP3/7K w - - 0 1")
+  let assert Ok(game) = load_fen("7k/8/8/8/6p1/1Pp1p3/P2PP1P1/7K w - - 0 1")
 
   game.valid_moves(game)
   |> list.filter_map(game.move_to_san(_, game))
   |> list.sort(string.compare)
   |> should.equal([
-    "Kg1", "Kg2", "Kh2", "a3", "a4", "b4", "d3", "d4", "dxc3", "dxe3",
+    "Kg1", "Kh2", "a3", "a4", "b4", "d3", "d4", "dxc3", "dxe3", "g3",
   ])
 }
 
@@ -617,6 +617,17 @@ pub fn moves_real_world_2_test() {
 }
 
 // END: move.moves tests
+
+// BEGIN: move.pseudolegal_moves tests
+
+pub fn pseudolegal_moves_basic_test() {
+  let assert Ok(game) = load_fen(game.start_fen)
+  let num_pseudolegal = game.pseudolegal_moves(game) |> list.length
+  let num_legal = game.valid_moves(game) |> list.length
+  should.equal(num_legal, num_pseudolegal)
+}
+
+// END: move.pseudolegal_moves test
 
 // BEGIN: move.apply tests
 

@@ -6,10 +6,8 @@ import chess/piece
 import chess/player
 import chess/square
 import gleam/bool
-import gleam/int
 import gleam/list
 import gleam/result
-import util/result_addons
 
 pub fn psqt(pieces: List(#(square.Square, piece.Piece))) {
   pieces
