@@ -1,6 +1,5 @@
 import chess/bitboard
 import chess/constants/zobrist
-import chess/constants_store.{type ConstantsStore, ConstantsStore}
 import chess/game/castle.{type Castle, KingSide, QueenSide}
 import chess/move
 import chess/move/disambiguation
@@ -16,7 +15,6 @@ import gleam/pair
 import gleam/result
 import gleam/set
 import gleam/string
-import iv
 import util/direction
 import util/yielder
 
@@ -424,11 +422,11 @@ pub fn is_check(game: Game, player: player.Player) -> Bool {
   square.is_attacked_at(game.board, king_position, player.opponent(player))
 }
 
-pub fn is_checkmate(game: Game, store) -> Bool {
+pub fn is_checkmate(game: Game) -> Bool {
   let us = turn(game)
   is_check(game, us)
   && {
-    valid_moves(game, store)
+    valid_moves(game)
     |> list.all(fn(move) {
       // If every new move we try still result in a check, then it's checkmate
       apply(game, move) |> is_check(us)
@@ -445,17 +443,16 @@ pub fn is_checkmate(game: Game, store) -> Bool {
 //   todo
 // }
 
-pub fn is_stalemate(game: Game, store) -> Bool {
-  !is_check(game, game.active_color)
-  && valid_moves(game, store) |> list.is_empty
+pub fn is_stalemate(game: Game) -> Bool {
+  !is_check(game, game.active_color) && valid_moves(game) |> list.is_empty
 }
 
 pub fn is_draw(_game: Game) -> Bool {
   False
 }
 
-pub fn is_game_over(game: Game, store) -> Bool {
-  is_checkmate(game, store) || is_stalemate(game, store) || is_draw(game)
+pub fn is_game_over(game: Game) -> Bool {
+  is_checkmate(game) || is_stalemate(game) || is_draw(game)
 }
 
 pub fn ascii(game: Game) -> String {
@@ -518,7 +515,6 @@ pub type SAN =
 pub fn move_to_san(
   move: move.Move(move.ValidInContext),
   game: Game,
-  store,
 ) -> Result(SAN, Nil) {
   let us = game.active_color
   let them = player.opponent(us)
@@ -576,7 +572,7 @@ pub fn move_to_san(
       let other_ambiguous_moves =
         // find other valid_moves that have the same player and piece type that's targeting
         // don't include ourselves
-        valid_moves(game, store)
+        valid_moves(game)
         |> list.filter(fn(other_move) {
           move.get_to(other_move) == to
           && !move.equal(move, other_move)
@@ -628,7 +624,7 @@ pub fn move_to_san(
   }
   Ok(
     undecorated_san
-    <> case is_check(new_game, them), is_checkmate(new_game, store) {
+    <> case is_check(new_game, them), is_checkmate(new_game) {
       _, True -> "#"
       True, _ -> "+"
       _, _ -> ""
@@ -644,10 +640,9 @@ pub fn move_to_san(
 pub fn move_from_san(
   san: String,
   game: Game,
-  store,
 ) -> Result(move.Move(move.ValidInContext), Nil) {
-  valid_moves(game, store)
-  |> list.find(fn(x) { move_to_san(x, game, store) == Ok(san) })
+  valid_moves(game)
+  |> list.find(fn(x) { move_to_san(x, game) == Ok(san) })
 }
 
 type GameOp {
@@ -914,9 +909,8 @@ pub fn find_player_king(game: Game, player: player.Player) {
 pub fn validate_move(
   move: move.Move(move.Pseudo),
   game: Game,
-  store,
 ) -> Result(move.Move(move.ValidInContext), Nil) {
-  valid_moves(game, store) |> list.find(move.equal(_, move))
+  valid_moves(game) |> list.find(move.equal(_, move))
 }
 
 fn generate_castle_move(game: Game, castle_player, castle) {
@@ -953,10 +947,7 @@ fn generate_castle_move(game: Game, castle_player, castle) {
 // Zobrist below
 
 /// generate valid moves
-pub fn valid_moves(
-  game: Game,
-  store: ConstantsStore,
-) -> List(move.Move(move.ValidInContext)) {
+pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
   let us = game.active_color
   let them = player.opponent(us)
 
@@ -1212,6 +1203,7 @@ pub fn valid_moves(
               |> list.Continue
           }
         }
+
         piece.Pawn -> {
           let pawn_direction = piece.pawn_direction(us)
           let small_move =
