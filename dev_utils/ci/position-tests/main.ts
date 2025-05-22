@@ -147,6 +147,7 @@ async function runTestCase(
     depth?: number;
   },
 ): Promise<TestResult> {
+  await engine.ucinewgame();
   await engine.position(tc.fen, []);
   await engine.isready();
   const { bestmove }: { bestmove: string; info: string[] } = await Promise.race(
@@ -160,6 +161,7 @@ async function runTestCase(
       ),
     ],
   );
+  await engine.ucinewgame();
 
   return {
     ok: tc.bms.includes(bestmove),
