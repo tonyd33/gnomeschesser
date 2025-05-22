@@ -1136,12 +1136,12 @@ pub fn valid_moves(
       // if this piece is pinned, we need to especially consider it
       let to_squares = case piece.symbol {
         piece.Knight -> {
-          let assert Ok(tos) = iv.get(store.baked_moves.knight, from)
+          let tos = square.knight_moves(from)
           use to <- list.filter(tos)
           attackable_square_predicate(to) || movable_square_predicate(to)
         }
         piece.Rook -> {
-          let assert Ok(rays) = iv.get(store.baked_moves.cardinals, from)
+          let rays = square.rook_rays(from)
           use ray <- list.flat_map(rays)
           use acc, to <- list.fold_until(ray, [])
 
@@ -1165,7 +1165,7 @@ pub fn valid_moves(
           }
         }
         piece.Bishop -> {
-          let assert Ok(rays) = iv.get(store.baked_moves.ordinals, from)
+          let rays = square.bishop_rays(from)
           use ray <- list.flat_map(rays)
           use acc, to <- list.fold_until(ray, [])
 
@@ -1189,8 +1189,7 @@ pub fn valid_moves(
           }
         }
         piece.Queen -> {
-          let assert Ok(rays) =
-            iv.get(store.baked_moves.cardinal_ordinals, from)
+          let rays = square.queen_rays(from)
           use ray <- list.flat_map(rays)
           use acc, to <- list.fold_until(ray, [])
 
