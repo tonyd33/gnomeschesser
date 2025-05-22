@@ -1389,23 +1389,30 @@ pub fn pseudolegal_moves(
     piece.Bishop -> from |> square.bishop_rays |> go_rays
     piece.Queen -> from |> square.queen_rays |> go_rays
     piece.Knight -> {
-      use to <- list.map(square.knight_moves(from))
-      #(piece, move.new_pseudo(from:, to:, promotion: None))
+      use to <- list.filter_map(square.knight_moves(from))
+      case dict.get(game.board, to) {
+        Ok(piece.Piece(player, _)) if player == us -> Error(Nil)
+        _ -> Ok(#(piece, move.new_pseudo(from:, to:, promotion: None)))
+      }
     }
     piece.Pawn -> {
-      let empty_square_moves = {
-        use to <- list.flat_map(square.pawn_empty_moves(from, us))
-        use <- bool.guard(dict.has_key(game.board, to), [])
-        case square.rank(to) {
-          0 | 7 -> [
-            #(piece, move.new_pseudo(from:, to:, promotion: Some(piece.Rook))),
-            #(piece, move.new_pseudo(from:, to:, promotion: Some(piece.Knight))),
-            #(piece, move.new_pseudo(from:, to:, promotion: Some(piece.Bishop))),
-            #(piece, move.new_pseudo(from:, to:, promotion: Some(piece.Queen))),
-          ]
-          _ -> [#(piece, move.new_pseudo(from:, to:, promotion: None))]
+      let empty_square_moves =
+        {
+          use acc, to <- list.fold_until(square.pawn_empty_moves(from, us), [])
+          use <- bool.guard(dict.has_key(game.board, to), list.Stop(acc))
+          let promote_move = move.new_pseudo(from:, to:, promotion: _)
+          let moves = case square.rank(to) {
+            0 | 7 -> [
+              #(piece, promote_move(Some(piece.Rook))),
+              #(piece, promote_move(Some(piece.Knight))),
+              #(piece, promote_move(Some(piece.Bishop))),
+              #(piece, promote_move(Some(piece.Queen))),
+            ]
+            _ -> [#(piece, promote_move(None))]
+          }
+          list.Continue([moves, ..acc])
         }
-      }
+        |> list.flatten
       let capture_moves = {
         use to <- list.flat_map(square.pawn_capture_moves(from, us))
         use <- bool.guard(!dict.has_key(game.board, to), [])
@@ -1422,7 +1429,13 @@ pub fn pseudolegal_moves(
       list.append(capture_moves, empty_square_moves)
     }
     piece.King -> {
-      let regular_tos = square.king_moves(from)
+      let regular_tos = {
+        use to <- list.filter_map(square.king_moves(from))
+        case dict.get(game.board, to) {
+          Ok(piece.Piece(player, _)) if player == us -> Error(Nil)
+          _ -> Ok(to)
+        }
+      }
       let castle_tos =
         case us, castling_availability {
           player.White, castle.CastlingAvailability(True, True, _, _) -> [

@@ -618,6 +618,17 @@ pub fn moves_real_world_2_test() {
 
 // END: move.moves tests
 
+// BEGIN: move.pseudolegal_moves tests
+
+pub fn pseudolegal_moves_basic_test() {
+  let assert Ok(game) = load_fen(game.start_fen)
+  let num_pseudolegal = game.pseudolegal_moves(game) |> list.length
+  let num_legal = game.valid_moves(game) |> list.length
+  should.equal(num_legal, num_pseudolegal)
+}
+
+// END: move.pseudolegal_moves test
+
 // BEGIN: move.apply tests
 
 pub fn apply_basic_1_test() {

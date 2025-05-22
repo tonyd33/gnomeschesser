@@ -6,10 +6,8 @@ import chess/piece
 import chess/player
 import chess/square
 import gleam/bool
-import gleam/int
 import gleam/list
 import gleam/result
-import util/result_addons
 
 pub fn psqt(pieces: List(#(square.Square, piece.Piece))) {
   pieces
@@ -26,12 +24,9 @@ pub fn psqt(pieces: List(#(square.Square, piece.Piece))) {
 /// This is implemented in a similar fashion: for every move, it counts
 /// positively towards the mobility score and is weighted by the piece.
 /// TODO: do both side's mobility
-pub fn mobility(moves: List(#(piece.Piece, move.Move(a)))) -> Int {
-  list.fold(moves, 0, fn(acc, pm) {
-    // TODO: shit, the piece is no longer stored in move for pseudolegal moves.
-    // Put it back without breaking API or squashing interfaces and making
-    // Johnny mad
-    let #(piece, _) = pm
+pub fn mobility(moves: List(move.Move(move.ValidInContext))) -> Int {
+  list.fold(moves, 0, fn(acc, move) {
+    let piece = move.get_context(move).piece
     case piece.symbol {
       piece.Pawn | piece.Knight | piece.King -> 0
       piece.Bishop -> 125
