@@ -1,9 +1,5 @@
-import chess/bitboard
 import chess/game
-import chess/piece
-import chess/player
 import gleam/dict
-import gleam/int
 import gleam/result
 
 pub type GameHistory =
