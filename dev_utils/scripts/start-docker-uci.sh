@@ -30,7 +30,6 @@ docker_args=$@
 docker run \
   --rm -i \
   --entrypoint=/bin/sh \
-  --pull=always \
   $docker_args \
-  ghcr.io/tonyd33/gleam-chess-tournament/chess-bot \
+  "ghcr.io/tonyd33/gleam-chess-tournament/chess-bot:$tag" \
   -c 'erl -pa /app/*/ebin -eval "erlang_template@@main:run(erlang_template_uci)" -noshell -extra'

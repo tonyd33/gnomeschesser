@@ -5,8 +5,10 @@ set -eu
 working_dir=$(pwd)
 script_path=$(dirname "$0")
 repo_root_path=$(realpath "$script_path/../../../")
-run_challenger="$repo_root_path/dev_utils/scripts/start-uci.sh"
+run_challenger="$repo_root_path/dev_utils/scripts/start-docker-uci.sh"
 run_defender="$repo_root_path/dev_utils/scripts/start-docker-uci.sh"
+challenger_args="--tag local -- -m 500M --cpus 2"
+defender_args="--tag latest -- -m 500M --cpus 2"
 
 fastchess_event_name="Fastchess Tournament"
 rounds=5
@@ -34,12 +36,14 @@ Usage:
   $0 [options...]
 
 Options:
-  --rounds      rounds      rounds to be played. default $rounds
-  --games       games       number of games per round. default $games
-  --concurrency concurrency # of games to be played at the same time. default $concurrency
-  --challenger  cmd         command to start challenger engine. default $run_challenger
-  --defender    cmd         command to start defender engine. default $run_defender
-  --results     dir         directory to store results. default $results_dir
+  --rounds          rounds      rounds to be played. default $rounds
+  --games           games       number of games per round. default $games
+  --concurrency     concurrency # of games to be played at the same time. default $concurrency
+  --challenger      cmd         command to start challenger engine. default $run_challenger
+  --challenger-args args        args to pass into the challenger engine
+  --defender        cmd         command to start defender engine. default $run_defender
+  --defender-args   args        args to pass into the defender engine
+  --results         dir         directory to store results. default $results_dir
 
 EOF
 }
@@ -47,13 +51,15 @@ EOF
 # Parse args
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --event-name)  fastchess_event_name="$2"; shift 2;;
-    --rounds)      rounds="$2"; shift 2;;
-    --games)       games="$2"; shift 2;;
-    --concurrency) concurrency="$2"; shift 2;;
-    --challenger)  run_challenger=$(realpath "$working_dir/$2"); shift 2;;
-    --defender)    run_defender=$(realpath "$working_dir/$2"); shift 2;;
-    *)             usage; exit 1;
+    --event-name)      fastchess_event_name="$2"; shift 2;;
+    --rounds)          rounds="$2"; shift 2;;
+    --games)           games="$2"; shift 2;;
+    --concurrency)     concurrency="$2"; shift 2;;
+    --challenger)      run_challenger=$(realpath "$working_dir/$2"); shift 2;;
+    --challenger-args) challenger_args="$2"; shift 2;;
+    --defender)        run_defender=$(realpath "$working_dir/$2"); shift 2;;
+    --defender-args)   defender_args="$2"; shift 2;;
+    *)                 usage; exit 1;
   esac
 done
 
@@ -87,7 +93,19 @@ download_fastchess() {
 
 run_fastchess=$(ls "$repo_root_path"/fastchess/fastchess-*)
 
-docker pull ghcr.io/tonyd33/gleam-chess-tournament/chess-bot
+
+# Always pull image.
+# This is a bit weird if we don't mean to run the defender but I can't be arsed
+# to account for that case
+docker pull ghcr.io/tonyd33/gleam-chess-tournament/chess-bot:latest
+
+# Always build local image.
+# This is a bit weird if we don't mean to run the challenger but I can't be
+# arsed to account for that case
+docker build \
+  -t ghcr.io/tonyd33/gleam-chess-tournament/chess-bot:local \
+  -f "$repo_root_path/erlang_template/Dockerfile" \
+  "$repo_root_path/erlang_template"
 
 # Run fastchess
 mkdir -p "$results_dir"
@@ -95,10 +113,12 @@ mkdir -p "$results_dir"
     -event "$fastchess_event_name" \
     -engine \
       cmd="$run_defender" \
+      args="$defender_args" \
       name=defender \
       st=3 \
     -engine \
       cmd="$run_challenger" \
+      args="$challenger_args" \
       name=challenger \
       st=3 \
     -rounds "$rounds" -games "$games" -concurrency "$concurrency" -maxmoves 100 \
