@@ -942,36 +942,31 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
 
   // We always generate king moves to squares not attacked
   let king_moves = {
-    let board_without_king =
-      game.board
-      |> dict.delete(king_position)
-    square.piece_attack_offsets(king_piece)
-    |> list.filter_map(fn(offset) {
-      use to <- result.try(square.add(king_position, offset))
-      let hit_piece = dict.get(game.board, to)
-      // return early if we hit our own piece
-      use <- bool.guard(
-        hit_piece
-          |> result.map(fn(x) { x.player == us })
-          |> result.unwrap(False),
-        Error(Nil),
-      )
-      // check if new square is attacked
-      use <- bool.guard(
-        square.is_attacked_at(board_without_king, to, them),
-        Error(Nil),
-      )
+    use to <- list.filter_map(square.king_moves(king_position))
+    let hit_piece = dict.get(game.board, to)
+    // return early if we hit our own piece
+    use <- bool.guard(
+      hit_piece
+        |> result.map(fn(x) { x.player == us })
+        |> result.unwrap(False),
+      Error(Nil),
+    )
+    // check if new square is attacked
+    let board_without_king = game.board |> dict.delete(king_position)
+    use <- bool.guard(
+      square.is_attacked_at(board_without_king, to, them),
+      Error(Nil),
+    )
 
-      let move_context =
-        move.Context(
-          capture: result.map(hit_piece, pair.new(to, _))
-            |> option.from_result,
-          piece: king_piece,
-          castling: None,
-        )
-        |> Some
-      move.new_valid(king_position, to, None, move_context) |> Ok
-    })
+    let move_context =
+      move.Context(
+        capture: result.map(hit_piece, pair.new(to, _))
+          |> option.from_result,
+        piece: king_piece,
+        castling: None,
+      )
+      |> Some
+    move.new_valid(king_position, to, None, move_context) |> Ok
   }
 
   // We can just pretend en passant doesn't exist, and calculate it specially
@@ -1041,7 +1036,7 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
     // These predicates exist to handle the cases where there is a check
     // They are separate because pawn moves are capture/non-capture
     // This predicates returns true if the target square is a valid capture
-    let #(attackable_square_predicate, movable_square_predicate) = {
+    let #(can_attack, can_move) = {
       case king_attackers {
         [king_attacker] -> {
           // if there is an attacker, the only valid moves is ones blocking the attack
@@ -1084,19 +1079,36 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
     }
     use #(from, piece) <- list.flat_map(pieces)
     use <- bool.guard(piece.player != us, [])
+    // If we are pinned down, check if the target square is along the line by:
+    // If from is a king blocker:
+    //   Keep when:
+    //     (to == pinner) or
+    //     (from_offset == square.ray_to_offset(from: pinner, to: to).0)
+    // Else:
+    //   Always keep
+    let unpins = case dict.get(king_blockers, from) {
+      Ok(pinner) -> fn(to) {
+        to == pinner
+        || {
+          let from_offset: Int = square.ray_to_offset(from: pinner, to: from).0
+          from_offset == square.ray_to_offset(from: pinner, to: to).0
+        }
+      }
+      _ -> fn(_) { True }
+    }
 
     let go_rays = fn(rays) {
       use ray <- list.flat_map(rays)
-      use acc, to <- list.fold_until(ray, [])
+      use ray_moves, to <- list.fold_until(ray, [])
 
       case dict.get(game.board, to) {
-        Ok(piece.Piece(hit_player, _)) if hit_player == us -> list.Stop(acc)
+        Ok(piece.Piece(hit_player, _)) if hit_player == us ->
+          list.Stop(ray_moves)
         // if hit_player != us
         Ok(captured_piece) ->
           {
-            let keep =
-              attackable_square_predicate(to) || movable_square_predicate(to)
-            use <- bool.guard(!keep, acc)
+            let keep = { can_attack(to) || can_move(to) } && unpins(to)
+            use <- bool.guard(!keep, ray_moves)
 
             let context =
               move.Context(
@@ -1105,25 +1117,24 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
                 castling: None,
               )
               |> Some
-            [move.new_valid(from:, to:, promotion: None, context:), ..acc]
+            [move.new_valid(from:, to:, promotion: None, context:), ..ray_moves]
           }
           |> list.Stop
         _ ->
           {
-            let keep =
-              attackable_square_predicate(to) || movable_square_predicate(to)
-            use <- bool.guard(!keep, acc)
+            let keep = { can_attack(to) || can_move(to) } && unpins(to)
+            use <- bool.guard(!keep, ray_moves)
             let context =
               move.Context(capture: None, piece:, castling: None)
               |> Some
-            [move.new_valid(from:, to:, promotion: None, context:), ..acc]
+            [move.new_valid(from:, to:, promotion: None, context:), ..ray_moves]
           }
           |> list.Continue
       }
     }
 
     // if this piece is pinned, we need to especially consider it
-    let to_moves = case piece.symbol {
+    case piece.symbol {
       // We already do king move generation separately
       piece.King -> []
       piece.Rook -> from |> square.rook_rays |> go_rays
@@ -1132,8 +1143,7 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
       piece.Knight -> {
         let tos = square.knight_moves(from)
         use to <- list.filter_map(tos)
-        let add =
-          attackable_square_predicate(to) || movable_square_predicate(to)
+        let add = { can_attack(to) || can_move(to) } && unpins(to)
         use <- bool.guard(!add, Error(Nil))
 
         case dict.get(game.board, to) {
@@ -1163,7 +1173,8 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
               [],
             )
             use <- bool.guard(dict.has_key(game.board, to), list.Stop(acc))
-            use <- bool.guard(!movable_square_predicate(to), list.Continue(acc))
+            let keep = can_move(to) && unpins(to)
+            use <- bool.guard(!keep, list.Continue(acc))
             let context =
               move.Context(capture: None, piece:, castling: None)
               |> Some
@@ -1188,7 +1199,8 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
         let capture_moves = {
           use to <- list.flat_map(square.pawn_capture_moves(from, us))
           use <- bool.guard(!dict.has_key(game.board, to), [])
-          use <- bool.guard(!attackable_square_predicate(to), [])
+          let keep = can_attack(to) && unpins(to)
+          use <- bool.guard(!keep, [])
           let assert Ok(captured_piece) = dict.get(game.board, to)
           let context =
             move.Context(
@@ -1210,19 +1222,6 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
         }
         list.append(empty_moves, capture_moves)
       }
-    }
-
-    // if we are pinned down, check if the target square is along the line
-    case dict.get(king_blockers, from) {
-      Ok(pinner) -> {
-        let from_offset: Int = square.ray_to_offset(from: pinner, to: from).0
-        use move <- list.filter(to_moves)
-        let to = move.get_to(move)
-        to == pinner
-        // if the to square is still along the same direction
-        || from_offset == square.ray_to_offset(from: pinner, to: to).0
-      }
-      _ -> to_moves
     }
   }
 
