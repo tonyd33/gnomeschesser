@@ -1,4 +1,3 @@
-import chess/bitboard
 import chess/constants/zobrist
 import chess/game/castle.{type Castle, KingSide, QueenSide}
 import chess/move
@@ -23,7 +22,6 @@ pub const start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 pub opaque type Game {
   Game(
     board: Dict(square.Square, piece.Piece),
-    bitboard: bitboard.GameBitboard,
     active_color: player.Player,
     castling_availability: castle.CastlingAvailability,
     en_passant_target_square: Option(#(player.Player, square.Square)),
@@ -31,10 +29,6 @@ pub opaque type Game {
     fullmove_number: Int,
     hash: Hash,
   )
-}
-
-pub fn get_game_bitboard(game: Game) {
-  game.bitboard
 }
 
 pub fn load_fen(fen: String) -> Result(Game, Nil) {
@@ -149,25 +143,22 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
     "b" -> player.Black
     _ -> panic
   }
-  let bitboard = bitboard.from_pieces(pieces)
   let en_passant_target_square =
     square.from_string(en_passant_target_square)
     |> result.map(pair.new(player.opponent(active_color), _))
     |> option.from_result
-    |> option.then(validate_en_passant(active_color, bitboard, _))
+    |> option.then(validate_en_passant(active_color, board, _))
 
   let hash =
     compute_zobrist_hash_impl(
       active_color,
       board,
-      bitboard,
       castling_availability,
       en_passant_target_square,
     )
 
   Game(
     board:,
-    bitboard:,
     active_color:,
     castling_availability:,
     en_passant_target_square:,
@@ -335,40 +326,15 @@ pub fn piece_exists_at(
   piece: piece.Piece,
   square: square.Square,
 ) -> Bool {
-  let bit = bitboard.from_square(square)
-  case piece {
-    piece.Piece(player.White, piece.Pawn) ->
-      int.bitwise_and(game.bitboard.white_pawns, bit)
-    piece.Piece(player.White, piece.Knight) ->
-      int.bitwise_and(game.bitboard.white_knights, bit)
-    piece.Piece(player.White, piece.Bishop) ->
-      int.bitwise_and(game.bitboard.white_bishops, bit)
-    piece.Piece(player.White, piece.Rook) ->
-      int.bitwise_and(game.bitboard.white_rooks, bit)
-    piece.Piece(player.White, piece.Queen) ->
-      int.bitwise_and(game.bitboard.white_queens, bit)
-    piece.Piece(player.White, piece.King) ->
-      int.bitwise_and(game.bitboard.white_king, bit)
-
-    piece.Piece(player.Black, piece.Pawn) ->
-      int.bitwise_and(game.bitboard.black_pawns, bit)
-    piece.Piece(player.Black, piece.Knight) ->
-      int.bitwise_and(game.bitboard.black_knights, bit)
-    piece.Piece(player.Black, piece.Bishop) ->
-      int.bitwise_and(game.bitboard.black_bishops, bit)
-    piece.Piece(player.Black, piece.Rook) ->
-      int.bitwise_and(game.bitboard.black_rooks, bit)
-    piece.Piece(player.Black, piece.Queen) ->
-      int.bitwise_and(game.bitboard.black_queens, bit)
-    piece.Piece(player.Black, piece.King) ->
-      int.bitwise_and(game.bitboard.black_king, bit)
+  case dict.get(game.board, square) {
+    Ok(p) -> p == piece
+    _ -> False
   }
-  != 0
 }
 
 fn validate_en_passant(
   us: player.Player,
-  bb: bitboard.GameBitboard,
+  board: Dict(square.Square, piece.Piece),
   en_passant_target_square: #(player.Player, square.Square),
 ) {
   let #(_, square) = en_passant_target_square
@@ -380,23 +346,15 @@ fn validate_en_passant(
   let x_left =
     square.move(square, direction.Left, 1)
     |> result.try(square.move(_, dir, 1))
-    |> result.map(bitboard.from_square)
     |> result.unwrap(0x0)
   let x_right =
     square.move(square, direction.Right, 1)
     |> result.try(square.move(_, dir, 1))
-    |> result.map(bitboard.from_square)
     |> result.unwrap(0x0)
 
   let can_attack =
-    {
-      int.bitwise_or(x_left, x_right)
-      |> int.bitwise_and(case us {
-        player.Black -> bb.black_pawns
-        player.White -> bb.white_pawns
-      })
-    }
-    != 0
+    dict.get(board, x_left) == Ok(piece.Piece(us, piece.Pawn))
+    || dict.get(board, x_right) == Ok(piece.Piece(us, piece.Pawn))
 
   case can_attack {
     True -> Some(en_passant_target_square)
@@ -405,8 +363,7 @@ fn validate_en_passant(
 }
 
 pub fn empty_at(game: Game, square: square.Square) -> Bool {
-  let square = bitboard.from_square(square)
-  0 == int.bitwise_and(square, bitboard.get_bitboard_all(game.bitboard))
+  !dict.has_key(game.board, square)
 }
 
 pub fn find_piece(game: Game, piece: piece.Piece) -> List(square.Square) {
@@ -653,25 +610,17 @@ type GameOp {
 fn map_bbh(bbh, op) {
   case op {
     BoardDeletion(square, piece) -> {
-      let #(board, bitboard, hash) = bbh
+      let #(board, hash) = bbh
       #(
         dict.delete(board, square),
-        // mask it out
-        bitboard.and(
-          bitboard,
-          piece,
-          int.bitwise_not(bitboard.from_square(square)),
-        ),
         // (un)XOR squares out
         int.bitwise_exclusive_or(hash, zobrist.piece_hash(square, piece)),
       )
     }
     BoardInsertion(square, piece) -> {
-      let #(board, bitboard, hash) = bbh
+      let #(board, hash) = bbh
       #(
         dict.insert(board, square, piece),
-        // mask it in
-        bitboard.or(bitboard, piece, bitboard.from_square(square)),
         // XOR squares in
         int.bitwise_exclusive_or(hash, zobrist.piece_hash(square, piece)),
       )
@@ -690,7 +639,6 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
   let move_context = move.get_context(move)
   let Game(
     board:,
-    bitboard:,
     castling_availability:,
     active_color: us,
     en_passant_target_square: prev_en_passant_target_square,
@@ -703,7 +651,7 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
   let assert Ok(piece) = dict.get(board, from)
 
   // Updates to the board.
-  let #(board, bitboard, hash) = {
+  let #(board, hash) = {
     // update the piece if it's a promotion
     let new_piece =
       promotion
@@ -718,7 +666,7 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
 
     // Over the course of hundreds of thousands of nodes, manually doing this
     // rather than folding over a list is marginally but measurably faster.
-    let bbh = #(board, bitboard, hash)
+    let bbh = #(board, hash)
     let bbh = map_bbh(bbh, BoardDeletion(from, move_context.piece))
     let bbh = case move_context.capture {
       Some(x) -> map_bbh(bbh, BoardDeletion(x.0, x.1))
@@ -757,7 +705,7 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
         }
       _ -> None
     }
-    |> option.then(validate_en_passant(them, bitboard, _))
+    |> option.then(validate_en_passant(them, board, _))
 
   // update castling availibility based on new game state
   let castling_availability = {
@@ -887,7 +835,6 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
 
   Game(
     board:,
-    bitboard:,
     active_color: them,
     castling_availability:,
     en_passant_target_square:,
@@ -1423,7 +1370,6 @@ pub fn compute_zobrist_hash(game: Game) {
   compute_zobrist_hash_impl(
     game.active_color,
     game.board,
-    game.bitboard,
     game.castling_availability,
     game.en_passant_target_square,
   )
@@ -1437,7 +1383,6 @@ pub fn compute_zobrist_hash(game: Game) {
 fn compute_zobrist_hash_impl(
   us: player.Player,
   board: Dict(square.Square, piece.Piece),
-  bb: bitboard.GameBitboard,
   castling_availability: castle.CastlingAvailability,
   en_passant_target_square: Option(#(player.Player, square.Square)),
 ) -> Hash {
@@ -1453,7 +1398,7 @@ fn compute_zobrist_hash_impl(
   // validate this is legit
   let en_passant_hash =
     en_passant_target_square
-    |> option.then(validate_en_passant(us, bb, _))
+    |> option.then(validate_en_passant(us, board, _))
     |> ep_hash
 
   let turn_hash = case us {
