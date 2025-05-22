@@ -1126,11 +1126,83 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
       use <- bool.guard(piece.player != us, [])
       // if this piece is pinned, we need to especially consider it
       let to_squares = case piece.symbol {
-        piece.Knight | piece.Bishop | piece.Queen | piece.Rook ->
-          square.piece_attacking(game.board, from, piece, True)
-          |> list.filter(fn(x) {
-            attackable_square_predicate(x) || movable_square_predicate(x)
-          })
+        piece.Knight -> {
+          let tos = square.knight_moves(from)
+          use to <- list.filter(tos)
+          attackable_square_predicate(to) || movable_square_predicate(to)
+        }
+        piece.Rook -> {
+          let rays = square.rook_rays(from)
+          use ray <- list.flat_map(rays)
+          use acc, to <- list.fold_until(ray, [])
+
+          case dict.get(game.board, to) {
+            Ok(piece.Piece(hit_player, _)) if hit_player == us -> list.Stop(acc)
+            // if hit_player != us
+            Ok(piece.Piece(_, _)) ->
+              {
+                use <- bool.guard(attackable_square_predicate(to), [to, ..acc])
+                use <- bool.guard(movable_square_predicate(to), [to, ..acc])
+                acc
+              }
+              |> list.Stop
+            _ ->
+              {
+                use <- bool.guard(attackable_square_predicate(to), [to, ..acc])
+                use <- bool.guard(movable_square_predicate(to), [to, ..acc])
+                acc
+              }
+              |> list.Continue
+          }
+        }
+        piece.Bishop -> {
+          let rays = square.bishop_rays(from)
+          use ray <- list.flat_map(rays)
+          use acc, to <- list.fold_until(ray, [])
+
+          case dict.get(game.board, to) {
+            Ok(piece.Piece(hit_player, _)) if hit_player == us -> list.Stop(acc)
+            // if hit_player != us
+            Ok(piece.Piece(_, _)) ->
+              {
+                use <- bool.guard(attackable_square_predicate(to), [to, ..acc])
+                use <- bool.guard(movable_square_predicate(to), [to, ..acc])
+                acc
+              }
+              |> list.Stop
+            _ ->
+              {
+                use <- bool.guard(attackable_square_predicate(to), [to, ..acc])
+                use <- bool.guard(movable_square_predicate(to), [to, ..acc])
+                acc
+              }
+              |> list.Continue
+          }
+        }
+        piece.Queen -> {
+          let rays = square.queen_rays(from)
+          use ray <- list.flat_map(rays)
+          use acc, to <- list.fold_until(ray, [])
+
+          case dict.get(game.board, to) {
+            Ok(piece.Piece(hit_player, _)) if hit_player == us -> list.Stop(acc)
+            // if hit_player != us
+            Ok(piece.Piece(_, _)) ->
+              {
+                use <- bool.guard(attackable_square_predicate(to), [to, ..acc])
+                use <- bool.guard(movable_square_predicate(to), [to, ..acc])
+                acc
+              }
+              |> list.Stop
+            _ ->
+              {
+                use <- bool.guard(attackable_square_predicate(to), [to, ..acc])
+                use <- bool.guard(movable_square_predicate(to), [to, ..acc])
+                acc
+              }
+              |> list.Continue
+          }
+        }
 
         piece.Pawn -> {
           let pawn_direction = piece.pawn_direction(us)
