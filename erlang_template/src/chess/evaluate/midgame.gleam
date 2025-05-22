@@ -101,3 +101,25 @@ pub fn king_pawn_shield(game: game.Game, side: player.Player) -> Int {
   }
   * common.player(side)
 }
+
+pub fn king_ray_safety(game: game.Game, side: player.Player) {
+  let assert Ok(#(king_square, _)) = game.find_player_king(game, side)
+  {
+    use safety_penalty, squares <- list.fold(square.queen_rays(king_square), 0)
+    use safety_penalty, square <- list.fold_until(squares, safety_penalty)
+    case game.piece_at(game, square) {
+      Ok(piece.Piece(player, _)) if player == side ->
+        // if it's our own piece, just stop
+        list.Stop(safety_penalty)
+      // if it's their piece that ends the ray, add a little bit of a stop
+      Ok(piece.Piece(_, piece.Pawn)) -> list.Stop(safety_penalty + 1)
+      // little more extra penalty for non-pawns
+      Ok(_) -> list.Stop(safety_penalty + 2)
+      // otherwise if it's empty just add 1
+      Error(Nil) -> list.Continue(safety_penalty + 1)
+    }
+  }
+  // estimate around 300 for a king in the centre exposed
+  * -10
+  * common.player(side)
+}

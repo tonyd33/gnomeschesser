@@ -44,18 +44,22 @@ pub fn game(game: game.Game) -> Score {
   }
   // TODO: change these based on the state of the game
   let mobility_score = midgame.mobility(valid_moves)
-  let king_safety_score =
+  let king_pawn_shield_score =
     midgame.king_pawn_shield(game, player.White)
     + midgame.king_pawn_shield(game, player.Black)
+  let king_ray_safety_score =
+    midgame.king_ray_safety(game, player.White)
+    + midgame.king_ray_safety(game, player.Black)
   // combine scores with weight
   {
     {
       { material_score * 850 }
       + { mobility_score * 10 }
       + { pqst_score * 50 }
-      + { king_safety_score * 40 }
+      + { king_pawn_shield_score * 40 }
+      + { king_ray_safety_score * 30 }
     }
-    / { 850 + 10 + 50 + 40 }
+    / { 850 + 10 + 50 + 40 + 30 }
   }
   |> xint.from_int
 }
