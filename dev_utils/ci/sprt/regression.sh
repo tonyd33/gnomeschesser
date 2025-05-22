@@ -7,9 +7,8 @@ script_path=$(dirname "$0")
 repo_root_path=$(realpath "$script_path/../../../")
 run_challenger="$repo_root_path/dev_utils/scripts/start-docker-uci.sh"
 run_defender="$repo_root_path/dev_utils/scripts/start-docker-uci.sh"
-# Constrain resources through args. E.g. "--tag local -- -m 500M --cpus 2"
-challenger_args="--tag local"
-defender_args="--tag latest"
+challenger_args="--tag local -- -m 500M --cpus 2"
+defender_args="--tag latest -- -m 500M --cpus 2"
 
 fastchess_event_name="Fastchess Tournament"
 rounds=5
@@ -122,7 +121,7 @@ mkdir -p "$results_dir"
       args="$challenger_args" \
       name=challenger \
       st=3 \
-    -rounds "$rounds" -games "$games" -concurrency "$concurrency" -maxmoves 50 \
+    -rounds "$rounds" -games "$games" -concurrency "$concurrency" -maxmoves 100 \
     -pgnout file="$results_dir/regression.pgn" \
     -log file="$results_dir/fastchess-regression.log" level=trace \
     -openings file=$book format=pgn order=random
