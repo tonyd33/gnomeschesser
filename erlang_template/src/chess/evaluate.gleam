@@ -19,7 +19,7 @@ pub fn game(game: game.Game) -> Score {
   let board = game.board(game)
   let pieces = game.pieces(game)
   // TODO: use a cached version of getting moves somehow?
-  let valid_moves = game.valid_moves(game)
+  let moves = game.pseudolegal_moves(game)
 
   // TODO: scale this gradually
   let game_stage = case
@@ -43,7 +43,7 @@ pub fn game(game: game.Game) -> Score {
     common.EndGame -> endgame.psqt(pieces)
   }
   // TODO: change these based on the state of the game
-  let mobility_score = midgame.mobility(valid_moves)
+  let mobility_score = midgame.mobility(game, moves)
   let king_safety_score =
     midgame.king_pawn_shield(game, player.White)
     + midgame.king_pawn_shield(game, player.Black)

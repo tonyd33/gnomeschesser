@@ -860,6 +860,23 @@ pub fn validate_move(
   valid_moves(game) |> list.find(move.equal(_, move))
 }
 
+fn generate_pseudolegal_castle_to(game: Game, castle) {
+  let us = game.active_color
+
+  let occupancy_blocked =
+    castle.occupancy_squares(us, castle)
+    |> list.any(fn(square) { dict.get(game.board, square) |> result.is_ok })
+  use <- bool.guard(occupancy_blocked, Error(Nil))
+
+  let rank = square.player_rank(us)
+  let to_file = case castle {
+    castle.KingSide -> 6
+    castle.QueenSide -> 2
+  }
+  let assert Ok(to) = square.from_rank_file(rank, to_file)
+  Ok(to)
+}
+
 fn generate_castle_move(game: Game, castle_player, castle) {
   let us = game.active_color
   let them = player.opponent(us)
@@ -1359,6 +1376,103 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
   }
 
   list.flatten([king_moves, regular_moves, en_passant_move, castling_moves])
+}
+
+pub fn pseudolegal_moves(game: Game) -> List(move.Move(move.Pseudo)) {
+  let Game(active_color: us, castling_availability:, ..) = game
+  let go_ray = fn(rays, from) {
+    use ray <- list.flat_map(rays)
+    use acc, to <- list.fold_until(ray, [])
+
+    case dict.get(game.board, to) {
+      Ok(piece.Piece(hit_player, _)) if hit_player == us -> list.Stop(acc)
+      // if hit_player != us
+      Ok(piece.Piece(_, _)) ->
+        list.Stop([move.new_pseudo(from:, to:, promotion: None), ..acc])
+      _ -> list.Continue([move.new_pseudo(from:, to:, promotion: None), ..acc])
+    }
+  }
+  use #(from, piece) <- list.flat_map(dict.to_list(game.board))
+  use <- bool.guard(piece.player != us, [])
+
+  case piece.symbol {
+    piece.Rook -> from |> square.rook_rays |> go_ray(from)
+    piece.Bishop -> from |> square.bishop_rays |> go_ray(from)
+    piece.Queen -> from |> square.queen_rays |> go_ray(from)
+    piece.Knight -> {
+      use to <- list.map(square.knight_moves(from))
+      move.new_pseudo(from:, to:, promotion: None)
+    }
+    piece.Pawn -> {
+      let pawn_direction = piece.pawn_direction(us)
+      let small_move = {
+        use to <- result.try(square.move(from, pawn_direction, 1))
+        case dict.get(game.board, to) {
+          Ok(_) -> Error(Nil)
+          Error(Nil) -> Ok(to)
+        }
+      }
+      let big_move = {
+        use <- bool.guard(
+          square.rank(from) != square.pawn_start_rank(us),
+          Error(Nil),
+        )
+        use small_move <- result.try(small_move)
+        use to <- result.try(square.move(small_move, pawn_direction, 1))
+        case dict.get(game.board, to) {
+          Ok(_) -> Error(Nil)
+          Error(Nil) -> Ok(to)
+        }
+      }
+      let x_move = square.piece_attacking(game.board, from, piece, True)
+      let pawn_tos =
+        list.append([small_move, big_move] |> result.values, x_move)
+      use to <- list.flat_map(pawn_tos)
+      let rank = square.rank(to)
+      use promotion <- list.map({
+        case rank {
+          0 | 7 -> [
+            Some(piece.Rook),
+            Some(piece.Knight),
+            Some(piece.Bishop),
+            Some(piece.Queen),
+          ]
+          _ -> [None]
+        }
+      })
+      move.new_pseudo(from:, to:, promotion:)
+    }
+    piece.King -> {
+      let regular_tos = square.king_moves(from)
+      let castle_tos =
+        case us, castling_availability {
+          player.White, castle.CastlingAvailability(True, True, _, _) -> [
+            generate_pseudolegal_castle_to(game, KingSide),
+            generate_pseudolegal_castle_to(game, QueenSide),
+          ]
+          player.White, castle.CastlingAvailability(True, False, _, _) -> [
+            generate_pseudolegal_castle_to(game, KingSide),
+          ]
+          player.White, castle.CastlingAvailability(False, True, _, _) -> [
+            generate_pseudolegal_castle_to(game, QueenSide),
+          ]
+          player.Black, castle.CastlingAvailability(_, _, True, True) -> [
+            generate_pseudolegal_castle_to(game, KingSide),
+            generate_pseudolegal_castle_to(game, QueenSide),
+          ]
+          player.Black, castle.CastlingAvailability(_, _, True, False) -> [
+            generate_pseudolegal_castle_to(game, KingSide),
+          ]
+          player.Black, castle.CastlingAvailability(_, _, False, True) -> [
+            generate_pseudolegal_castle_to(game, QueenSide),
+          ]
+          _, _ -> []
+        }
+        |> result.values
+      use to <- list.map(list.append(regular_tos, castle_tos))
+      move.new_pseudo(from:, to:, promotion: None)
+    }
+  }
 }
 
 pub type Hash =
