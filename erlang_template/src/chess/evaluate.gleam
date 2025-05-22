@@ -43,7 +43,7 @@ pub fn game(game: game.Game) -> Score {
     common.EndGame -> endgame.psqt(pieces)
   }
   // TODO: change these based on the state of the game
-  let mobility_score = midgame.mobility(game, moves)
+  let mobility_score = midgame.mobility(moves)
   let king_safety_score =
     midgame.king_pawn_shield(game, player.White)
     + midgame.king_pawn_shield(game, player.Black)

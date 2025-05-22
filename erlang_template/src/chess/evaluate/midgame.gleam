@@ -26,12 +26,12 @@ pub fn psqt(pieces: List(#(square.Square, piece.Piece))) {
 /// This is implemented in a similar fashion: for every move, it counts
 /// positively towards the mobility score and is weighted by the piece.
 /// TODO: do both side's mobility
-pub fn mobility(game: game.Game, moves: List(move.Move(a))) -> Int {
-  list.fold(moves, 0, fn(acc, move) {
+pub fn mobility(moves: List(#(piece.Piece, move.Move(a)))) -> Int {
+  list.fold(moves, 0, fn(acc, pm) {
     // TODO: shit, the piece is no longer stored in move for pseudolegal moves.
     // Put it back without breaking API or squashing interfaces and making
     // Johnny mad
-    let assert Ok(piece) = game.piece_at(game, move.get_from(move))
+    let #(piece, _) = pm
     case piece.symbol {
       piece.Pawn | piece.Knight | piece.King -> 0
       piece.Bishop -> 125
