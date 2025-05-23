@@ -1168,10 +1168,14 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
       piece.Pawn -> {
         let empty_moves =
           {
-            use acc, to <- list.fold_until(
-              square.pawn_empty_moves(from, us),
-              [],
-            )
+            let pots = case square.pawn_empty_moves(from, us) {
+              Ok(pots) -> pots
+              Error(Nil) -> {
+                echo to_fen(game)
+                panic as "We fucked up"
+              }
+            }
+            use acc, to <- list.fold_until(pots, [])
             use <- bool.guard(dict.has_key(game.board, to), list.Stop(acc))
             let keep = can_move(to) && unpins(to)
             use <- bool.guard(!keep, list.Continue(acc))
@@ -1398,7 +1402,14 @@ pub fn pseudolegal_moves(
     piece.Pawn -> {
       let empty_square_moves =
         {
-          use acc, to <- list.fold_until(square.pawn_empty_moves(from, us), [])
+          let pots = case square.pawn_empty_moves(from, us) {
+            Ok(pots) -> pots
+            Error(Nil) -> {
+              echo to_fen(game)
+              panic as "We fucked up"
+            }
+          }
+          use acc, to <- list.fold_until(pots, [])
           use <- bool.guard(dict.has_key(game.board, to), list.Stop(acc))
           let promote_move = move.new_pseudo(from:, to:, promotion: _)
           let moves = case square.rank(to) {
