@@ -42,7 +42,7 @@ pub fn init() -> Robot {
 /// Updates the robot to specified FEN and then
 /// waits a certain number of milliseconds before getting
 /// the best move
-/// If there's only 1 move the robot responds immediately 
+/// If there's only 1 move the robot responds immediately
 pub fn get_best_move_from_fen_by(
   robot: Robot,
   fen: String,

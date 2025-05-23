@@ -1,6 +1,7 @@
 import chess/game
 import chess/search/evaluation
 import gleam/dict
+import util/state.{type State, State}
 
 /// A table to cache calculation results.
 ///

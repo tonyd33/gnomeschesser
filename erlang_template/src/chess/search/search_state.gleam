@@ -1,12 +1,15 @@
 import chess/game
 import chess/piece
+import chess/robot/robot_tt
 import chess/search/evaluation.{type Evaluation, Evaluation}
 import chess/search/transposition
 import chess/square
 import gleam/dict
+import gleam/erlang/process
 import gleam/float
 import gleam/int
 import gleam/option.{type Option, None, Some}
+import gleam/otp/actor
 import gleam/result
 import gleam/set
 import gleam/time/duration
@@ -16,6 +19,7 @@ import util/xint.{type ExtendedInt}
 
 pub type SearchState {
   SearchState(
+    actor: process.Subject(robot_tt.Message),
     transposition: transposition.Table,
     history: dict.Dict(#(square.Square, piece.Piece), Int),
     stats: SearchStats,
@@ -23,7 +27,9 @@ pub type SearchState {
 }
 
 pub fn new(now: timestamp.Timestamp) {
+  let assert Ok(actor) = actor.start(dict.new(), robot_tt.handle_message)
   SearchState(
+    actor,
     transposition: dict.new(),
     history: dict.new(),
     stats: SearchStats(
@@ -76,19 +82,9 @@ pub type TranspositionPruneMethod {
 pub fn transposition_get(
   hash: game.Hash,
 ) -> State(SearchState, Result(transposition.Entry, Nil)) {
-  use search_state: SearchState <- State(run: _)
-  let transposition = search_state.transposition
-  let entry = dict.get(transposition, hash)
-  let transposition = case entry {
-    Ok(entry) -> {
-      let last_accessed = search_state.stats.nodes_searched
-      let entry = transposition.Entry(..entry, last_accessed:)
-
-      dict.insert(transposition, hash, entry)
-    }
-    _ -> transposition
-  }
-  #(entry, SearchState(..search_state, transposition:))
+  use state: SearchState <- state.select
+  let entry = process.call(state.actor, robot_tt.Get(hash, _), 1000)
+  entry
 }
 
 pub fn transposition_insert(
@@ -99,8 +95,8 @@ pub fn transposition_insert(
   use search_state: SearchState <- state.modify
   let last_accessed = search_state.stats.nodes_searched
   let entry = transposition.Entry(depth:, eval:, last_accessed:)
-  let transposition = dict.insert(search_state.transposition, hash, entry)
-  SearchState(..search_state, transposition:)
+  process.send(search_state.actor, robot_tt.Insert(hash, entry))
+  search_state
 }
 
 pub fn transposition_prune(
