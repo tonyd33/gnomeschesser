@@ -96,7 +96,6 @@ download_fastchess() {
 
 run_fastchess=$(ls "$repo_root_path"/fastchess/fastchess-*)
 
-
 # Always pull image.
 # This is a bit weird if we don't mean to run the defender but I can't be arsed
 # to account for that case
@@ -127,4 +126,4 @@ mkdir -p "$results_dir"
     -rounds "$rounds" -games "$games" -concurrency "$concurrency" -maxmoves 100 \
     -pgnout file="$results_dir/regression.pgn" \
     -log file="$results_dir/fastchess-regression.log" level=trace \
-    -openings file=$book format=pgn order=random
+    -openings file="$book" format=pgn order=random

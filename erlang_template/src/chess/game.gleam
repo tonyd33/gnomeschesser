@@ -216,6 +216,11 @@ pub fn fullmove_number(game: Game) -> Int {
   game.fullmove_number
 }
 
+pub fn reverse_turn(game: Game) -> Game {
+  let them = player.opponent(game.active_color)
+  Game(..game, active_color: them)
+}
+
 pub fn to_fen(game: Game) -> String {
   // todo: board positions
 

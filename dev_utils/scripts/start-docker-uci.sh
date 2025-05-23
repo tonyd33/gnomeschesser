@@ -20,9 +20,8 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-tag=${tag:-}
+tag=${tag:-latest}
 docker_args=$@
-
 
 # Get this command by inspecting the entrypoint.sh referenced in the Dockerfile
 # And then modify it to run the UCI entrypoint to get this command.
