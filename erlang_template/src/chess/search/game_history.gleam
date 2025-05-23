@@ -3,7 +3,7 @@ import gleam/dict
 import gleam/result
 
 pub type GameHistory =
-  dict.Dict(game.Hash, game.Game)
+  dict.Dict(Int, game.Game)
 
 pub const new = dict.new
 

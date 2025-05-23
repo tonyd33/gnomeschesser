@@ -2,7 +2,6 @@
 //// See the [spec](https://github.com/tonyd33/node-uci-protocol/blob/master/engine-interface.txt)
 ////
 
-import gleam/float
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -156,19 +155,6 @@ fn p_int() -> Parser(Int) {
     "-" -> p.return(-nat)
     _ -> panic as "There is a bug in the code"
   }
-}
-
-/// TODO: what's this function for?
-fn floating() -> Parser(Float) {
-  use left <- p.do(p_int())
-  use dot <- p.do(p.char("."))
-  use right <- p.do(natural())
-
-  // loooooooool
-  let assert Ok(fl) =
-    float.parse(int.to_string(left) <> dot <> int.to_string(right))
-
-  p.return(fl)
 }
 
 pub fn engine_cmd() -> Parser(UCIEngineCommand) {

@@ -1,6 +1,5 @@
 import chess/game
 import chess/move
-import chess/piece
 import chess/player
 import chess/search
 import chess/search/evaluation
@@ -8,13 +7,11 @@ import chess/search/game_history
 import chess/search/search_state
 import chess/uci
 import gleam/bool
-import gleam/dict
 import gleam/erlang/process.{type Subject}
 import gleam/function
 import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import gleam/pair
 import gleam/result
 import gleam/time/timestamp
 import util/xint

@@ -73,6 +73,7 @@ fn search(
   opts: SearchOpts,
   game_history: game_history.GameHistory,
 ) -> State(SearchState, Nil) {
+  echo current_depth
   let game_hash = game.hash(game)
   use cached_evaluation <- state.do(search_state.transposition_get(game_hash))
 
@@ -233,6 +234,7 @@ fn negamax_alphabeta_failsoft(
 ) -> State(SearchState, Evaluation) {
   let game_hash = game.hash(game)
 
+  use _ <- state.do(search_state.stats_increment_nodes_searched())
   // TODO: check for cache collision here
   // return early if we find an entry in the transposition table
   use cached_evaluation <- state.do(
@@ -266,7 +268,6 @@ fn negamax_alphabeta_failsoft(
   use _ <- state.do(
     search_state.transposition_insert(game_hash, #(depth, evaluation)),
   )
-  use _ <- state.do(search_state.stats_increment_nodes_searched())
   use _ <- state.do(search_state.transposition_prune(
     when: search_state.LargerThan(max_tt_size),
     do: search_state.ByRecency(max_tt_recency),
