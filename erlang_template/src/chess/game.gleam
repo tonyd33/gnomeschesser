@@ -646,6 +646,7 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     halfmove_clock:,
     hash:,
   ) = game
+  let prev_game = game
   let prev_castling_availability = castling_availability
   let them = player.opponent(us)
   let assert Ok(piece) = dict.get(board, from)
@@ -992,9 +993,9 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
           attacker_square,
           us,
         )
-        |> list.filter_map(fn(defender_square) {
+        |> list.flat_map(fn(defender_square) {
           let assert Ok(piece) = dict.get(game.board, defender_square)
-          use <- bool.guard(piece.symbol == piece.King, Error(Nil))
+          use <- bool.guard(piece.symbol == piece.King, [])
           let can_capture = case dict.get(king_blockers, defender_square) {
             Ok(pinner_square) -> {
               // If we're also a blocker, we need to make sure we're moving along the line of our pin
@@ -1010,7 +1011,7 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
             // We're not a blocker, so we're allowed to just capture the piece
             Error(_) -> True
           }
-          use <- bool.guard(!can_capture, Error(Nil))
+          use <- bool.guard(!can_capture, [])
 
           let context =
             move.Context(
@@ -1019,13 +1020,21 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
               castling: None,
             )
             |> Some
-          move.new_valid(
+          let promote_move = move.new_valid(
             from: defender_square,
             to: attacker_square,
-            promotion: None,
+            promotion: _,
             context:,
           )
-          |> Ok
+          case piece.symbol, square.rank(attacker_square) {
+            piece.Pawn, 0 | piece.Pawn, 7 -> [
+              promote_move(Some(piece.Rook)),
+              promote_move(Some(piece.Knight)),
+              promote_move(Some(piece.Bishop)),
+              promote_move(Some(piece.Queen)),
+            ]
+            _, _ -> [promote_move(None)]
+          }
         })
         |> Ok
       }
@@ -1168,14 +1177,10 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
       piece.Pawn -> {
         let empty_moves =
           {
-            let pots = case square.pawn_empty_moves(from, us) {
-              Ok(pots) -> pots
-              Error(Nil) -> {
-                echo to_fen(game)
-                panic as "We fucked up"
-              }
-            }
-            use acc, to <- list.fold_until(pots, [])
+            use acc, to <- list.fold_until(
+              square.pawn_empty_moves(from, us),
+              [],
+            )
             use <- bool.guard(dict.has_key(game.board, to), list.Stop(acc))
             let keep = can_move(to) && unpins(to)
             use <- bool.guard(!keep, list.Continue(acc))
@@ -1402,14 +1407,7 @@ pub fn pseudolegal_moves(
     piece.Pawn -> {
       let empty_square_moves =
         {
-          let pots = case square.pawn_empty_moves(from, us) {
-            Ok(pots) -> pots
-            Error(Nil) -> {
-              echo to_fen(game)
-              panic as "We fucked up"
-            }
-          }
-          use acc, to <- list.fold_until(pots, [])
+          use acc, to <- list.fold_until(square.pawn_empty_moves(from, us), [])
           use <- bool.guard(dict.has_key(game.board, to), list.Stop(acc))
           let promote_move = move.new_pseudo(from:, to:, promotion: _)
           let moves = case square.rank(to) {

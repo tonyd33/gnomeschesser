@@ -16,6 +16,12 @@ export type Command =
   | { _sig: "move"; move: string }
   | { _sig: "fen" }
   | { _sig: "load"; fen: string }
+  | {
+    _sig: "loaduci";
+    uciposition:
+      | { _sig: "startpos"; moves: string[] }
+      | { _sig: "fen"; fen: string; moves: string[] };
+  }
   | { _sig: "perft"; moves: number }
   | { _sig: "loadpgn"; pgn: string }
   | { _sig: "loadpgnfile"; pgnfile: string }
@@ -189,6 +195,59 @@ export const commands: {
       args.length === 0 ? ["err", "need fen"] : ["ok", { fen: args.join(" ") }],
     handler: async (ctx, { fen }) => {
       ctx.chess.load(fen);
+      return ["ok", ctx];
+    },
+  },
+  loaduci: {
+    args: ["uciposition"],
+    summary: "load a uci position",
+    aliases: ["lu"],
+    print: true,
+    // we don't have string quoting logic so args is always split lol
+    parser: (args) => {
+      if (args.length < 2) return ["err", "bad position"];
+
+      switch (args[1]) {
+        case "startpos": {
+          if (args.length === 2) {
+            return ["ok", { uciposition: { _sig: "startpos", moves: [] } }];
+          } else if (args.length >= 4) {
+            // position startpos moves X [...]
+            const moves = args.slice(3);
+            return ["ok", { uciposition: { _sig: "startpos", moves } }];
+          } else {
+            return ["err", "bad position"];
+          }
+        }
+        case "fen": {
+          if (args.length === 2) {
+            return ["ok", { uciposition: { _sig: "fen", moves: [] } }];
+          } else if (args.length >= 4) {
+            // position fen moves X [...]
+            const moves = args.slice(3);
+            return ["ok", { uciposition: { _sig: "fen", moves } }];
+          } else {
+            return ["err", "bad position"];
+          }
+        }
+        default:
+          return ["err", "bad position"];
+      }
+    },
+    handler: async (ctx, { uciposition }) => {
+      switch (uciposition._sig) {
+        case "startpos":
+          ctx.chess.reset();
+          break;
+        case "fen":
+          ctx.chess.load(uciposition.fen);
+          break;
+        default:
+          return ["err", "how did we get here?"];
+      }
+      for (const move of uciposition.moves) {
+        ctx.chess.move(move);
+      }
       return ["ok", ctx];
     },
   },
