@@ -203,8 +203,7 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
                     uci.InfoNodesPerSecond(nps),
                     // TODO: Keep track of this
                     uci.InfoHashFull(0),
-                    // TODO: Re-enable this
-                  // uci.InfoPrincipalVariation(list.map(best_line, move.to_lan)),
+                    uci.InfoPrincipalVariation(list.map(best_line, move.to_lan)),
                   ])
                   |> uci.serialize_gui_cmd
                   |> io.println
