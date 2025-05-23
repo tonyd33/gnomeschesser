@@ -320,6 +320,30 @@ pub fn moves_pawn_promotion_test() {
   ])
 }
 
+/// Test the special case where we capture a piece attacking the king early
+/// and trigger a pawn promotion
+///   +------------------------+
+/// 8 | .  .  .  .  .  .  .  . |
+/// 7 | .  .  .  .  .  .  .  . |
+/// 6 | .  .  .  .  .  .  .  . |
+/// 5 | .  .  .  .  .  .  .  ♟ |
+/// 4 | .  .  .  .  .  .  .  . |
+/// 3 | .  .  ♝  .  .  ♚  ♙  ♟ |
+/// 2 | .  .  .  ♟  .  ♙  .  . |
+/// 1 | .  .  .  .  ♘  .  ♔  . |
+///   +------------------------+
+///     a  b  c  d  e  f  g  h
+pub fn moves_pawn_promotion_2_test() {
+  let assert Ok(game) = load_fen("8/8/8/7p/8/2b2kPp/3p1P2/4N1K1 b - - 1 63")
+
+  game.valid_moves(game)
+  |> list.filter_map(game.move_to_san(_, game))
+  |> list.sort(string.compare)
+  |> should.equal([
+    "Ke2", "Ke4", "Kg4", "dxe1=B", "dxe1=N", "dxe1=Q+", "dxe1=R+",
+  ])
+}
+
 /// Ensure moves are properly disambiguated. Test both levels of
 /// disambiguation: file and rank and file+rank.
 /// Board inspired from: https://en.wikipedia.org/wiki/Algebraic_notation_(chess)#Disambiguating_moves
