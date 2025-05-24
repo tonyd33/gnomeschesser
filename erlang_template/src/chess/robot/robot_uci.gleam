@@ -1,3 +1,4 @@
+import chess/actors/auditor
 import chess/game
 import chess/move
 import chess/piece
@@ -55,7 +56,12 @@ type RobotState {
   RobotState(
     game: Option(game.Game),
     best_evaluation: Option(evaluation.Evaluation),
-    searcher: #(Option(process.Pid), Subject(search.SearchMessage)),
+    searcher: #(
+      Option(process.Pid),
+      Subject(search.SearchMessage),
+      Option(process.Pid),
+      Subject(search.SearchMessage),
+    ),
     search_state: search_state.SearchState,
     subject: Subject(RobotMessage),
     game_history: game_history.GameHistory,
@@ -71,23 +77,30 @@ fn create_robot_thread() -> Subject(RobotMessage) {
       let robot_subject: Subject(RobotMessage) = process.new_subject()
       process.send(reply_subject, robot_subject)
 
-      let search_state = search_state.new(timestamp.system_time())
+      let auditor_channel = auditor.start()
+      let search_state =
+        search_state.new(timestamp.system_time(), auditor_channel)
       // The search_subject will be used by searchers to update new best moves found
-      let search_subject: Subject(search.SearchMessage) = process.new_subject()
+      let search_subject_1: Subject(search.SearchMessage) =
+        process.new_subject()
+
+      // The search_subject will be used by searchers to update new best moves found
+      let search_subject_2: Subject(search.SearchMessage) =
+        process.new_subject()
 
       main_loop(
         RobotState(
           game: None,
           best_evaluation: None,
-          searcher: #(None, search_subject),
-          search_state:,
+          searcher: #(None, search_subject_1, None, search_subject_2),
+          search_state: search_state,
           subject: robot_subject,
           game_history: game_history.new(),
         ),
         // This selector allows is to merge the different subjects (like from the searcher) into one selector
         process.new_selector()
           |> process.selecting(robot_subject, function.identity)
-          |> process.selecting(search_subject, SearcherMessage),
+          |> process.selecting(search_subject_1, SearcherMessage),
       )
     },
     True,
@@ -124,10 +137,14 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
             process.unlink(pid)
             process.kill(pid)
           })
+          let auditor_channel = auditor.start()
           RobotState(
             ..state,
-            search_state: search_state.new(timestamp.system_time()),
-            searcher: #(None, state.searcher.1),
+            search_state: search_state.new(
+              timestamp.system_time(),
+              auditor_channel,
+            ),
+            searcher: #(None, state.searcher.1, None, state.searcher.3),
             game: None,
             game_history: game_history.new(),
             best_evaluation: None,
@@ -256,7 +273,7 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
             _ -> Nil
           }
 
-          let search_opts = search.SearchOpts(depth)
+          let search_opts = search.SearchOpts(depth, 1)
           start_searcher(state, search_opts)
         }
         GoInfinite -> start_searcher(state, search.default_search_opts)
@@ -281,7 +298,7 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
 
           RobotState(
             ..state,
-            searcher: #(None, state.searcher.1),
+            searcher: #(None, state.searcher.1, None, state.searcher.3),
             best_evaluation: None,
           )
         }
@@ -317,7 +334,12 @@ fn start_searcher(
             |> Some
           RobotState(
             ..state,
-            searcher: #(search_pid, state.searcher.1),
+            searcher: #(
+              search_pid,
+              state.searcher.1,
+              search_pid,
+              state.searcher.3,
+            ),
             best_evaluation: None,
           )
         }

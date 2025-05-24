@@ -1,3 +1,4 @@
+import chess/actors/auditor
 import chess/game
 import chess/move
 import chess/search
@@ -29,7 +30,11 @@ type RobotState {
   RobotState(
     game: game.Game,
     best_evaluation: Option(evaluation.Evaluation),
-    searcher: #(Option(process.Pid), Subject(search.SearchMessage)),
+    searcher: #(
+      Option(process.Pid),
+      Option(process.Pid),
+      Subject(search.SearchMessage),
+    ),
     search_state: search_state.SearchState,
     game_history: game_history.GameHistory,
   )
@@ -105,11 +110,21 @@ fn create_robot_thread() -> Subject(RobotMessage) {
         game.load_fen(game.start_fen)
       let game_history = game_history.new() |> game_history.insert(game)
 
-      let search_state = search_state.new(timestamp.system_time())
+      let auditor_channel = auditor.start()
+      let search_state =
+        search_state.new(timestamp.system_time(), auditor_channel)
       // The search_subject will be used by searchers to update new best moves found
       let search_subject: Subject(search.SearchMessage) = process.new_subject()
 
-      let search_pid =
+      let search_pid_2 =
+        search.new(
+          game,
+          search_state,
+          search_subject,
+          search.SearchOpts(..search.default_search_opts, start_depth: 2),
+          game_history,
+        )
+      let search_pid_1 =
         search.new(
           game,
           search_state,
@@ -122,7 +137,7 @@ fn create_robot_thread() -> Subject(RobotMessage) {
         RobotState(
           game:,
           best_evaluation: None,
-          searcher: #(Some(search_pid), search_subject),
+          searcher: #(Some(search_pid_1), Some(search_pid_2), search_subject),
           search_state:,
           game_history:,
         ),
@@ -197,14 +212,26 @@ fn update_state_with_new_game(state: RobotState, game: game.Game) -> RobotState 
     process.unlink(pid)
     process.kill(pid)
   })
+  option.map(state.searcher.1, fn(pid) {
+    process.unlink(pid)
+    process.kill(pid)
+  })
 
   let game_history = game_history.insert(state.game_history, game)
 
-  let search_pid =
+  let search_pid_1 =
     search.new(
       game,
       state.search_state,
-      state.searcher.1,
+      state.searcher.2,
+      search.default_search_opts,
+      state.game_history,
+    )
+  let search_pid_2 =
+    search.new(
+      game,
+      state.search_state,
+      state.searcher.2,
       search.default_search_opts,
       state.game_history,
     )
@@ -213,15 +240,16 @@ fn update_state_with_new_game(state: RobotState, game: game.Game) -> RobotState 
   // this could be false due to collision
   // TODO: just remove this because we're now confident that it will return a move in time
   // TODO: or generate a random move instead?
-  let best_evaluation = case
-    dict.get(state.search_state.transposition, game.hash(game))
-  {
-    Ok(transposition.Entry(_, best_evaluation, _)) -> Some(best_evaluation)
-    Error(Nil) -> None
-  }
+  let best_evaluation = None
+  // case
+  //   dict.get(state.search_state.transposition, game.hash(game))
+  // {
+  //   Ok(transposition.Entry(_, best_evaluation, _)) -> Some(best_evaluation)
+  //   Error(Nil) -> None
+  // }
 
   RobotState(
-    searcher: #(Some(search_pid), state.searcher.1),
+    searcher: #(Some(search_pid_1), Some(search_pid_2), state.searcher.2),
     game:,
     best_evaluation:,
     search_state: state.search_state,

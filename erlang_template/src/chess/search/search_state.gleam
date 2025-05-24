@@ -1,9 +1,11 @@
+import chess/actors/auditor
 import chess/game
 import chess/piece
-import chess/search/evaluation.{type Evaluation, Evaluation}
+import chess/search/evaluation.{type Depth, type Evaluation, Evaluation}
 import chess/search/transposition
 import chess/square
 import gleam/dict
+import gleam/erlang/process.{type Subject}
 import gleam/float
 import gleam/int
 import gleam/option.{type Option, None, Some}
@@ -16,20 +18,24 @@ import util/xint.{type ExtendedInt}
 
 pub type SearchState {
   SearchState(
-    transposition: transposition.Table,
+    auditor_channel: Subject(auditor.Message(Int, #(Depth, Evaluation))),
     history: dict.Dict(#(square.Square, piece.Piece), Int),
     stats: SearchStats,
   )
 }
 
-pub fn new(now: timestamp.Timestamp) {
+pub fn new(
+  now: timestamp.Timestamp,
+  auditor_channel: Subject(auditor.Message(Int, #(Depth, Evaluation))),
+) {
   SearchState(
-    transposition: dict.new(),
+    auditor_channel:,
     history: dict.new(),
     stats: SearchStats(
       nodes_searched: 0,
       nodes_searched_at_init_time: 0,
       init_time: now,
+      failed: 0,
     ),
   )
 }
@@ -75,68 +81,39 @@ pub type TranspositionPruneMethod {
 
 pub fn transposition_get(
   hash: game.Hash,
-) -> State(SearchState, Result(transposition.Entry, Nil)) {
-  use search_state: SearchState <- State(run: _)
-  let transposition = search_state.transposition
-  let entry = dict.get(transposition, hash)
-  let transposition = case entry {
-    Ok(entry) -> {
-      let last_accessed = search_state.stats.nodes_searched
-      let entry = transposition.Entry(..entry, last_accessed:)
-
-      dict.insert(transposition, hash, entry)
+) -> State(SearchState, Result(#(Depth, Evaluation), Nil)) {
+  use state: SearchState <- state.select
+  case process.try_call(state.auditor_channel, auditor.Get(hash, _), 10) {
+    Ok(Ok(x)) -> Ok(x.value)
+    Ok(Error(_)) -> Error(Nil)
+    Error(_) -> {
+      // echo "failing"
+      Error(Nil)
     }
-    _ -> transposition
   }
-  #(entry, SearchState(..search_state, transposition:))
 }
 
 pub fn transposition_insert(
   hash: game.Hash,
   entry: #(evaluation.Depth, Evaluation),
 ) -> State(SearchState, Nil) {
-  let #(depth, eval) = entry
   use search_state: SearchState <- state.modify
-  let last_accessed = search_state.stats.nodes_searched
-  let entry = transposition.Entry(depth:, eval:, last_accessed:)
-  let transposition = dict.insert(search_state.transposition, hash, entry)
-  SearchState(..search_state, transposition:)
+  process.send(search_state.auditor_channel, auditor.Insert(hash, entry))
+  search_state
 }
 
 pub fn transposition_prune(
   when policy: TranspositionPolicy,
   do method: TranspositionPruneMethod,
 ) -> State(SearchState, Nil) {
-  use policy_met <- state.do(
-    transposition_prune_policy_met(_, policy)
-    |> state.select,
-  )
-
-  case policy_met {
-    True -> {
-      use search_state: SearchState <- state.modify
-      let transposition = case method {
-        ByRecency(max_recency:) ->
-          search_state.transposition
-          |> dict.filter(fn(_, entry) {
-            search_state.stats.nodes_searched - entry.last_accessed
-            <= max_recency
-          })
-      }
-      SearchState(..search_state, transposition:)
-    }
-    False -> state.return(Nil)
-  }
+  state.return(Nil)
 }
 
 fn transposition_prune_policy_met(
   search_state: SearchState,
   policy: TranspositionPolicy,
 ) -> Bool {
-  case policy {
-    Indiscriminately -> True
-    LargerThan(max_size) -> dict.size(search_state.transposition) > max_size
-  }
+  False
 }
 
 pub type SearchStats {
@@ -149,6 +126,7 @@ pub type SearchStats {
     // Same with this. The only reason we store this is so calculate the
     // number of nodes searched per second (nps).
     init_time: timestamp.Timestamp,
+    failed: Int,
   )
 }
 
@@ -184,7 +162,9 @@ pub fn stats_to_string(
   search_state: SearchState,
   now: timestamp.Timestamp,
 ) -> String {
-  let transposition = search_state.transposition
+  let size =
+    process.try_call(search_state.auditor_channel, auditor.Size, 1000)
+    |> result.unwrap(#(-1, -1, -1))
   let stats = search_state.stats
   let nps = stats_nodes_per_second(search_state, now)
   ""
@@ -203,7 +183,13 @@ pub fn stats_to_string(
   |> int.to_string
   <> "\n"
   <> "  Size: "
-  <> dict.size(transposition) |> int.to_string
+  <> size.0 |> int.to_string
+  <> "\n"
+  <> "  Hits: "
+  <> size.1 |> int.to_string
+  <> "\n"
+  <> "  Misses: "
+  <> size.2 |> int.to_string
   <> "\n"
 }
 

@@ -11,6 +11,7 @@ import gleam/dict
 import gleam/erlang/process
 import gleam/float
 import gleam/int
+import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/order
@@ -41,10 +42,10 @@ pub type SearchMessage {
 }
 
 pub type SearchOpts {
-  SearchOpts(max_depth: Option(Int))
+  SearchOpts(max_depth: Option(Int), start_depth: Int)
 }
 
-pub const default_search_opts = SearchOpts(max_depth: None)
+pub const default_search_opts = SearchOpts(max_depth: None, start_depth: 1)
 
 pub fn new(
   game: game.Game,
@@ -58,7 +59,7 @@ pub fn new(
       {
         let now = timestamp.system_time()
         use _ <- state.do(search_state.stats_checkpoint_time(now))
-        search(search_subject, game, 1, opts, game_history)
+        search(search_subject, game, opts.start_depth, opts, game_history)
       }
       |> state.go(initial: search_state)
     },
@@ -73,6 +74,7 @@ fn search(
   opts: SearchOpts,
   game_history: game_history.GameHistory,
 ) -> State(SearchState, Nil) {
+  echo #(current_depth, timestamp.system_time())
   let game_hash = game.hash(game)
   use cached_evaluation <- state.do(search_state.transposition_get(game_hash))
 
@@ -83,8 +85,8 @@ fn search(
       search_with_widening_windows(
         game,
         current_depth,
-        entry.eval.score |> xint.subtract(offset),
-        entry.eval.score |> xint.add(offset),
+        { entry.1 }.score |> xint.subtract(offset),
+        { entry.1 }.score |> xint.add(offset),
         0,
         game_history,
       )
@@ -132,11 +134,11 @@ fn search(
   )
 
   // TODO: use a logging library for this?
-  // use info <- state.do(
-  //   search_state.stats_to_string(_, now)
-  //   |> state.select,
-  // )
-  // io.print_error(info)
+  use info <- state.do(
+    search_state.stats_to_string(_, now)
+    |> state.select,
+  )
+  io.print_error(info)
 
   use _ <- state.do(search_state.stats_checkpoint_time(now))
   process.send(search_subject, SearchStateUpdate(search_state:))
@@ -233,12 +235,13 @@ fn negamax_alphabeta_failsoft(
 ) -> State(SearchState, Evaluation) {
   let game_hash = game.hash(game)
 
+  use _ <- state.do(search_state.stats_increment_nodes_searched())
   // TODO: check for cache collision here
   // return early if we find an entry in the transposition table
   use cached_evaluation <- state.do(
     search_state.transposition_get(game_hash)
     |> state.map(fn(x) {
-      use transposition.Entry(cached_depth, evaluation, _) <- result.try(x)
+      use #(cached_depth, evaluation) <- result.try(x)
       use <- bool.guard(cached_depth < depth, Error(Nil))
       // If we find a cached entry that is deeper than our current search
       case evaluation {
@@ -266,7 +269,6 @@ fn negamax_alphabeta_failsoft(
   use _ <- state.do(
     search_state.transposition_insert(game_hash, #(depth, evaluation)),
   )
-  use _ <- state.do(search_state.stats_increment_nodes_searched())
   use _ <- state.do(search_state.transposition_prune(
     when: search_state.LargerThan(max_tt_size),
     do: search_state.ByRecency(max_tt_recency),
@@ -427,7 +429,7 @@ fn sorted_moves(
   use entry <- state.do(search_state.transposition_get(game.hash(game)))
   // the cached PV move
   let best_move = case entry {
-    Ok(transposition.Entry(_, evaluation, _)) -> evaluation.best_move
+    Ok(#(_, evaluation)) -> evaluation.best_move
     Error(Nil) -> None
   }
 
