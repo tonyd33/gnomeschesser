@@ -1,11 +1,13 @@
-import chess/evaluate
 import chess/evaluate/common
+import chess/evaluate/midgame
 import chess/game
+import chess/player
 
 pub fn main() {
   let assert Ok(game) =
-    game.load_fen("n2bk2n/pppppppp/5b2/8/1N6/8/PPPPPPPP/3BKB1N b KQkq - 1 1")
-  let scores = evaluate.batch_scores(game)
+    game.load_fen(
+      "Rnbqkbnr/2pppppp/8/2p1P1r1/8/2N1p3/P1PPPPPP/2BQKBNR w KQkq - 1 1",
+    )
+  let scores = midgame.psqt(game.pieces(game))
   echo scores
-  echo evaluate.phase(game, scores)
 }
