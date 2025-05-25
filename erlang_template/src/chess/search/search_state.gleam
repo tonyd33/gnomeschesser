@@ -109,14 +109,13 @@ pub fn transposition_insert(
   use search_state: SearchState <- state.modify
   let entry = transposition.Entry(hash:, depth:, eval:)
   let key = transposition_key_reduce(hash)
-  let transposition = dict.insert(search_state.transposition, key, entry)
-  // let transposition = {
-  //   use maybe_entry <- dict.upsert(search_state.transposition, key)
-  //   case maybe_entry {
-  //     Some(existing_entry) if existing_entry.depth > depth -> existing_entry
-  //     _ -> entry
-  //   }
-  // }
+  let transposition = {
+    use maybe_entry <- dict.upsert(search_state.transposition, key)
+    case maybe_entry {
+      Some(existing_entry) if existing_entry.depth > depth -> existing_entry
+      _ -> entry
+    }
+  }
   SearchState(..search_state, transposition:)
 }
 
