@@ -71,14 +71,24 @@ pub type TranspositionPruneMethod {
   ByRecency(max_recency: Int)
 }
 
+/// To reduce the need of manual trimming when the transposition table gets too
+/// large, we reduce the key space by taking only a certain amount of lower
+/// bits. This current mask gives us a max size of 2^16, or 65536 entries.
+const key_mask = 0xFFFF
+
+fn transposition_key_reduce(key: Int) {
+  int.bitwise_and(key, key_mask)
+}
+
 pub fn transposition_get(
   hash: Int,
 ) -> State(SearchState, Result(transposition.Entry, Nil)) {
   use search_state: SearchState <- State(run: _)
   let transposition = search_state.transposition
-  let entry = dict.get(transposition, hash)
+  let key = transposition_key_reduce(hash)
+  let entry = dict.get(transposition, key)
   case entry {
-    Ok(entry) -> {
+    Ok(entry) if entry.hash == hash -> {
       let last_accessed = search_state.stats.nodes_searched
       let entry = transposition.Entry(..entry, last_accessed:)
 
@@ -114,8 +124,9 @@ pub fn transposition_insert(
   let #(depth, eval) = entry
   use search_state: SearchState <- state.modify
   let last_accessed = search_state.stats.nodes_searched
-  let entry = transposition.Entry(depth:, eval:, last_accessed:)
-  let transposition = dict.insert(search_state.transposition, hash, entry)
+  let entry = transposition.Entry(hash:, depth:, eval:, last_accessed:)
+  let key = transposition_key_reduce(hash)
+  let transposition = dict.insert(search_state.transposition, key, entry)
   SearchState(..search_state, transposition:)
 }
 

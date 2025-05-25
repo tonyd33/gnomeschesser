@@ -12,6 +12,7 @@ pub type Table =
 ///
 pub type Entry {
   Entry(
+    hash: Int,
     depth: evaluation.Depth,
     eval: evaluation.Evaluation,
     last_accessed: Int,

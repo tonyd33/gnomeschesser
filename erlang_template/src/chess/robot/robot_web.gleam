@@ -217,7 +217,7 @@ fn update_state_with_new_game(state: RobotState, game: game.Game) -> RobotState 
   let best_evaluation = case
     dict.get(state.search_state.transposition, game.hash(game))
   {
-    Ok(transposition.Entry(_, best_evaluation, _)) -> Some(best_evaluation)
+    Ok(transposition.Entry(eval: best_evaluation, ..)) -> Some(best_evaluation)
     Error(Nil) -> None
   }
 

@@ -218,9 +218,7 @@ fn search_with_widening_windows(
 /// Don't even bother inserting into the transposition table unless we're past
 /// this depth!
 ///
-/// TODO: Tune this later
-///
-const tt_min_leaf_distance = 1
+const tt_min_leaf_distance = 3
 
 /// https://www.chessprogramming.org/Alpha-Beta#Negamax_Framework
 /// returns the score of the current game searched at depth
@@ -259,7 +257,9 @@ fn negamax_alphabeta_failsoft(
   use cached_evaluation <- state.do(
     search_state.transposition_get(game_hash)
     |> state.map(fn(x) {
-      use transposition.Entry(cached_depth, evaluation, _) <- result.try(x)
+      use transposition.Entry(depth: cached_depth, eval: evaluation, ..) <- result.try(
+        x,
+      )
       use <- bool.guard(cached_depth < depth, Error(Nil))
       // If we find a cached entry that is deeper than our current search
       case evaluation {
@@ -471,7 +471,7 @@ const iid_depth = 4
 /// an IID upon cache miss. To not deepen past the leaf, this number should
 /// always be quite a bit greater than `iid_depth`.
 ///
-const iid_min_leaf_distance = 9
+const iid_min_leaf_distance = 8
 
 /// Get the PV move for a game, trying to hit the cache and falling back to
 /// (internally) iteratively deepening if we're far from the leaves.
