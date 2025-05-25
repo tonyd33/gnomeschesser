@@ -214,12 +214,13 @@ fn update_state_with_new_game(state: RobotState, game: game.Game) -> RobotState 
   // this could be false due to collision
   // TODO: just remove this because we're now confident that it will return a move in time
   // TODO: or generate a random move instead?
-  let best_evaluation = case
-    dict.get(state.search_state.transposition, game.hash(game))
-  {
-    Ok(transposition.Entry(eval: best_evaluation, ..)) -> Some(best_evaluation)
-    Error(Nil) -> None
-  }
+  let best_evaluation = None
+  // case
+  //   dict.get(state.search_state.transposition, game.hash(game))
+  // {
+  //   Ok(transposition.Entry(eval: best_evaluation, ..)) -> Some(best_evaluation)
+  //   Error(Nil) -> None
+  // }
 
   RobotState(
     searcher: #(Some(search_pid), state.searcher.1),

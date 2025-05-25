@@ -8,11 +8,12 @@ import gleam/int
 import gleam/result
 import gleam/time/duration
 import gleam/time/timestamp
+import iv
 import util/state.{type State, State}
 
 pub type SearchState {
   SearchState(
-    transposition: transposition.Table,
+    transposition: iv.Array(Option(transposition.Entry)),
     history: dict.Dict(#(square.Square, piece.Piece), Int),
     stats: SearchStats,
   )
@@ -20,7 +21,7 @@ pub type SearchState {
 
 pub fn new(now: timestamp.Timestamp) {
   SearchState(
-    transposition: dict.new(),
+    transposition: iv.repeat(None, key_mask + 1),
     history: dict.new(),
     stats: SearchStats(
       nodes_searched: 0,
@@ -73,9 +74,9 @@ pub fn transposition_get(
   use search_state: SearchState <- State(run: _)
   let transposition = search_state.transposition
   let key = transposition_key_reduce(hash)
-  let entry = dict.get(transposition, key)
+  let entry = iv.get(transposition, key)
   case entry {
-    Ok(entry) if entry.hash == hash -> {
+    Ok(Some(entry)) if entry.hash == hash -> {
       #(
         Ok(entry),
         SearchState(
@@ -88,6 +89,7 @@ pub fn transposition_get(
         ),
       )
     }
+    Error(_) -> panic as "shit"
     _ -> #(
       Error(Nil),
       SearchState(
@@ -109,13 +111,14 @@ pub fn transposition_insert(
   use search_state: SearchState <- state.modify
   let entry = transposition.Entry(hash:, depth:, eval:)
   let key = transposition_key_reduce(hash)
-  let transposition = {
-    use maybe_entry <- dict.upsert(search_state.transposition, key)
-    case maybe_entry {
-      Some(existing_entry) if existing_entry.depth > depth -> existing_entry
-      _ -> entry
-    }
-  }
+  let assert Ok(transposition) = iv.set(search_state.transposition, key, Some(entry))
+  // let transposition = {
+  //   use maybe_entry <- dict.upsert(search_state.transposition, key)
+  //   case maybe_entry {
+  //     Some(existing_entry) if existing_entry.depth > depth -> existing_entry
+  //     _ -> entry
+  //   }
+  // }
   SearchState(..search_state, transposition:)
 }
 
@@ -184,9 +187,9 @@ pub fn stats_to_string(
   <> { stats.nodes_searched - stats.nodes_searched_at_init_time }
   |> int.to_string
   <> "\n"
-  <> "  Size: "
-  <> dict.size(transposition) |> int.to_string
-  <> "\n"
+  // <> "  Size: "
+  // <> dict.size(transposition) |> int.to_string
+  // <> "\n"
   <> {
     "  Cache hits, misses, %: "
     <> int.to_string(stats.hits)
