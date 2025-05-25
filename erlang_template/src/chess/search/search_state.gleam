@@ -30,6 +30,8 @@ pub fn new(now: timestamp.Timestamp) {
       nodes_searched: 0,
       nodes_searched_at_init_time: 0,
       init_time: now,
+      hits: 0,
+      misses: 0,
     ),
   )
 }
@@ -79,16 +81,34 @@ pub fn transposition_get(
   use search_state: SearchState <- State(run: _)
   let transposition = search_state.transposition
   let entry = dict.get(transposition, hash)
-  let transposition = case entry {
+  case entry {
     Ok(entry) -> {
       let last_accessed = search_state.stats.nodes_searched
       let entry = transposition.Entry(..entry, last_accessed:)
 
-      dict.insert(transposition, hash, entry)
+      #(
+        Ok(entry),
+        SearchState(
+          ..search_state,
+          transposition: dict.insert(transposition, hash, entry),
+          stats: SearchStats(
+            ..search_state.stats,
+            hits: search_state.stats.hits + 1,
+          ),
+        ),
+      )
     }
-    _ -> transposition
+    _ -> #(
+      entry,
+      SearchState(
+        ..search_state,
+        stats: SearchStats(
+          ..search_state.stats,
+          misses: search_state.stats.misses + 1,
+        ),
+      ),
+    )
   }
-  #(entry, SearchState(..search_state, transposition:))
 }
 
 pub fn transposition_insert(
@@ -149,6 +169,8 @@ pub type SearchStats {
     // Same with this. The only reason we store this is so calculate the
     // number of nodes searched per second (nps).
     init_time: timestamp.Timestamp,
+    hits: Int,
+    misses: Int,
   )
 }
 
@@ -205,6 +227,21 @@ pub fn stats_to_string(
   <> "  Size: "
   <> dict.size(transposition) |> int.to_string
   <> "\n"
+  <> {
+    "  Cache hits, misses, %: "
+    <> int.to_string(stats.hits)
+    <> ", "
+    <> int.to_string(stats.misses)
+    <> ", "
+    <> float.to_string(float.to_precision(
+      int.to_float(stats.hits)
+        *. 100.0
+        /. int.to_float(stats.hits + stats.misses),
+      2,
+    ))
+    <> "%"
+    <> "\n"
+  }
 }
 
 pub fn stats_nodes_per_second(
