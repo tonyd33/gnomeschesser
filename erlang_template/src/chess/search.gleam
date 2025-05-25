@@ -11,6 +11,7 @@ import gleam/dict
 import gleam/erlang/process
 import gleam/float
 import gleam/int
+import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/order
@@ -21,11 +22,11 @@ import util/state.{type State, State}
 import util/xint.{type ExtendedInt}
 
 /// We don't let the transposition table get bigger than this
-const max_tt_size = 100_000
+const max_tt_size = 200_000
 
 /// When pruning the transposition table, how recent of entries do we decide to
-/// keep? In ms
-const max_tt_recency = 50_000
+/// keep?
+const max_tt_recency = 100_000
 
 pub type SearchMessage {
   SearchStateUpdate(search_state: SearchState)
@@ -73,6 +74,7 @@ fn search(
   opts: SearchOpts,
   game_history: game_history.GameHistory,
 ) -> State(SearchState, Nil) {
+  echo #(current_depth, timestamp.system_time())
   let game_hash = game.hash(game)
   use cached_evaluation <- state.do(search_state.transposition_get(game_hash))
 
@@ -132,11 +134,11 @@ fn search(
   )
 
   // TODO: use a logging library for this?
-  // use info <- state.do(
-  //   search_state.stats_to_string(_, now)
-  //   |> state.select,
-  // )
-  // io.print_error(info)
+  use info <- state.do(
+    search_state.stats_to_string(_, now)
+    |> state.select,
+  )
+  io.print_error(info)
 
   use _ <- state.do(search_state.stats_checkpoint_time(now))
   process.send(search_subject, SearchStateUpdate(search_state:))
@@ -290,10 +292,6 @@ fn negamax_alphabeta_failsoft(
     True -> search_state.transposition_insert(game_hash, #(depth, evaluation))
     False -> state.return(Nil)
   })
-  use _ <- state.do(search_state.transposition_prune(
-    when: search_state.LargerThan(max_tt_size),
-    do: search_state.ByRecency(max_tt_recency),
-  ))
 
   state.return(evaluation)
 }

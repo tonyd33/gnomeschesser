@@ -58,23 +58,10 @@ pub fn history_update(
   SearchState(..search_state, history:)
 }
 
-/// When should we prune the transposition table?
-///
-pub type TranspositionPolicy {
-  Indiscriminately
-  LargerThan(max_size: Int)
-}
-
-/// How should we prune the transposition table?
-///
-pub type TranspositionPruneMethod {
-  ByRecency(max_recency: Int)
-}
-
 /// To reduce the need of manual trimming when the transposition table gets too
 /// large, we reduce the key space by taking only a certain amount of lower
-/// bits. This current mask gives us a max size of 2^16, or 65536 entries.
-const key_mask = 0xFFFF
+/// bits. This current mask gives us a max size of 2^17, or 131072 entries.
+const key_mask = 0x3FFFF
 
 fn transposition_key_reduce(key: Int) {
   int.bitwise_and(key, key_mask)
@@ -89,14 +76,11 @@ pub fn transposition_get(
   let entry = dict.get(transposition, key)
   case entry {
     Ok(entry) if entry.hash == hash -> {
-      let last_accessed = search_state.stats.nodes_searched
-      let entry = transposition.Entry(..entry, last_accessed:)
-
       #(
         Ok(entry),
         SearchState(
           ..search_state,
-          transposition: dict.insert(transposition, hash, entry),
+          transposition:,
           stats: SearchStats(
             ..search_state.stats,
             hits: search_state.stats.hits + 1,
@@ -105,7 +89,7 @@ pub fn transposition_get(
       )
     }
     _ -> #(
-      entry,
+      Error(Nil),
       SearchState(
         ..search_state,
         stats: SearchStats(
@@ -123,47 +107,17 @@ pub fn transposition_insert(
 ) -> State(SearchState, Nil) {
   let #(depth, eval) = entry
   use search_state: SearchState <- state.modify
-  let last_accessed = search_state.stats.nodes_searched
-  let entry = transposition.Entry(hash:, depth:, eval:, last_accessed:)
+  let entry = transposition.Entry(hash:, depth:, eval:)
   let key = transposition_key_reduce(hash)
   let transposition = dict.insert(search_state.transposition, key, entry)
+  // let transposition = {
+  //   use maybe_entry <- dict.upsert(search_state.transposition, key)
+  //   case maybe_entry {
+  //     Some(existing_entry) if existing_entry.depth > depth -> existing_entry
+  //     _ -> entry
+  //   }
+  // }
   SearchState(..search_state, transposition:)
-}
-
-pub fn transposition_prune(
-  when policy: TranspositionPolicy,
-  do method: TranspositionPruneMethod,
-) -> State(SearchState, Nil) {
-  use policy_met <- state.do(
-    transposition_prune_policy_met(_, policy)
-    |> state.select,
-  )
-
-  case policy_met {
-    True -> {
-      use search_state: SearchState <- state.modify
-      let transposition = case method {
-        ByRecency(max_recency:) ->
-          search_state.transposition
-          |> dict.filter(fn(_, entry) {
-            search_state.stats.nodes_searched - entry.last_accessed
-            <= max_recency
-          })
-      }
-      SearchState(..search_state, transposition:)
-    }
-    False -> state.return(Nil)
-  }
-}
-
-fn transposition_prune_policy_met(
-  search_state: SearchState,
-  policy: TranspositionPolicy,
-) -> Bool {
-  case policy {
-    Indiscriminately -> True
-    LargerThan(max_size) -> dict.size(search_state.transposition) > max_size
-  }
 }
 
 pub type SearchStats {

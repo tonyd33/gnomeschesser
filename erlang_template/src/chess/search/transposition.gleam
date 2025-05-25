@@ -15,7 +15,6 @@ pub type Entry {
     hash: Int,
     depth: evaluation.Depth,
     eval: evaluation.Evaluation,
-    last_accessed: Int,
   )
 }
 
