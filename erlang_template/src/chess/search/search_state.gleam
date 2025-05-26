@@ -1,4 +1,3 @@
-import chess/game
 import chess/piece
 import chess/search/evaluation.{type Evaluation, Evaluation}
 import chess/search/transposition
@@ -6,13 +5,10 @@ import chess/square
 import gleam/dict
 import gleam/float
 import gleam/int
-import gleam/option.{type Option, None, Some}
 import gleam/result
-import gleam/set
 import gleam/time/duration
 import gleam/time/timestamp
 import util/state.{type State, State}
-import util/xint.{type ExtendedInt}
 
 pub type SearchState {
   SearchState(
@@ -76,7 +72,7 @@ pub type TranspositionPruneMethod {
 }
 
 pub fn transposition_get(
-  hash: game.Hash,
+  hash: Int,
 ) -> State(SearchState, Result(transposition.Entry, Nil)) {
   use search_state: SearchState <- State(run: _)
   let transposition = search_state.transposition
@@ -112,7 +108,7 @@ pub fn transposition_get(
 }
 
 pub fn transposition_insert(
-  hash: game.Hash,
+  hash: Int,
   entry: #(evaluation.Depth, Evaluation),
 ) -> State(SearchState, Nil) {
   let #(depth, eval) = entry
