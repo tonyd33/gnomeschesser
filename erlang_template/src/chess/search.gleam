@@ -73,7 +73,6 @@ fn search(
   opts: SearchOpts,
   game_history: game_history.GameHistory,
 ) -> State(SearchState, Nil) {
-  echo current_depth
   let game_hash = game.hash(game)
   use cached_evaluation <- state.do(search_state.transposition_get(game_hash))
 
@@ -216,6 +215,13 @@ fn search_with_widening_windows(
   }
 }
 
+/// Don't even bother inserting into the transposition table unless we're past
+/// this depth!
+///
+/// TODO: Tune this later
+///
+const tt_min_leaf_distance = 1
+
 /// https://www.chessprogramming.org/Alpha-Beta#Negamax_Framework
 /// returns the score of the current game searched at depth
 /// uses negamax version of alpha beta pruning with failsoft
@@ -234,8 +240,21 @@ fn negamax_alphabeta_failsoft(
 ) -> State(SearchState, Evaluation) {
   let game_hash = game.hash(game)
 
-  use _ <- state.do(search_state.stats_increment_nodes_searched())
-  // TODO: check for cache collision here
+  // 3 fold repetition
+  // If we've encountered this position before, we can assume we're in a 3 fold loop
+  // and that this position will resolve to a 0
+  use <- bool.guard(
+    game_history.is_previous_game(game_history, game),
+    state.return(
+      Evaluation(
+        score: xint.from_int(0),
+        node_type: evaluation.PV,
+        best_move: None,
+        best_line: [],
+      ),
+    ),
+  )
+
   // return early if we find an entry in the transposition table
   use cached_evaluation <- state.do(
     search_state.transposition_get(game_hash)
@@ -258,16 +277,19 @@ fn negamax_alphabeta_failsoft(
       }
     }),
   )
-
   use <- result.lazy_unwrap(result.map(cached_evaluation, state.return))
 
+  // Otherwise, actually do negamax
   use evaluation <- state.do({
     do_negamax_alphabeta_failsoft(game, depth, alpha, beta, game_history)
   })
 
-  use _ <- state.do(
-    search_state.transposition_insert(game_hash, #(depth, evaluation)),
-  )
+  // Manage stats and transposition table before returning evaluation.
+  use _ <- state.do(search_state.stats_increment_nodes_searched())
+  use _ <- state.do(case depth >= tt_min_leaf_distance {
+    True -> search_state.transposition_insert(game_hash, #(depth, evaluation))
+    False -> state.return(Nil)
+  })
   use _ <- state.do(search_state.transposition_prune(
     when: search_state.LargerThan(max_tt_size),
     do: search_state.ByRecency(max_tt_recency),
@@ -289,7 +311,7 @@ fn do_negamax_alphabeta_failsoft(
     |> state.return
   })
 
-  use moves <- state.do(sorted_moves(game))
+  use moves <- state.do(sorted_moves(game, depth, alpha, beta, game_history))
 
   use <- bool.lazy_guard(list.is_empty(moves), fn() {
     // if checkmate/stalemate
@@ -303,57 +325,35 @@ fn do_negamax_alphabeta_failsoft(
 
   // We iterate through every move and perform minimax to evaluate said move
   // accumulator keeps track of best evaluation while updating the node type
-
   {
     use #(best_evaluation, alpha), move <- state.list_fold_until_s(moves, #(
       Evaluation(xint.NegInf, evaluation.PV, None, []),
       alpha,
     ))
-    use #(best_evaluation, alpha): #(Evaluation, ExtendedInt) <- state.do({
-      let game = game.apply(game, move)
 
-      use evaluation <- state.map({
-        // 3 fold repetition
-        // If we've encountered this position before, we can assume we're in a 3 fold loop
-        // and that this position will resolve to a 0
-        use <- bool.guard(game_history.is_previous_game(game_history, game), {
-          Evaluation(
-            score: 0 |> xint.from_int,
-            node_type: evaluation.PV,
-            best_move: None,
-            best_line: [],
-          )
-          |> state.return
-        })
-
-        let game_history = game_history.insert(game_history, game)
-
-        use evaluation <- state.map(negamax_alphabeta_failsoft(
-          game,
-          depth - 1,
-          xint.negate(beta),
-          xint.negate(alpha),
-          game_history,
-        ))
-        evaluation.negate(evaluation)
-      })
-
-      let evaluation =
-        Evaluation(
-          ..evaluation,
-          best_line: [move, ..evaluation.best_line],
-          best_move: Some(move),
-        )
-
-      let best_evaluation = case
-        xint.gt(evaluation.score, best_evaluation.score)
-      {
-        True -> evaluation
-        False -> best_evaluation
-      }
-      let alpha = xint.max(alpha, evaluation.score)
-      #(best_evaluation, alpha)
+    use evaluation <- state.do({
+      use neg_evaluation <- state.map(negamax_alphabeta_failsoft(
+        game.apply(game, move),
+        depth - 1,
+        xint.negate(beta),
+        xint.negate(alpha),
+        game_history.insert(game_history, game),
+      ))
+      Evaluation(
+        ..evaluation.negate(neg_evaluation),
+        best_line: [move, ..neg_evaluation.best_line],
+        best_move: Some(move),
+      )
     })
+
+    let best_evaluation = case
+      xint.gt(evaluation.score, best_evaluation.score)
+    {
+      True -> evaluation
+      False -> best_evaluation
+    }
+    let alpha = xint.max(alpha, evaluation.score)
+
     // beta-cutoff
     case xint.gte(best_evaluation.score, beta) {
       True -> {
@@ -421,16 +421,96 @@ fn quiesce(
   best_score
 }
 
-/// sort moves from best to worse, which improves alphabeta pruning
+/// [Iteratively deepen](https://www.chessprogramming.org/Iterative_Deepening)
+/// on this node.
+///
+fn iteratively_deepen(
+  game: game.Game,
+  current_depth: evaluation.Depth,
+  alpha: ExtendedInt,
+  beta: ExtendedInt,
+  opts: SearchOpts,
+  game_history: game_history.GameHistory,
+) {
+  use evaluation <- state.do(negamax_alphabeta_failsoft(
+    game,
+    current_depth,
+    alpha,
+    beta,
+    game_history,
+  ))
+  case opts.max_depth {
+    Some(max_depth) if current_depth >= max_depth -> state.return(evaluation)
+    _ ->
+      iteratively_deepen(
+        game,
+        current_depth + 1,
+        alpha,
+        beta,
+        opts,
+        game_history,
+      )
+  }
+}
+
+/// If we miss the cache trying to get the PV move for move ordering, we'll
+/// (internally) iteratively deepen to find a PV move. This is how far we'll
+/// deepen.
+///
+const iid_depth = 4
+
+/// Internal iterative deepening is not always a benefit even if we miss the
+/// cache. We want to be selective about when we deepen: if we're close to the
+/// leaf of the tree and we iteratively deepen past the leaf, we'd essentially
+/// just be searching to a higher depth anyway!
+///
+/// Thus we want to iteratively deepen if we're far from the leaves, making
+/// sure not to deepen past the leaf.
+///
+/// This number represents the minimum distance from the leaves to trigger
+/// an IID upon cache miss. To not deepen past the leaf, this number should
+/// always be quite a bit greater than `iid_depth`.
+///
+const iid_min_leaf_distance = 9
+
+/// Get the PV move for a game, trying to hit the cache and falling back to
+/// (internally) iteratively deepening if we're far from the leaves.
+///
+/// `depth` should represent the distance from the leaves.
+///
+fn get_pv_move(game: game.Game, depth: evaluation.Depth, alpha, beta, history) {
+  use cached_entry <- state.do(search_state.transposition_get(game.hash(game)))
+  case cached_entry, depth >= iid_min_leaf_distance {
+    // We hit the cache. No need to for IID at all, just return the PV move.
+    Ok(transposition.Entry(eval:, ..)), _ -> state.return(eval.best_move)
+    // We missed the cache and we're far from the leaves. So we should
+    // iteratively deepen for the PV move.
+    Error(Nil), True -> {
+      use eval <- state.do(iteratively_deepen(
+        game,
+        1,
+        alpha,
+        beta,
+        SearchOpts(max_depth: Some(iid_depth)),
+        history,
+      ))
+      state.return(eval.best_move)
+    }
+    // Cache miss but we're close to the leaves. Too bad.
+    Error(Nil), False -> state.return(None)
+  }
+}
+
+/// Sort moves from best to worse, which improves alphabeta pruning
+///
 fn sorted_moves(
   game: game.Game,
+  depth: evaluation.Depth,
+  alpha,
+  beta,
+  history,
 ) -> State(SearchState, List(move.Move(move.ValidInContext))) {
-  use entry <- state.do(search_state.transposition_get(game.hash(game)))
-  // the cached PV move
-  let best_move = case entry {
-    Ok(transposition.Entry(_, evaluation, _)) -> evaluation.best_move
-    Error(Nil) -> None
-  }
+  use best_move <- state.do(get_pv_move(game, depth, alpha, beta, history))
 
   // retrieve the cached transposition table data
   let valid_moves = game.valid_moves(game)

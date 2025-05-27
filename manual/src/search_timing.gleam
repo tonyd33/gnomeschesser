@@ -5,7 +5,7 @@ import chess/search/game_history
 import chess/search/search_state
 import gleam/dict
 import gleam/erlang/process
-import gleam/option
+import gleam/option.{Some}
 import gleam/time/timestamp
 import util/yielder
 
@@ -46,8 +46,8 @@ fn search_game_to_depth(game: game.Game, depth: Int) {
       game,
       memo,
       subject,
-      search.SearchOpts(max_depth: option.Some(depth)),
-      game_history.new() |> game_history.insert(game),
+      search.SearchOpts(max_depth: Some(depth)),
+      game_history.new(),
     )
 
   yielder.repeat(subject)

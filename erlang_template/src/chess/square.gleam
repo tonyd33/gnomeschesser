@@ -1282,13 +1282,11 @@ pub fn pawn_capture_moves(from: Square, player: player.Player) {
 
 pub fn get_squares_attacking_at(
   board: dict.Dict(Square, piece.Piece),
-  pieces_yielder: yielder.Yielder(#(Square, piece.Piece)),
   at: Square,
   by: player.Player,
 ) -> List(Square) {
-  pieces_yielder
-  |> yielder.fold([], fn(acc, piece) {
-    let #(from, piece) = piece
+  board
+  |> dict.fold([], fn(acc, from, piece) {
     // We only consider attacks by a certain player
     use <- bool.guard(piece.player != by, acc)
 
@@ -1399,90 +1397,82 @@ pub fn is_attacked_at(
 /// Returns a list of attackers as well as pinned piece if it exists
 pub fn attacks_and_pins_to(
   board: dict.Dict(Square, piece.Piece),
-  pieces_yielder: yielder.Yielder(#(Square, piece.Piece)),
   at: Square,
   by: player.Player,
 ) -> List(#(Square, option.Option(Square))) {
-  let _attacks_and_pins =
-    pieces_yielder
-    |> yielder.fold([], fn(acc, piece) {
-      let #(from, piece) = piece
-      // We only consider attacks by a certain player
-      use <- bool.guard(piece.player != by, acc)
+  board
+  |> dict.fold([], fn(acc, from, piece) {
+    // We only consider attacks by a certain player
+    use <- bool.guard(piece.player != by, acc)
 
-      let difference = from - at
-      // skip if to/from square are the same
-      use <- bool.guard(difference == 0, acc)
+    let difference = from - at
+    // skip if to/from square are the same
+    use <- bool.guard(difference == 0, acc)
 
-      // This index is used for `attacks` and `rays`, where a difference of 0 corresponds to the centre
-      let index = difference + 0x77
+    // This index is used for `attacks` and `rays`, where a difference of 0 corresponds to the centre
+    let index = difference + 0x77
 
-      // `attacks` lets us index which type of piece can attack from that square
-      // if it's not the piece we currently have, we just return
-      use <- bool.guard(
-        int.bitwise_and(attacks(index), piece_masks(piece.symbol)) == 0,
-        acc,
-      )
+    // `attacks` lets us index which type of piece can attack from that square
+    // if it's not the piece we currently have, we just return
+    use <- bool.guard(
+      int.bitwise_and(attacks(index), piece_masks(piece.symbol)) == 0,
+      acc,
+    )
 
-      let x = case piece.symbol {
-        // Knights and Kings can't be blocked
-        piece.Knight | piece.King -> Ok(#(from, option.None))
-        // Pawns can't be blocked
-        piece.Pawn ->
-          // Pawns can only attack forwards, so we check which side they're on
-          case piece.player, int.compare(difference, 0) {
-            player.Black, order.Gt | player.White, order.Lt ->
-              Ok(#(from, option.None))
-            _, _ -> Error(Nil)
-          }
-        // These slide, so we check if their path is empty
-        piece.Bishop | piece.Queen | piece.Rook -> {
-          let offset = rays(index)
+    let x = case piece.symbol {
+      // Knights and Kings can't be blocked
+      piece.Knight | piece.King -> Ok(#(from, option.None))
+      // Pawns can't be blocked
+      piece.Pawn ->
+        // Pawns can only attack forwards, so we check which side they're on
+        case piece.player, int.compare(difference, 0) {
+          player.Black, order.Gt | player.White, order.Lt ->
+            Ok(#(from, option.None))
+          _, _ -> Error(Nil)
+        }
+      // These slide, so we check if their path is empty
+      piece.Bishop | piece.Queen | piece.Rook -> {
+        let offset = rays(index)
 
-          let first = from + offset
-          let last = at - offset
-          let iterations = { { last - first } / offset } + 1
-          use <- bool.guard(iterations <= 0, Ok(#(from, option.None)))
-          // We shoot two rays, one from from -> to, then to -> from, if the piece is the same and "ours"
-          // Then that is a pinned piece
-          let source_to_target_piece =
-            yielder.iterate(first, int.add(_, offset))
-            |> yielder.take(iterations)
-            |> yielder.find_map(fn(ox88) {
-              dict.get(board, ox88) |> result.map(pair.new(ox88, _))
-            })
+        let first = from + offset
+        let last = at - offset
+        let iterations = { { last - first } / offset } + 1
+        use <- bool.guard(iterations <= 0, Ok(#(from, option.None)))
+        // We shoot two rays, one from from -> to, then to -> from, if the piece is the same and "ours"
+        // Then that is a pinned piece
+        let source_to_target_piece =
+          yielder.iterate(first, int.add(_, offset))
+          |> yielder.take(iterations)
+          |> yielder.find_map(fn(ox88) {
+            dict.get(board, ox88) |> result.map(pair.new(ox88, _))
+          })
 
-          use <- bool.guard(
-            source_to_target_piece |> result.is_error,
-            Ok(#(from, option.None)),
-          )
-          case source_to_target_piece {
-            Error(Nil) -> Ok(#(from, option.None))
-            Ok(#(first_hit_square, piece)) -> {
-              use <- bool.guard(piece.player == by, Error(Nil))
-              // shoot the second ray
-              let target_to_source_piece =
-                yielder.iterate(last, int.subtract(_, offset))
-                |> yielder.take(iterations)
-                |> yielder.find(fn(ox88) {
-                  dict.get(board, ox88) |> result.is_ok
-                })
-              // if the first hit, then this must hit as well
-              let assert Ok(second_hit_square) = target_to_source_piece
-              use <- bool.guard(
-                second_hit_square != first_hit_square,
-                Error(Nil),
-              )
-              Ok(#(from, option.Some(first_hit_square)))
-            }
+        use <- bool.guard(
+          source_to_target_piece |> result.is_error,
+          Ok(#(from, option.None)),
+        )
+        case source_to_target_piece {
+          Error(Nil) -> Ok(#(from, option.None))
+          Ok(#(first_hit_square, piece)) -> {
+            use <- bool.guard(piece.player == by, Error(Nil))
+            // shoot the second ray
+            let target_to_source_piece =
+              yielder.iterate(last, int.subtract(_, offset))
+              |> yielder.take(iterations)
+              |> yielder.find(fn(ox88) { dict.get(board, ox88) |> result.is_ok })
+            // if the first hit, then this must hit as well
+            let assert Ok(second_hit_square) = target_to_source_piece
+            use <- bool.guard(second_hit_square != first_hit_square, Error(Nil))
+            Ok(#(from, option.Some(first_hit_square)))
           }
         }
       }
-      case x {
-        Ok(x) -> [x, ..acc]
-        _ -> acc
-      }
-    })
+    }
+    case x {
+      Ok(x) -> [x, ..acc]
+      _ -> acc
+    }
+  })
 }
 
 // BEGIN: CONSTANTS

@@ -33,7 +33,7 @@ pub type UCIInfo {
   InfoNodes(nodes: Int)
   InfoPrincipalVariation(moves: List(String))
   InfoMultiPrincipalVariation(n: Int)
-  InfoScore(params: List(UCIScore))
+  InfoScore(score: UCIScore)
   InfoCurrMove(move: String)
   InfoCurrMoveNumber(n: Int)
   InfoHashFull(n: Int)
@@ -377,7 +377,7 @@ fn tokenize_gui_cmd(cmd: UCIGUICommand) -> List(String) {
       InfoNodesPerSecond(n) -> ["nps", int.to_string(n)]
       InfoPrincipalVariation(moves) -> ["pv", ..moves]
       InfoRefutation(moves) -> ["refutation", ..moves]
-      InfoScore(params) -> ["score", ..list.flat_map(params, tokenize_score)]
+      InfoScore(score) -> ["score", ..tokenize_score(score)]
       InfoSelDepth(n) -> ["seldepth", int.to_string(n)]
       InfoShredderBaseHits(n) -> ["sbhits", int.to_string(n)]
       InfoString(s) -> ["string", s]
