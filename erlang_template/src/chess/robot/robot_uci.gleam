@@ -165,6 +165,7 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
               time:,
               nodes_searched:,
               nps:,
+              hashfull:,
             ) -> {
               case option.map(state.game, game.equal(_, game)) {
                 Some(True) -> {
@@ -183,8 +184,7 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
                     uci.InfoNodes(nodes_searched),
                     uci.InfoTime(time),
                     uci.InfoNodesPerSecond(nps),
-                    // TODO: Keep track of this
-                    uci.InfoHashFull(0),
+                    uci.InfoHashFull(hashfull),
                     uci.InfoPrincipalVariation(list.map(best_line, move.to_lan)),
                   ])
                   |> uci.serialize_gui_cmd

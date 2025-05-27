@@ -13,6 +13,7 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/time/timestamp
+import iv
 import util/dict_addons
 
 pub opaque type Robot {
@@ -215,12 +216,11 @@ fn update_state_with_new_game(state: RobotState, game: game.Game) -> RobotState 
   // TODO: just remove this because we're now confident that it will return a move in time
   // TODO: or generate a random move instead?
   let best_evaluation = None
-  // case
-  //   dict.get(state.search_state.transposition, game.hash(game))
-  // {
-  //   Ok(transposition.Entry(eval: best_evaluation, ..)) -> Some(best_evaluation)
-  //   Error(Nil) -> None
-  // }
+  case iv.get(state.search_state.transposition, game.hash(game)) {
+    Ok(Some(transposition.Entry(eval: best_evaluation, ..))) ->
+      Some(best_evaluation)
+    _ -> None
+  }
 
   RobotState(
     searcher: #(Some(search_pid), state.searcher.1),

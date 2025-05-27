@@ -30,6 +30,7 @@ pub type SearchMessage {
     time: Int,
     nodes_searched: Int,
     nps: Int,
+    hashfull: Int,
   )
   SearchDone
 }
@@ -67,7 +68,6 @@ fn search(
   opts: SearchOpts,
   game_history: game_history.GameHistory,
 ) -> State(SearchState, Nil) {
-  echo #(current_depth, timestamp.system_time())
   let game_hash = game.hash(game)
   use cached_evaluation <- state.do(search_state.transposition_get(game_hash))
 
@@ -125,16 +125,15 @@ fn search(
     state.select(search_state.stats_nodes_per_second(_, now))
     |> state.map(float.round),
   )
+  use hashfull <- state.do(state.select(search_state.stats_hashfull))
 
   // TODO: use a logging library for this?
-  use info <- state.do(
-    search_state.stats_to_string(_, now)
-    |> state.select,
-  )
-  io.print_error(info)
+  // use info <- state.do(
+  //   search_state.stats_to_string(_, now)
+  //   |> state.select,
+  // )
+  // io.print_error(info)
 
-  use _ <- state.do(search_state.stats_checkpoint_time(now))
-  process.send(search_subject, SearchStateUpdate(search_state:))
   process.send(
     search_subject,
     SearchUpdate(
@@ -144,8 +143,10 @@ fn search(
       time: dt,
       nodes_searched: search_state.stats.nodes_searched,
       nps:,
+      hashfull:,
     ),
   )
+  process.send(search_subject, SearchStateUpdate(search_state:))
 
   case opts.max_depth {
     Some(max_depth) if current_depth >= max_depth -> {
@@ -210,10 +211,41 @@ fn search_with_widening_windows(
   }
 }
 
-/// Don't even bother inserting into the transposition table unless we're past
-/// this depth!
+/// Don't even bother inserting into/reading from the transposition table
+/// unless we're past this depth!
 ///
-const tt_min_leaf_distance = 3
+const tt_min_leaf_distance = 2
+
+/// Retrieve an entry from the transposition table respecting the alpha-beta
+/// bounds and the depth.
+///
+fn tt_bounded_get(game, depth, alpha, beta) {
+  let game_hash = game.hash(game)
+  // Don't even look if we're close to the leaf. We wouldn't even have
+  // inserted anything here anyway.
+  use <- bool.guard(depth < tt_min_leaf_distance, state.return(Error(Nil)))
+
+  use maybe_entry <- state.map(search_state.transposition_get(game_hash))
+  use transposition.Entry(depth: cached_depth, eval: evaluation, ..) <- result.try(
+    maybe_entry,
+  )
+  // Entry should have depth deeper than our current search depth.
+  use <- bool.guard(cached_depth < depth, Error(Nil))
+
+  case evaluation {
+    Evaluation(_, evaluation.PV, _, _) -> Ok(evaluation)
+    Evaluation(score, evaluation.Cut, _, _) ->
+      case xint.gte(score, beta) {
+        True -> Ok(evaluation)
+        False -> Error(Nil)
+      }
+    Evaluation(score, evaluation.All, _, _) ->
+      case xint.lte(score, alpha) {
+        True -> Ok(evaluation)
+        False -> Error(Nil)
+      }
+  }
+}
 
 /// https://www.chessprogramming.org/Alpha-Beta#Negamax_Framework
 /// returns the score of the current game searched at depth
@@ -249,32 +281,7 @@ fn negamax_alphabeta_failsoft(
   )
 
   // return early if we find an entry in the transposition table
-  use cached_evaluation <- state.do({
-    // Don't even look if we're close to the leaf
-    use <- bool.guard(depth < tt_min_leaf_distance, state.return(Error(Nil)))
-
-    search_state.transposition_get(game_hash)
-    |> state.map(fn(x) {
-      use transposition.Entry(depth: cached_depth, eval: evaluation, ..) <- result.try(
-        x,
-      )
-      use <- bool.guard(cached_depth < depth, Error(Nil))
-      // If we find a cached entry that is deeper than our current search
-      case evaluation {
-        Evaluation(_, evaluation.PV, _, _) -> Ok(evaluation)
-        Evaluation(score, evaluation.Cut, _, _) ->
-          case xint.gte(score, beta) {
-            True -> Ok(evaluation)
-            False -> Error(Nil)
-          }
-        Evaluation(score, evaluation.All, _, _) ->
-          case xint.lte(score, alpha) {
-            True -> Ok(evaluation)
-            False -> Error(Nil)
-          }
-      }
-    })
-  })
+  use cached_evaluation <- state.do(tt_bounded_get(game, depth, alpha, beta))
   use <- result.lazy_unwrap(result.map(cached_evaluation, state.return))
 
   // Otherwise, actually do negamax
@@ -465,7 +472,7 @@ const iid_depth = 3
 /// an IID upon cache miss. To not deepen past the leaf, this number should
 /// always be quite a bit greater than `iid_depth`.
 ///
-const iid_min_leaf_distance = 7
+const iid_min_leaf_distance = 8
 
 /// Get the PV move for a game, trying to hit the cache and falling back to
 /// (internally) iteratively deepening if we're far from the leaves.
@@ -473,13 +480,22 @@ const iid_min_leaf_distance = 7
 /// `depth` should represent the distance from the leaves.
 ///
 fn get_pv_move(game: game.Game, depth: evaluation.Depth, alpha, beta, history) {
+  // We're way too close to leaves. Don't even bother asking the cache, since
+  // it won't have it and there's no way we're going to trigger an IID since
+  // we're close to the leaves.
+  use <- bool.guard(depth < tt_min_leaf_distance, state.return(None))
+
   use cached_entry <- state.do(search_state.transposition_get(game.hash(game)))
   case cached_entry, depth >= iid_min_leaf_distance {
     // We hit the cache. No need to for IID at all, just return the PV move.
-    Ok(transposition.Entry(eval:, ..)), _ -> state.return(eval.best_move)
+    Ok(transposition.Entry(eval:, ..)), _ -> {
+      use _ <- state.do(search_state.stats_increment_iid_notriggerhits())
+      state.return(eval.best_move)
+    }
     // We missed the cache and we're far from the leaves. So we should
     // iteratively deepen for the PV move.
     Error(Nil), True -> {
+      use _ <- state.do(search_state.stats_increment_iid_triggers())
       use eval <- state.do(iteratively_deepen(
         game,
         1,
@@ -491,7 +507,10 @@ fn get_pv_move(game: game.Game, depth: evaluation.Depth, alpha, beta, history) {
       state.return(eval.best_move)
     }
     // Cache miss but we're close to the leaves. Too bad.
-    Error(Nil), False -> state.return(None)
+    Error(Nil), False -> {
+      use _ <- state.do(search_state.stats_increment_iid_notriggermisses())
+      state.return(None)
+    }
   }
 }
 

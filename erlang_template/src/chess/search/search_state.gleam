@@ -28,8 +28,12 @@ pub fn new(now: timestamp.Timestamp) {
       nodes_searched: 0,
       nodes_searched_at_init_time: 0,
       init_time: now,
+      tt_size: 0,
       hits: 0,
       misses: 0,
+      iid_triggers: 0,
+      iid_notriggerhits: 0,
+      iid_notriggermisses: 0,
     ),
   )
 }
@@ -62,8 +66,8 @@ pub fn history_update(
 
 /// To reduce the need of manual trimming when the transposition table gets too
 /// large, we reduce the key space by taking only a certain amount of lower
-/// bits. This current mask gives us a max size of 2^17, or 131072 entries.
-const key_mask = 0x3FFFF
+/// bits. This current mask gives us a max size of 2^16, or 65536 entries.
+const key_mask = 0xFFFF
 
 fn transposition_key_reduce(key: Int) {
   int.bitwise_and(key, key_mask)
@@ -112,16 +116,48 @@ pub fn transposition_insert(
   use search_state: SearchState <- state.modify
   let entry = transposition.Entry(hash:, depth:, eval:)
   let key = transposition_key_reduce(hash)
-  let assert Ok(transposition) =
-    iv.set(search_state.transposition, key, Some(entry))
-  // let transposition = {
-  //   use maybe_entry <- dict.upsert(search_state.transposition, key)
-  //   case maybe_entry {
-  //     Some(existing_entry) if existing_entry.depth > depth -> existing_entry
-  //     _ -> entry
-  //   }
-  // }
-  SearchState(..search_state, transposition:)
+
+  // Update the transposition table if:
+  // - The new entry is a PV, or
+  // - The new entry replaces the existing hash, or
+  // - The new entry is deeper than the existing entry's depth
+  //   (depth-preferred)
+  let #(transposition, is_new_entry) = {
+    let assert Ok(maybe_existing_entry) =
+      iv.get(search_state.transposition, key)
+
+    let updated_entry = case maybe_existing_entry {
+      Some(existing_entry) -> {
+        let override =
+          eval.node_type == evaluation.PV
+          || existing_entry.hash != hash
+          || depth > existing_entry.depth
+        case override {
+          True -> entry
+          False -> existing_entry
+        }
+      }
+      None -> entry
+    }
+
+    let assert Ok(updated_transposition) =
+      iv.set(search_state.transposition, key, Some(updated_entry))
+
+    #(updated_transposition, option.is_none(maybe_existing_entry))
+  }
+
+  case is_new_entry {
+    True ->
+      SearchState(
+        ..search_state,
+        transposition:,
+        stats: SearchStats(
+          ..search_state.stats,
+          tt_size: search_state.stats.tt_size + 1,
+        ),
+      )
+    False -> SearchState(..search_state, transposition:)
+  }
 }
 
 pub type SearchStats {
@@ -134,8 +170,12 @@ pub type SearchStats {
     // Same with this. The only reason we store this is so calculate the
     // number of nodes searched per second (nps).
     init_time: timestamp.Timestamp,
+    tt_size: Int,
     hits: Int,
     misses: Int,
+    iid_triggers: Int,
+    iid_notriggerhits: Int,
+    iid_notriggermisses: Int,
   )
 }
 
@@ -145,6 +185,36 @@ pub fn stats_increment_nodes_searched() -> State(SearchState, Nil) {
   SearchState(
     ..search_state,
     stats: SearchStats(..stats, nodes_searched: stats.nodes_searched + 1),
+  )
+}
+
+pub fn stats_increment_iid_triggers() -> State(SearchState, Nil) {
+  use search_state: SearchState <- state.modify
+  let stats = search_state.stats
+  SearchState(
+    ..search_state,
+    stats: SearchStats(..stats, iid_triggers: stats.iid_triggers + 1),
+  )
+}
+
+pub fn stats_increment_iid_notriggerhits() -> State(SearchState, Nil) {
+  use search_state: SearchState <- state.modify
+  let stats = search_state.stats
+  SearchState(
+    ..search_state,
+    stats: SearchStats(..stats, iid_notriggerhits: stats.iid_notriggerhits + 1),
+  )
+}
+
+pub fn stats_increment_iid_notriggermisses() -> State(SearchState, Nil) {
+  use search_state: SearchState <- state.modify
+  let stats = search_state.stats
+  SearchState(
+    ..search_state,
+    stats: SearchStats(
+      ..stats,
+      iid_notriggermisses: stats.iid_notriggermisses + 1,
+    ),
   )
 }
 
@@ -171,7 +241,6 @@ pub fn stats_to_string(
   search_state: SearchState,
   now: timestamp.Timestamp,
 ) -> String {
-  let transposition = search_state.transposition
   let stats = search_state.stats
   let nps = stats_nodes_per_second(search_state, now)
   ""
@@ -185,13 +254,20 @@ pub fn stats_to_string(
   <> "  Checkpoint: "
   <> stats.nodes_searched_at_init_time |> int.to_string
   <> "\n"
-  <> "  Nodes in Depth: "
+  <> "  Nodes difference: "
   <> { stats.nodes_searched - stats.nodes_searched_at_init_time }
   |> int.to_string
   <> "\n"
-  // <> "  Size: "
-  // <> dict.size(transposition) |> int.to_string
-  // <> "\n"
+  <> "  Size: "
+  <> stats.tt_size |> int.to_string
+  <> "\n"
+  <> "  IID triggers/notriggerhits/notriggermisses: "
+  <> stats.iid_triggers |> int.to_string
+  <> "/"
+  <> stats.iid_notriggerhits |> int.to_string
+  <> "/"
+  <> stats.iid_notriggermisses |> int.to_string
+  <> "\n"
   <> {
     "  Cache hits, misses, %: "
     <> int.to_string(stats.hits)
@@ -227,4 +303,10 @@ pub fn stats_nodes_per_second(
       nps
     }
   }
+}
+
+pub fn stats_hashfull(search_state: SearchState) -> Int {
+  let stats = search_state.stats
+  let size = stats.tt_size
+  float.round({ int.to_float(size) *. 1000.0 } /. int.to_float(key_mask))
 }
