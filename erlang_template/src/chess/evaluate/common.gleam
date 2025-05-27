@@ -18,15 +18,10 @@ pub fn piece_symbol(symbol: piece.PieceSymbol) -> Int {
   }
 }
 
-/// Alternative material values from Stockfish. Specifically for using their
-/// phase calculations.
-/// See: https://hxim.github.io/Stockfish-Evaluation-Guide/ (piece value bonus
-/// page)
-///
-pub fn piece_value_bonus(piece: piece.Piece, phase: Stage) -> SidedScore {
-  let score = case phase {
+pub fn piece_value_bonus_symbol(symbol: piece.PieceSymbol, phase: Stage) -> Int {
+  case phase {
     MidGame ->
-      case piece.symbol {
+      case symbol {
         piece.Pawn -> 124
         piece.Knight -> 781
         piece.Bishop -> 825
@@ -35,7 +30,7 @@ pub fn piece_value_bonus(piece: piece.Piece, phase: Stage) -> SidedScore {
         piece.King -> 0
       }
     EndGame ->
-      case piece.symbol {
+      case symbol {
         piece.Pawn -> 206
         piece.Knight -> 854
         piece.Bishop -> 915
@@ -44,15 +39,28 @@ pub fn piece_value_bonus(piece: piece.Piece, phase: Stage) -> SidedScore {
         piece.King -> 0
       }
   }
-  case piece.player {
-    player.White -> SidedScore(white: score, black: 0)
-    player.Black -> SidedScore(white: 0, black: score)
-  }
+}
+
+/// Alternative material values from Stockfish. Specifically for using their
+/// phase calculations.
+/// See: https://hxim.github.io/Stockfish-Evaluation-Guide/ (piece value bonus
+/// page)
+///
+pub fn piece_value_bonus(piece: piece.Piece, phase: Stage) -> Int {
+  piece_value_bonus_symbol(piece.symbol, phase) * player(piece.player)
 }
 
 pub fn non_pawn_piece_value(piece: piece.Piece, phase: Stage) -> SidedScore {
-  use <- bool.guard(piece.symbol == piece.Pawn, empty_sided_score)
-  piece_value_bonus(piece, phase)
+  use <- bool.guard(
+    piece.symbol == piece.Pawn || piece.symbol == piece.King,
+    empty_sided_score,
+  )
+  case piece.player {
+    player.White ->
+      SidedScore(white: piece_value_bonus_symbol(piece.symbol, phase), black: 0)
+    player.Black ->
+      SidedScore(white: 0, black: piece_value_bonus_symbol(piece.symbol, phase))
+  }
 }
 
 /// Piece score based on player side

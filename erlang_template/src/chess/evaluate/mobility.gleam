@@ -1,7 +1,6 @@
 import chess/evaluate/common.{type SidedScore, SidedScore}
 import chess/piece
 import chess/player
-import gleam/bool
 
 /// Calculate a [mobility score](https://www.chessprogramming.org/Mobility).
 ///
@@ -31,9 +30,8 @@ pub fn sided_score(nmoves, piece, phase) -> SidedScore {
 }
 
 fn mg(nmoves, piece: piece.Piece) -> Int {
-  use <- bool.guard(piece.symbol == piece.King || piece.symbol == piece.Pawn, 0)
-
   case piece.symbol {
+    piece.Pawn | piece.King -> 0
     piece.Knight ->
       case nmoves {
         0 -> -62
@@ -116,14 +114,12 @@ fn mg(nmoves, piece: piece.Piece) -> Int {
         27 -> 116
         _ -> 0
       }
-    piece.Pawn | piece.King -> 0
   }
 }
 
 fn eg(nmoves, piece: piece.Piece) -> Int {
-  use <- bool.guard(piece.symbol == piece.King || piece.symbol == piece.Pawn, 0)
-
   case piece.symbol {
+    piece.Pawn | piece.King -> 0
     piece.Knight ->
       case nmoves {
         0 -> -81
@@ -206,6 +202,5 @@ fn eg(nmoves, piece: piece.Piece) -> Int {
         27 -> 219
         _ -> 0
       }
-    piece.Pawn | piece.King -> 0
   }
 }

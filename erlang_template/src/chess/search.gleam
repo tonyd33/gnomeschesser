@@ -73,6 +73,7 @@ fn search(
   opts: SearchOpts,
   game_history: game_history.GameHistory,
 ) -> State(SearchState, Nil) {
+  echo #(game.turn(game))
   let game_hash = game.hash(game)
   use cached_evaluation <- state.do(search_state.transposition_get(game_hash))
 

@@ -220,6 +220,10 @@ pub fn reverse_turn(game: Game) -> Game {
   Game(..game, active_color: them)
 }
 
+pub fn set_turn(game: Game, player: player.Player) -> Game {
+  Game(..game, active_color: player)
+}
+
 pub fn to_fen(game: Game) -> String {
   // todo: board positions
 
@@ -891,6 +895,29 @@ fn generate_castle_move(game: Game, castle_player, castle) {
   move.new_valid(from:, to:, promotion: None, context:) |> Ok
 }
 
+pub fn attackers_and_blockers(
+  game: Game,
+  square: square.Square,
+  by: player.Player,
+) {
+  let attacks_pins = square.attacks_and_pins_to(game.board, square, by)
+  let #(attackers, blockers) = {
+    use #(attackers, blockers), #(attacker_square, pinned_square) <- list.fold(
+      attacks_pins,
+      #([], []),
+    )
+    case pinned_square {
+      None -> #([attacker_square, ..attackers], blockers)
+      Some(pinned_square) -> #(attackers, [
+        #(pinned_square, attacker_square),
+        ..blockers
+      ])
+    }
+  }
+  let blockers = dict.from_list(blockers)
+  #(attackers, blockers)
+}
+
 /// generate valid moves
 pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
   let us = game.active_color
@@ -899,23 +926,11 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
   let pieces = game.board |> dict.to_list
 
   let king_piece = piece.Piece(us, piece.King)
-  // let king_position = find_player_king(game, us)
   let assert [king_position] = find_piece(game, king_piece)
 
   // find attacks and pins to the king
-  let #(king_attackers, king_blockers) = {
-    let #(attackers, pins) =
-      square.attacks_and_pins_to(game.board, king_position, them)
-      |> list.partition(fn(x) { x.1 |> option.is_none })
-    let attackers = list.map(attackers, pair.first)
-    let blockers =
-      list.map(pins, fn(x) {
-        let assert #(attacker, Some(pinned)) = x
-        #(pinned, attacker)
-      })
-      |> dict.from_list
-    #(attackers, blockers)
-  }
+  let #(king_attackers, king_blockers) =
+    attackers_and_blockers(game, king_position, them)
 
   // We always generate king moves to squares not attacked
   let king_moves = {
@@ -1338,10 +1353,73 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
   list.flatten([king_moves, regular_moves, en_passant_move, castling_moves])
 }
 
+pub fn give_better_name(game: Game) -> fn(square.Square, piece.Piece) -> Int {
+  let us = game.active_color
+  let them = player.opponent(us)
+
+  let king_piece = piece.Piece(us, piece.King)
+  let assert [king_position] = find_piece(game, king_piece)
+
+  // find attacks and pins to the king
+  let #(_, king_blockers) = attackers_and_blockers(game, king_position, them)
+
+  fn(from, piece: piece.Piece) -> Int {
+    // If we are pinned down, check if the target square is along the line by:
+    // If from is a king blocker:
+    //   Keep when:
+    //     (to == pinner) or
+    //     (from_offset == square.ray_to_offset(from: pinner, to: to).0)
+    // Else:
+    //   Always keep
+    let unpins = case dict.get(king_blockers, from) {
+      Ok(pinner) -> fn(to) {
+        to == pinner
+        || {
+          let from_offset: Int = square.ray_to_offset(from: pinner, to: from).0
+          from_offset == square.ray_to_offset(from: pinner, to: to).0
+        }
+      }
+      _ -> fn(_) { True }
+    }
+
+    let go_rays = fn(rays) {
+      use acc, ray <- list.fold(rays, 0)
+      use acc, to <- list.fold_until(ray, acc)
+
+      let keep = case unpins(to) {
+        True -> 1
+        False -> 0
+      }
+      case dict.get(game.board, to), piece.symbol {
+        Error(Nil), _ -> list.Continue(acc + keep)
+        // If we're a queen and we hit anything, always stop
+        Ok(_), piece.Queen -> list.Stop(acc + keep)
+        // If we're not a queen and we hit something, xray through it if it's
+        // the same piece or its a queen
+        Ok(hit_piece), _
+          if hit_piece == piece || hit_piece.symbol == piece.Queen
+        -> list.Continue(acc + keep)
+        // If it's a bishop, don't include the hit piece
+        Ok(_), piece.Bishop -> list.Stop(acc)
+        // Rooks and queens include the hit piece
+        Ok(_), _ -> list.Stop(acc + keep)
+      }
+    }
+
+    case piece.symbol {
+      piece.King -> 0
+      piece.Rook -> from |> square.rook_rays |> go_rays
+      piece.Bishop -> from |> square.bishop_rays |> go_rays
+      piece.Queen -> from |> square.queen_rays |> go_rays
+      piece.Knight -> list.length(square.knight_moves(from))
+      piece.Pawn -> 0
+    }
+  }
+}
+
 pub fn xray_at(game: Game, from: square.Square) {
   case dict.get(game.board, from) {
     Ok(piece) -> {
-      let owner = piece.player
       let go_xrays = fn(rays) {
         use acc, ray <- list.fold(rays, 0)
         use acc, to <- list.fold_until(ray, acc)
@@ -1365,86 +1443,8 @@ pub fn xray_at(game: Game, from: square.Square) {
         piece.Bishop -> from |> square.bishop_rays |> go_xrays
         piece.Queen -> from |> square.queen_rays |> go_xrays
         piece.Knight -> list.length(square.knight_moves(from))
-        piece.Pawn -> {
-          let empty_square_moves = {
-            use acc, to <- list.fold_until(
-              square.pawn_empty_moves(from, owner),
-              0,
-            )
-            use <- bool.guard(dict.has_key(game.board, to), list.Stop(acc))
-            let nmoves = case square.rank(to) {
-              0 | 7 -> 4
-              _ -> 1
-            }
-            list.Continue(nmoves + acc)
-          }
-          let capture_moves = {
-            use acc, to <- list.fold(square.pawn_capture_moves(from, owner), 0)
-            let nmoves =
-              {
-                use _ <- result.try(dict.get(game.board, to))
-                case square.rank(to) {
-                  0 | 7 -> 4
-                  _ -> 1
-                }
-                |> Ok
-              }
-              |> result.unwrap(0)
-            nmoves + acc
-          }
-          capture_moves + empty_square_moves
-        }
-        piece.King -> {
-          let regular_moves = {
-            use acc, to <- list.fold(square.king_moves(from), 0)
-            case dict.get(game.board, to) {
-              Ok(piece.Piece(player, _)) if player == owner -> acc
-              _ -> acc + 1
-            }
-          }
-          let castle_moves = case owner, game.castling_availability {
-            player.White, castle.CastlingAvailability(True, True, _, _) ->
-              case can_pseudolegal_castle(game, KingSide) {
-                True -> 1
-                False -> 0
-              }
-              + case can_pseudolegal_castle(game, QueenSide) {
-                True -> 1
-                False -> 0
-              }
-            player.White, castle.CastlingAvailability(True, False, _, _) ->
-              case can_pseudolegal_castle(game, KingSide) {
-                True -> 1
-                False -> 0
-              }
-            player.White, castle.CastlingAvailability(False, True, _, _) ->
-              case can_pseudolegal_castle(game, QueenSide) {
-                True -> 1
-                False -> 0
-              }
-            player.Black, castle.CastlingAvailability(_, _, True, True) ->
-              case can_pseudolegal_castle(game, KingSide) {
-                True -> 1
-                False -> 0
-              }
-              + case can_pseudolegal_castle(game, QueenSide) {
-                True -> 1
-                False -> 0
-              }
-            player.Black, castle.CastlingAvailability(_, _, True, False) ->
-              case can_pseudolegal_castle(game, KingSide) {
-                True -> 1
-                False -> 0
-              }
-            player.Black, castle.CastlingAvailability(_, _, False, True) ->
-              case can_pseudolegal_castle(game, QueenSide) {
-                True -> 1
-                False -> 0
-              }
-            _, _ -> 0
-          }
-          regular_moves + castle_moves
-        }
+        piece.Pawn -> 0
+        piece.King -> 0
       }
     }
     Error(Nil) -> 0

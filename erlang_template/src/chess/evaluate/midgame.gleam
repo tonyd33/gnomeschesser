@@ -10,7 +10,6 @@ import gleam/list
 import gleam/option.{Some}
 import gleam/result
 
-
 /// Evaluate king safety score with a pawn shield
 /// Positive is good for white, negative is good for black
 pub fn king_pawn_shield(game: game.Game, side: player.Player) -> Int {

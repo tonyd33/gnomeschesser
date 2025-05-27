@@ -3,8 +3,10 @@ import chess/evaluate/midgame
 import chess/evaluate/mobility
 import chess/evaluate/psqt
 import chess/game
+import chess/move
 import chess/piece
 import chess/player
+import chess/square
 import gleam/int
 import gleam/list
 import util/xint.{type ExtendedInt}
@@ -28,9 +30,10 @@ pub fn game(game: game.Game) -> Score {
   ) = compute_batched_scores(game)
   let phase = phase(npm)
 
-  let material = interpolate_by_phase(material_mg, material_eg, phase)
-  let psq = interpolate_by_phase(psq_mg, psq_eg, phase)
-  let mobility = interpolate_by_phase(mobility_mg, mobility_eg, phase)
+  let material = taper(material_mg, material_eg, phase)
+  let psq = taper(psq_mg, psq_eg, phase)
+  let mobility = taper(mobility_mg, mobility_eg, phase)
+  let tempo = 28 * player(game.turn(game))
 
   let king_safety_score =
     midgame.king_pawn_shield(game, player.White)
@@ -40,10 +43,11 @@ pub fn game(game: game.Game) -> Score {
     {
       { material * 850 }
       + { psq * 850 }
-      + { mobility * 850 }
-      + { king_safety_score * 40 }
+      + { tempo * 850 }
+      + { mobility * 400 }
+      + { king_safety_score * 400 }
     }
-    / { 850 + 850 + 850 + 40 }
+    / { 850 + 850 + 850 + 400 + 400 }
   }
   |> xint.from_int
 }
@@ -84,9 +88,9 @@ pub fn phase(npm_score: SidedScore) -> Int {
   { { npm - endgame_limit } * 100 } / { midgame_limit - endgame_limit }
 }
 
-/// Interpolate a score based on the phase.
+/// Make a smooth transition between mg and eg scores by phase.
 ///
-fn interpolate_by_phase(mg: Int, eg: Int, phase: Int) {
+fn taper(mg: Int, eg: Int, phase: Int) {
   { { mg * phase } + { eg * { 100 - phase } } } / 100
 }
 
@@ -97,7 +101,7 @@ pub const player = common.player
 /// A dummy data structure to hold all our scores as we traverse the board
 /// in a single iteration for efficiency.
 ///
-type BatchedScores {
+pub type BatchedScores {
   BatchedScores(
     npm: SidedScore,
     material_mg: Int,
@@ -131,16 +135,17 @@ fn add_batched_scores(s1: BatchedScores, s2: BatchedScores) {
   )
 }
 
-fn compute_batched_scores_at(game: game.Game, square, piece: piece.Piece) {
-  let nmoves = case piece.symbol {
-    piece.Pawn -> 0
-    piece.King -> 0
-    _ -> game.xray_at(game, square)
+fn compute_batched_scores_at(white_xray, black_xray, square, piece: piece.Piece) {
+  let nmoves = case piece {
+    piece.Piece(_, piece.Pawn) -> 0
+    piece.Piece(_, piece.King) -> 0
+    piece.Piece(player.White, _) -> white_xray(square, piece)
+    piece.Piece(player.Black, _) -> black_xray(square, piece)
   }
   BatchedScores(
     npm: common.non_pawn_piece_value(piece, common.MidGame),
-    material_mg: common.piece(piece),
-    material_eg: common.piece(piece),
+    material_mg: common.piece_value_bonus(piece, common.MidGame),
+    material_eg: common.piece_value_bonus(piece, common.EndGame),
     psq_mg: psqt.score(piece, square, common.MidGame),
     psq_eg: psqt.score(piece, square, common.EndGame),
     mobility_mg: mobility.score(nmoves, piece, common.MidGame),
@@ -148,11 +153,14 @@ fn compute_batched_scores_at(game: game.Game, square, piece: piece.Piece) {
   )
 }
 
-fn compute_batched_scores(game: game.Game) {
+pub fn compute_batched_scores(game: game.Game) {
+  let white_xray = game.set_turn(game, player.White) |> game.give_better_name
+  let black_xray = game.set_turn(game, player.Black) |> game.give_better_name
+
   use total_score, #(square, piece) <- list.fold(
     game.pieces(game),
     empty_batched_scores,
   )
-  compute_batched_scores_at(game, square, piece)
+  compute_batched_scores_at(white_xray, black_xray, square, piece)
   |> add_batched_scores(total_score)
 }
