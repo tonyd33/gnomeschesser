@@ -11,11 +11,7 @@ pub type Table =
 /// choice, but the number of nodes searched serves us just as well.
 ///
 pub type Entry {
-  Entry(
-    hash: Int,
-    depth: evaluation.Depth,
-    eval: evaluation.Evaluation,
-  )
+  Entry(hash: Int, depth: evaluation.Depth, eval: evaluation.Evaluation)
 }
 
 pub fn new() -> Table {

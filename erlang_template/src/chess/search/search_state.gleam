@@ -5,6 +5,7 @@ import chess/square
 import gleam/dict
 import gleam/float
 import gleam/int
+import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/time/duration
 import gleam/time/timestamp
@@ -111,7 +112,8 @@ pub fn transposition_insert(
   use search_state: SearchState <- state.modify
   let entry = transposition.Entry(hash:, depth:, eval:)
   let key = transposition_key_reduce(hash)
-  let assert Ok(transposition) = iv.set(search_state.transposition, key, Some(entry))
+  let assert Ok(transposition) =
+    iv.set(search_state.transposition, key, Some(entry))
   // let transposition = {
   //   use maybe_entry <- dict.upsert(search_state.transposition, key)
   //   case maybe_entry {

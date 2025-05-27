@@ -21,13 +21,6 @@ import gleam/time/timestamp
 import util/state.{type State, State}
 import util/xint.{type ExtendedInt}
 
-/// We don't let the transposition table get bigger than this
-const max_tt_size = 200_000
-
-/// When pruning the transposition table, how recent of entries do we decide to
-/// keep?
-const max_tt_recency = 100_000
-
 pub type SearchMessage {
   SearchStateUpdate(search_state: SearchState)
   SearchUpdate(
@@ -256,7 +249,10 @@ fn negamax_alphabeta_failsoft(
   )
 
   // return early if we find an entry in the transposition table
-  use cached_evaluation <- state.do(
+  use cached_evaluation <- state.do({
+    // Don't even look if we're close to the leaf
+    use <- bool.guard(depth < tt_min_leaf_distance, state.return(Error(Nil)))
+
     search_state.transposition_get(game_hash)
     |> state.map(fn(x) {
       use transposition.Entry(depth: cached_depth, eval: evaluation, ..) <- result.try(
@@ -277,8 +273,8 @@ fn negamax_alphabeta_failsoft(
             False -> Error(Nil)
           }
       }
-    }),
-  )
+    })
+  })
   use <- result.lazy_unwrap(result.map(cached_evaluation, state.return))
 
   // Otherwise, actually do negamax
@@ -455,7 +451,7 @@ fn iteratively_deepen(
 /// (internally) iteratively deepen to find a PV move. This is how far we'll
 /// deepen.
 ///
-const iid_depth = 4
+const iid_depth = 3
 
 /// Internal iterative deepening is not always a benefit even if we miss the
 /// cache. We want to be selective about when we deepen: if we're close to the
@@ -469,7 +465,7 @@ const iid_depth = 4
 /// an IID upon cache miss. To not deepen past the leaf, this number should
 /// always be quite a bit greater than `iid_depth`.
 ///
-const iid_min_leaf_distance = 8
+const iid_min_leaf_distance = 7
 
 /// Get the PV move for a game, trying to hit the cache and falling back to
 /// (internally) iteratively deepening if we're far from the leaves.
