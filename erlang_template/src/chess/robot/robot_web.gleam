@@ -2,7 +2,6 @@ import chess/game
 import chess/move
 import chess/search
 import chess/search/evaluation
-import chess/search/game_history
 import chess/search/search_state
 import chess/search/transposition
 import gleam/bool
@@ -10,9 +9,11 @@ import gleam/dict
 import gleam/erlang/process.{type Subject}
 import gleam/function
 import gleam/io
+import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/time/timestamp
+import util/dict_addons
 
 pub opaque type Robot {
   Robot(main_subject: Subject(RobotMessage))
@@ -31,7 +32,7 @@ type RobotState {
     best_evaluation: Option(evaluation.Evaluation),
     searcher: #(Option(process.Pid), Subject(search.SearchMessage)),
     search_state: search_state.SearchState,
-    game_history: game_history.GameHistory,
+    history: List(game.Game),
   )
 }
 
@@ -42,7 +43,7 @@ pub fn init() -> Robot {
 /// Updates the robot to specified FEN and then
 /// waits a certain number of milliseconds before getting
 /// the best move
-/// If there's only 1 move the robot responds immediately 
+/// If there's only 1 move the robot responds immediately
 pub fn get_best_move_from_fen_by(
   robot: Robot,
   fen: String,
@@ -103,7 +104,7 @@ fn create_robot_thread() -> Subject(RobotMessage) {
 
       let assert Ok(game): Result(game.Game, Nil) =
         game.load_fen(game.start_fen)
-      let game_history = game_history.new() |> game_history.insert(game)
+      let history = []
 
       let search_state = search_state.new(timestamp.system_time())
       // The search_subject will be used by searchers to update new best moves found
@@ -115,7 +116,7 @@ fn create_robot_thread() -> Subject(RobotMessage) {
           search_state,
           search_subject,
           search.default_search_opts,
-          game_history,
+          dict_addons.zip_dict_by(history, game.hash),
         )
 
       main_loop(
@@ -124,7 +125,7 @@ fn create_robot_thread() -> Subject(RobotMessage) {
           best_evaluation: None,
           searcher: #(Some(search_pid), search_subject),
           search_state:,
-          game_history:,
+          history: history,
         ),
         // This selector allows is to merge the different subjects (like from the searcher) into one selector
         process.new_selector()
@@ -198,7 +199,7 @@ fn update_state_with_new_game(state: RobotState, game: game.Game) -> RobotState 
     process.kill(pid)
   })
 
-  let game_history = game_history.insert(state.game_history, game)
+  let history = [game, ..state.history]
 
   let search_pid =
     search.new(
@@ -206,7 +207,7 @@ fn update_state_with_new_game(state: RobotState, game: game.Game) -> RobotState 
       state.search_state,
       state.searcher.1,
       search.default_search_opts,
-      state.game_history,
+      dict_addons.zip_dict_by(state.history, game.hash),
     )
 
   // TODO: check if the retrieved evaluation is actually valid for the given game
@@ -225,6 +226,6 @@ fn update_state_with_new_game(state: RobotState, game: game.Game) -> RobotState 
     game:,
     best_evaluation:,
     search_state: state.search_state,
-    game_history:,
+    history:,
   )
 }

@@ -3,10 +3,10 @@ import chess/move
 import chess/player
 import chess/search
 import chess/search/evaluation
-import chess/search/game_history
 import chess/search/search_state
 import chess/uci
 import gleam/bool
+import gleam/dict
 import gleam/erlang/process.{type Subject}
 import gleam/function
 import gleam/io
@@ -14,6 +14,7 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/time/timestamp
+import util/dict_addons
 import util/xint
 
 const name = "TODO: name"
@@ -33,8 +34,8 @@ pub type RobotMessage {
   UciStart
   IsReady
   Clear
-  SetFen(fen: String)
-  ApplyMove(lan: String)
+  PositionFEN(fen: String, moves: List(String))
+  PositionStartPos(moves: List(String))
   GoClock(
     white_time: Int,
     black_time: Int,
@@ -51,11 +52,11 @@ pub type RobotMessage {
 type RobotState {
   RobotState(
     game: Option(game.Game),
+    history: List(game.Game),
     best_evaluation: Option(evaluation.Evaluation),
     searcher: #(Option(process.Pid), Subject(search.SearchMessage)),
     search_state: search_state.SearchState,
     subject: Subject(RobotMessage),
-    game_history: game_history.GameHistory,
   )
 }
 
@@ -75,11 +76,11 @@ fn create_robot_thread() -> Subject(RobotMessage) {
       main_loop(
         RobotState(
           game: None,
+          history: [],
           best_evaluation: None,
           searcher: #(None, search_subject),
           search_state:,
           subject: robot_subject,
-          game_history: game_history.new(),
         ),
         // This selector allows is to merge the different subjects (like from the searcher) into one selector
         process.new_selector()
@@ -90,6 +91,33 @@ fn create_robot_thread() -> Subject(RobotMessage) {
     True,
   )
   process.receive_forever(reply_subject)
+}
+
+fn set_fen(state, fen, moves) {
+  let robot_result = {
+    use initial_game <- result.try(game.load_fen(fen))
+
+    // Construct the head and tail of the game
+    // #(game_n, [game_{n-1}, game_{n-2}, ..., .game_1])
+    use #(game, history) <- result.try({
+      use ht, lan <- list.fold(moves, Ok(#(initial_game, [])))
+      use #(head, tail) <- result.try(ht)
+
+      use move <- result.try(game.validate_move(move.from_lan(lan), head))
+      let head1 = game.apply(head, move)
+      Ok(#(head1, [head, ..tail]))
+    })
+
+    Ok(RobotState(..state, game: Some(game), history:))
+  }
+
+  case robot_result {
+    Ok(new_state) -> new_state
+    Error(_) -> {
+      echo "Failed to apply the robot result!!"
+      state
+    }
+  }
 }
 
 /// The main robot loop that checks for messages and updates the state
@@ -106,16 +134,9 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
           io.println(uci.serialize_gui_cmd(uci.GUICmdUCIOk))
           state
         }
+        PositionFEN(fen:, moves:) -> set_fen(state, fen, moves)
+        PositionStartPos(moves:) -> set_fen(state, game.start_fen, moves)
         // Update the current game position
-        SetFen(fen:) -> {
-          let game = game.load_fen(fen) |> option.from_result
-          let game_history = game_history.new()
-          let game_history =
-            game
-            |> option.map(game_history.insert(game_history, _))
-            |> option.unwrap(game_history)
-          RobotState(..state, game:, best_evaluation: None, game_history:)
-        }
         Clear -> {
           option.map(state.searcher.0, fn(pid) {
             process.unlink(pid)
@@ -126,25 +147,10 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
             search_state: search_state.new(timestamp.system_time()),
             searcher: #(None, state.searcher.1),
             game: None,
-            game_history: game_history.new(),
+            history: [],
             best_evaluation: None,
           )
         }
-        ApplyMove(lan:) ->
-          {
-            use game <- option.then(state.game)
-            use valid_move <- option.map(
-              move.from_lan(lan)
-              |> game.validate_move(game)
-              |> option.from_result,
-            )
-            let game = game.apply(game, valid_move)
-            let game_history = game_history.insert(state.game_history, game)
-
-            RobotState(..state, game: Some(game), game_history:)
-          }
-          |> option.unwrap(state)
-
         IsReady -> {
           io.println(uci.serialize_gui_cmd(uci.GUICmdReadyOk))
           state
@@ -162,39 +168,18 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
             ) -> {
               case option.map(state.game, game.equal(_, game)) {
                 Some(True) -> {
-                  let evaluation.Evaluation(
-                    score:,
-                    node_type:,
-                    best_move:,
-                    best_line:,
-                  ) = best_evaluation
+                  let evaluation.Evaluation(score:, best_move:, best_line:, ..) =
+                    best_evaluation
 
-                  let info_score_list =
-                    [
-                      // TODO: Give proper mate score
-                      // Why are we sending these scores for the infinite
-                      // cases? Idk I think it stops fastchess warnings lol
-                      case score {
-                        xint.PosInf -> [
-                          uci.ScoreMate(1),
-                          uci.ScoreCentipawns(n: 1),
-                        ]
-                        xint.Finite(score) -> [uci.ScoreCentipawns(n: score)]
-                        xint.NegInf -> [
-                          uci.ScoreMate(1),
-                          uci.ScoreCentipawns(n: 1),
-                        ]
-                      },
-                      case node_type {
-                        evaluation.PV -> []
-                        evaluation.Cut -> [uci.ScoreLowerbound]
-                        evaluation.All -> [uci.ScoreUpperbound]
-                      },
-                    ]
-                    |> list.flatten
+                  let info_score = case score {
+                    // TODO: Give proper mate score
+                    xint.PosInf -> uci.ScoreMate(-1)
+                    xint.Finite(score) -> uci.ScoreCentipawns(n: score)
+                    xint.NegInf -> uci.ScoreMate(-1)
+                  }
                   uci.GUICmdInfo([
                     uci.InfoDepth(depth),
-                    uci.InfoScore(info_score_list),
+                    uci.InfoScore(info_score),
                     uci.InfoNodes(nodes_searched),
                     uci.InfoTime(time),
                     uci.InfoNodesPerSecond(nps),
@@ -309,7 +294,7 @@ fn start_searcher(
               state.search_state,
               state.searcher.1,
               search_opts,
-              state.game_history,
+              dict_addons.zip_dict_by(state.history, game.hash),
             )
             |> Some
           RobotState(

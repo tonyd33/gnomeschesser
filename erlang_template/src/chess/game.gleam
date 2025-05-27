@@ -646,7 +646,6 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     halfmove_clock:,
     hash:,
   ) = game
-  let prev_game = game
   let prev_castling_availability = castling_availability
   let them = player.opponent(us)
   let piece = move_context.piece
@@ -906,7 +905,6 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
   let them = player.opponent(us)
 
   let pieces = game.board |> dict.to_list
-  let pieces_yielder = pieces |> yielder.from_list
 
   let king_piece = piece.Piece(us, piece.King)
   // let king_position = find_player_king(game, us)
@@ -915,12 +913,7 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
   // find attacks and pins to the king
   let #(king_attackers, king_blockers) = {
     let #(attackers, pins) =
-      square.attacks_and_pins_to(
-        game.board,
-        pieces_yielder,
-        king_position,
-        them,
-      )
+      square.attacks_and_pins_to(game.board, king_position, them)
       |> list.partition(fn(x) { x.1 |> option.is_none })
     let attackers = list.map(attackers, pair.first)
     let blockers =
@@ -978,12 +971,7 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
       Ok(x) if x.symbol == piece.Knight || x.symbol == piece.Pawn -> {
         let assert [attacker_square] = king_attackers
         let assert Ok(attacker_piece) = dict.get(game.board, attacker_square)
-        square.get_squares_attacking_at(
-          game.board,
-          pieces_yielder,
-          attacker_square,
-          us,
-        )
+        square.get_squares_attacking_at(game.board, attacker_square, us)
         |> list.flat_map(fn(defender_square) {
           let assert Ok(piece) = dict.get(game.board, defender_square)
           use <- bool.guard(piece.symbol == piece.King, [])

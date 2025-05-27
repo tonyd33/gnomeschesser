@@ -1,4 +1,3 @@
-import chess/game
 import chess/robot/robot_uci as robot
 import chess/uci
 import gleam/dict
@@ -44,15 +43,11 @@ fn handle_input(robot: robot.Robot) {
           }
           Ok(uci.EngCmdPosition(moves:, position:)) -> {
             case position {
-              uci.PositionStartPos -> game.start_fen
-              uci.PositionFEN(fen) -> fen
+              uci.PositionStartPos ->
+                process.send(robot.subject, robot.PositionStartPos(moves))
+              uci.PositionFEN(fen) ->
+                process.send(robot.subject, robot.PositionFEN(fen, moves))
             }
-            |> robot.SetFen
-            |> process.send(robot.subject, _)
-
-            list.each(moves, fn(move) {
-              process.send(robot.subject, robot.ApplyMove(move))
-            })
           }
           Ok(uci.EngCmdStop) -> {
             process.send(robot.subject, robot.Stop)
