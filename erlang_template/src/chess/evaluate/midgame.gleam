@@ -1,13 +1,10 @@
-import chess/evaluate/common.{type SidedScore, SidedScore}
-import chess/evaluate/psqt
+import chess/evaluate/common
 import chess/game
-import chess/move
 import chess/piece
 import chess/player
 import chess/square
 import gleam/bool
 import gleam/list
-import gleam/option.{Some}
 import gleam/result
 
 /// Evaluate king safety score with a pawn shield

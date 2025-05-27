@@ -41,7 +41,7 @@ async function main() {
     })
     .option("rest", {
       type: "number",
-      default: 1000,
+      default: 5000,
       describe: "time (ms) to rest between uploads",
     })
     .option("title", {

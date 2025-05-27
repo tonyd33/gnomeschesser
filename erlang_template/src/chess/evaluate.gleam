@@ -3,10 +3,8 @@ import chess/evaluate/midgame
 import chess/evaluate/mobility
 import chess/evaluate/psqt
 import chess/game
-import chess/move
 import chess/piece
 import chess/player
-import chess/square
 import gleam/int
 import gleam/list
 import util/xint.{type ExtendedInt}
@@ -33,7 +31,6 @@ pub fn game(game: game.Game) -> Score {
   let material = taper(material_mg, material_eg, phase)
   let psq = taper(psq_mg, psq_eg, phase)
   let mobility = taper(mobility_mg, mobility_eg, phase)
-  let tempo = 28 * player(game.turn(game))
 
   let king_safety_score =
     midgame.king_pawn_shield(game, player.White)
@@ -43,11 +40,10 @@ pub fn game(game: game.Game) -> Score {
     {
       { material * 850 }
       + { psq * 850 }
-      + { tempo * 850 }
-      + { mobility * 400 }
-      + { king_safety_score * 400 }
+      + { mobility * 10 }
+      + { king_safety_score * 40 }
     }
-    / { 850 + 850 + 850 + 400 + 400 }
+    / { 850 + 850 + 850 + 10 + 50 }
   }
   |> xint.from_int
 }

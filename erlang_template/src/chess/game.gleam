@@ -1096,13 +1096,18 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
       use ray <- list.flat_map(rays)
       use ray_moves, to <- list.fold_until(ray, [])
 
+      // If traveling in this direction exposes the king, travelling any
+      // further will continue exposing the king. So stop travelling
+      // immediately.
+      use <- bool.guard(!unpins(to), list.Stop([]))
+
       case dict.get(game.board, to) {
         Ok(piece.Piece(hit_player, _)) if hit_player == us ->
           list.Stop(ray_moves)
         // if hit_player != us
         Ok(captured_piece) ->
           {
-            let keep = { can_attack(to) || can_move(to) } && unpins(to)
+            let keep = can_attack(to) || can_move(to)
             use <- bool.guard(!keep, ray_moves)
 
             let context =
@@ -1117,7 +1122,7 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
           |> list.Stop
         _ ->
           {
-            let keep = { can_attack(to) || can_move(to) } && unpins(to)
+            let keep = can_attack(to) || can_move(to)
             use <- bool.guard(!keep, ray_moves)
             let context =
               move.Context(capture: None, piece:, castling: None)
@@ -1385,24 +1390,19 @@ pub fn give_better_name(game: Game) -> fn(square.Square, piece.Piece) -> Int {
     let go_rays = fn(rays) {
       use acc, ray <- list.fold(rays, 0)
       use acc, to <- list.fold_until(ray, acc)
+      use <- bool.guard(!unpins(to), list.Stop(0))
 
-      let keep = case unpins(to) {
-        True -> 1
-        False -> 0
-      }
       case dict.get(game.board, to), piece.symbol {
-        Error(Nil), _ -> list.Continue(acc + keep)
+        Error(Nil), _ -> list.Continue(acc + 1)
         // If we're a queen and we hit anything, always stop
-        Ok(_), piece.Queen -> list.Stop(acc + keep)
+        Ok(_), piece.Queen -> list.Stop(acc + 1)
         // If we're not a queen and we hit something, xray through it if it's
         // the same piece or its a queen
         Ok(hit_piece), _
           if hit_piece == piece || hit_piece.symbol == piece.Queen
-        -> list.Continue(acc + keep)
-        // If it's a bishop, don't include the hit piece
-        Ok(_), piece.Bishop -> list.Stop(acc)
-        // Rooks and queens include the hit piece
-        Ok(_), _ -> list.Stop(acc + keep)
+        -> list.Continue(acc + 1)
+        // Otherwise, stop at the hit piece
+        Ok(_), _ -> list.Stop(acc + 1)
       }
     }
 

@@ -591,6 +591,28 @@ pub fn moves_castle_passthrough_test() {
   ])
 }
 
+///    +------------------------+
+///  8 | .  .  .  .  .  .  .  ♚ |
+///  7 | .  .  .  .  .  .  .  . |
+///  6 | .  .  .  .  .  .  .  . |
+///  5 | ♔  .  .  ♖  .  .  ♜  ♜ |
+///  4 | .  .  .  .  .  .  .  . |
+///  3 | .  .  .  .  .  .  .  . |
+///  2 | .  .  .  .  .  .  .  . |
+///  1 | .  .  .  .  .  .  .  . |
+///    +------------------------+
+///      a  b  c  d  e  f  g  h
+pub fn moves_pin_test() {
+  let assert Ok(game) = load_fen("7k/8/8/K2R2rr/8/8/8/8 w - - 0 1")
+
+  game.valid_moves(game)
+  |> list.filter_map(game.move_to_san(_, game))
+  |> list.sort(string.compare)
+  |> should.equal([
+    "Ka4", "Ka6", "Kb4", "Kb5", "Kb6", "Rb5", "Rc5", "Re5", "Rf5", "Rxg5",
+  ])
+}
+
 ///   +------------------------+
 /// 8 | .  n  b  q  k  b  n  r |
 /// 7 | r  p  p  p  p  p  p  p |

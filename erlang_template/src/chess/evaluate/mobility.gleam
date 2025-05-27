@@ -32,6 +32,26 @@ pub fn sided_score(nmoves, piece, phase) -> SidedScore {
 fn mg(nmoves, piece: piece.Piece) -> Int {
   case piece.symbol {
     piece.Pawn | piece.King -> 0
+    piece.Knight -> 0
+    piece.Bishop -> 125 * nmoves
+    piece.Rook -> 60 * nmoves
+    piece.Queen -> 25 * nmoves
+  }
+}
+
+fn eg(nmoves, piece: piece.Piece) -> Int {
+  case piece.symbol {
+    piece.Pawn | piece.King -> 0
+    piece.Knight -> 8 * nmoves
+    piece.Bishop -> 125 * nmoves
+    piece.Rook -> 60 * nmoves
+    piece.Queen -> 45 * nmoves
+  }
+}
+
+fn mg_sf(nmoves, piece: piece.Piece) -> Int {
+  case piece.symbol {
+    piece.Pawn | piece.King -> 0
     piece.Knight ->
       case nmoves {
         0 -> -62
@@ -117,7 +137,7 @@ fn mg(nmoves, piece: piece.Piece) -> Int {
   }
 }
 
-fn eg(nmoves, piece: piece.Piece) -> Int {
+fn eg_sf(nmoves, piece: piece.Piece) -> Int {
   case piece.symbol {
     piece.Pawn | piece.King -> 0
     piece.Knight ->
