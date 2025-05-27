@@ -220,7 +220,7 @@ fn search_with_widening_windows(
 ///
 /// TODO: Tune this later
 ///
-const tt_min_leaf_distance = 1
+const tt_min_leaf_distance = 4
 
 /// https://www.chessprogramming.org/Alpha-Beta#Negamax_Framework
 /// returns the score of the current game searched at depth
@@ -256,7 +256,9 @@ fn negamax_alphabeta_failsoft(
   )
 
   // return early if we find an entry in the transposition table
-  use cached_evaluation <- state.do(
+  use cached_evaluation <- state.do({
+    use <- bool.guard(depth < tt_min_leaf_distance, state.return(Error(Nil)))
+
     search_state.transposition_get(game_hash)
     |> state.map(fn(x) {
       use transposition.Entry(cached_depth, evaluation, _) <- result.try(x)
@@ -275,8 +277,8 @@ fn negamax_alphabeta_failsoft(
             False -> Error(Nil)
           }
       }
-    }),
-  )
+    })
+  })
   use <- result.lazy_unwrap(result.map(cached_evaluation, state.return))
 
   // Otherwise, actually do negamax
@@ -312,8 +314,9 @@ fn do_negamax_alphabeta_failsoft(
   })
 
   use moves <- state.do(sorted_moves(game, depth, alpha, beta, game_history))
+  let nmoves = list.length(moves)
 
-  use <- bool.lazy_guard(list.is_empty(moves), fn() {
+  use <- bool.lazy_guard(nmoves == 0, fn() {
     // if checkmate/stalemate
     let score = case game.is_check(game, game.turn(game)) {
       True -> xint.NegInf
@@ -326,15 +329,32 @@ fn do_negamax_alphabeta_failsoft(
   // We iterate through every move and perform minimax to evaluate said move
   // accumulator keeps track of best evaluation while updating the node type
   {
-    use #(best_evaluation, alpha), move <- state.list_fold_until_s(moves, #(
-      Evaluation(xint.NegInf, evaluation.PV, None, []),
-      alpha,
-    ))
+    use #(best_evaluation, alpha, idx), move <- state.list_fold_until_s(
+      moves,
+      #(Evaluation(xint.NegInf, evaluation.PV, None, []), alpha, 0),
+    )
+
+    // TODO: Limit conditions and re-search if fail high
+    let depth_reduction = {
+      let context = move.get_context(move)
+      let should_reduce =
+        idx > 2
+        && depth > 2
+        // Don't reduce on captures
+        && !option.is_some(context.capture)
+        // Don't reduce while "in check". This is obviously inaccurate, but
+        // checking for check is expensive
+        && nmoves > 4
+      case should_reduce {
+        True -> 1
+        _ -> 0
+      }
+    }
 
     use evaluation <- state.do({
       use neg_evaluation <- state.map(negamax_alphabeta_failsoft(
         game.apply(game, move),
-        depth - 1,
+        depth - 1 - depth_reduction,
         xint.negate(beta),
         xint.negate(alpha),
         game_history.insert(game_history, game),
@@ -370,9 +390,10 @@ fn do_negamax_alphabeta_failsoft(
           }
           False -> state.pure(Nil)
         })
-        #(best_evaluation, alpha) |> list.Stop
+        #(best_evaluation, alpha, idx + 1) |> list.Stop
       }
-      False -> #(best_evaluation, alpha) |> list.Continue |> state.return
+      False ->
+        #(best_evaluation, alpha, idx + 1) |> list.Continue |> state.return
     }
   }
   |> state.map(fn(x) { x.0 })
