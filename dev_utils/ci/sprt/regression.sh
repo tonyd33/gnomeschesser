@@ -14,14 +14,17 @@ challenger_args="--tag local"
 defender_args="--tag latest"
 
 fastchess_event_name="Fastchess Tournament"
-rounds=5
+rounds=10
 # run (half #cores - 2) games at a time.
 # yes, we're piping into deno just for this. yes, it's cursed
 concurrency=$(echo "Math.min(($(nproc)/2) - 2)" | NO_COLOR=1 deno repl -q)
 games=2
 results_dir="$repo_root_path/results"
-system=$(uname -sm)
+st=3
+pull=yes
+build=yes
 book="$repo_root_path/opening_books/8moves_v3.pgn"
+system=$(uname -sm)
 
 case "$system" in
   "Darwin arm64")
@@ -47,6 +50,9 @@ Options:
   --defender        cmd         command to start defender engine. default $run_defender
   --defender-args   args        args to pass into the defender engine
   --results         dir         directory to store results. default $results_dir
+  --st              sec         seconds per move. default $st
+  --no-pull                     don't pull latest docker image
+  --no-build                    don't build current docker image
 
 EOF
 }
@@ -62,6 +68,9 @@ while [ "$#" -gt 0 ]; do
     --challenger-args) challenger_args="$2"; shift 2;;
     --defender)        run_defender=$(realpath "$working_dir/$2"); shift 2;;
     --defender-args)   defender_args="$2"; shift 2;;
+    --no-pull)         pull=no; shift;;
+    --no-build)        build=no; shift;;
+    --st)              st="$2" shift 2;;
     *)                 usage; exit 1;
   esac
 done
@@ -76,6 +85,10 @@ concurrency="$concurrency"
 challenger="$run_challenger"
 defender="$run_defender"
 results_dir="$results_dir"
+st="$st"
+pull="$pull"
+build="$build"
+book="$book"
 system="$system"
 
 EOF
@@ -96,18 +109,16 @@ download_fastchess() {
 
 run_fastchess=$(ls "$repo_root_path"/fastchess/fastchess-*)
 
-# Always pull image.
-# This is a bit weird if we don't mean to run the defender but I can't be arsed
-# to account for that case
-docker pull ghcr.io/tonyd33/gleam-chess-tournament/chess-bot:latest
+if [ "$pull" = yes ]; then
+  docker pull ghcr.io/tonyd33/gleam-chess-tournament/chess-bot:latest
+fi
 
-# Always build local image.
-# This is a bit weird if we don't mean to run the challenger but I can't be
-# arsed to account for that case
-docker build \
-  -t ghcr.io/tonyd33/gleam-chess-tournament/chess-bot:local \
-  -f "$repo_root_path/erlang_template/Dockerfile" \
-  "$repo_root_path/erlang_template"
+if [ "$build" = yes ]; then
+  docker build \
+    -t ghcr.io/tonyd33/gleam-chess-tournament/chess-bot:local \
+    -f "$repo_root_path/erlang_template/Dockerfile" \
+    "$repo_root_path/erlang_template"
+fi
 
 # Run fastchess
 mkdir -p "$results_dir"
@@ -117,12 +128,11 @@ mkdir -p "$results_dir"
       cmd="$run_defender" \
       args="$defender_args" \
       name=defender \
-      st=3 \
     -engine \
       cmd="$run_challenger" \
       args="$challenger_args" \
       name=challenger \
-      st=3 \
+    -each st="$st" \
     -rounds "$rounds" -games "$games" -concurrency "$concurrency" -maxmoves 100 \
     -pgnout file="$results_dir/regression.pgn" \
     -log file="$results_dir/fastchess-regression.log" level=trace \
