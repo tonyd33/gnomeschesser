@@ -851,21 +851,13 @@ pub fn validate_move(
   valid_moves(game) |> list.find(move.equal(_, move))
 }
 
-fn generate_pseudolegal_castle_to(game: Game, castle) {
+fn can_pseudolegal_castle(game: Game, castle) {
   let us = game.active_color
 
   let occupancy_blocked =
     castle.occupancy_squares(us, castle)
     |> list.any(fn(square) { dict.has_key(game.board, square) })
-  use <- bool.guard(occupancy_blocked, Error(Nil))
-
-  let rank = square.player_rank(us)
-  let to_file = case castle {
-    castle.KingSide -> 6
-    castle.QueenSide -> 2
-  }
-  let assert Ok(to) = square.from_rank_file(rank, to_file)
-  Ok(to)
+  !occupancy_blocked
 }
 
 fn generate_castle_move(game: Game, castle_player, castle) {
@@ -1346,113 +1338,124 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
   list.flatten([king_moves, regular_moves, en_passant_move, castling_moves])
 }
 
-pub fn pseudolegal_moves(
-  game: Game,
-) -> List(#(piece.Piece, move.Move(move.Pseudo))) {
-  let Game(active_color: us, castling_availability:, ..) = game
-  use #(from, piece) <- list.flat_map(dict.to_list(game.board))
-  use <- bool.guard(piece.player != us, [])
-  let go_rays = fn(rays) {
-    use ray <- list.flat_map(rays)
-    use acc, to <- list.fold_until(ray, [])
-
-    case dict.get(game.board, to) {
-      Ok(piece.Piece(hit_player, _)) if hit_player == us -> list.Stop(acc)
-      // if hit_player != us
-      Ok(piece.Piece(_, _)) ->
-        list.Stop([
-          #(piece, move.new_pseudo(from:, to:, promotion: None)),
-          ..acc
-        ])
-      _ ->
-        list.Continue([
-          #(piece, move.new_pseudo(from:, to:, promotion: None)),
-          ..acc
-        ])
-    }
-  }
-
-  case piece.symbol {
-    piece.Rook -> from |> square.rook_rays |> go_rays
-    piece.Bishop -> from |> square.bishop_rays |> go_rays
-    piece.Queen -> from |> square.queen_rays |> go_rays
-    piece.Knight -> {
-      use to <- list.filter_map(square.knight_moves(from))
-      case dict.get(game.board, to) {
-        Ok(piece.Piece(player, _)) if player == us -> Error(Nil)
-        _ -> Ok(#(piece, move.new_pseudo(from:, to:, promotion: None)))
+pub fn xray_at(game: Game, from: square.Square) {
+  case dict.get(game.board, from) {
+    Ok(piece) -> {
+      let owner = piece.player
+      let go_xrays = fn(rays) {
+        use acc, ray <- list.fold(rays, 0)
+        use acc, to <- list.fold_until(ray, acc)
+        case dict.get(game.board, to), piece.symbol {
+          // If we didn't hit anything, keep going
+          Error(Nil), _ -> list.Continue(acc + 1)
+          // If we're a queen and we hit anything, always stop
+          Ok(_), piece.Queen -> list.Stop(acc + 1)
+          // If we're not a queen and we hit something, xray through it if it's
+          // the same piece or its a queen
+          Ok(hit_piece), _
+            if hit_piece == piece || hit_piece.symbol == piece.Queen
+          -> list.Continue(acc + 1)
+          // Otherwise, stop at the first thing we hit
+          Ok(_), _ -> list.Stop(acc + 1)
+        }
       }
-    }
-    piece.Pawn -> {
-      let empty_square_moves =
-        {
-          use acc, to <- list.fold_until(square.pawn_empty_moves(from, us), [])
-          use <- bool.guard(dict.has_key(game.board, to), list.Stop(acc))
-          let promote_move = move.new_pseudo(from:, to:, promotion: _)
-          let moves = case square.rank(to) {
-            0 | 7 -> [
-              #(piece, promote_move(Some(piece.Rook))),
-              #(piece, promote_move(Some(piece.Knight))),
-              #(piece, promote_move(Some(piece.Bishop))),
-              #(piece, promote_move(Some(piece.Queen))),
-            ]
-            _ -> [#(piece, promote_move(None))]
+
+      case piece.symbol {
+        piece.Rook -> from |> square.rook_rays |> go_xrays
+        piece.Bishop -> from |> square.bishop_rays |> go_xrays
+        piece.Queen -> from |> square.queen_rays |> go_xrays
+        piece.Knight -> list.length(square.knight_moves(from))
+        piece.Pawn -> {
+          let empty_square_moves = {
+            use acc, to <- list.fold_until(
+              square.pawn_empty_moves(from, owner),
+              0,
+            )
+            use <- bool.guard(dict.has_key(game.board, to), list.Stop(acc))
+            let nmoves = case square.rank(to) {
+              0 | 7 -> 4
+              _ -> 1
+            }
+            list.Continue(nmoves + acc)
           }
-          list.Continue([moves, ..acc])
+          let capture_moves = {
+            use acc, to <- list.fold(square.pawn_capture_moves(from, owner), 0)
+            let nmoves =
+              {
+                use _ <- result.try(dict.get(game.board, to))
+                case square.rank(to) {
+                  0 | 7 -> 4
+                  _ -> 1
+                }
+                |> Ok
+              }
+              |> result.unwrap(0)
+            nmoves + acc
+          }
+          capture_moves + empty_square_moves
         }
-        |> list.flatten
-      let capture_moves = {
-        use to <- list.flat_map(square.pawn_capture_moves(from, us))
-        use <- bool.guard(!dict.has_key(game.board, to), [])
-        case square.rank(to) {
-          0 | 7 -> [
-            #(piece, move.new_pseudo(from:, to:, promotion: Some(piece.Rook))),
-            #(piece, move.new_pseudo(from:, to:, promotion: Some(piece.Knight))),
-            #(piece, move.new_pseudo(from:, to:, promotion: Some(piece.Bishop))),
-            #(piece, move.new_pseudo(from:, to:, promotion: Some(piece.Queen))),
-          ]
-          _ -> [#(piece, move.new_pseudo(from:, to:, promotion: None))]
+        piece.King -> {
+          let regular_moves = {
+            use acc, to <- list.fold(square.king_moves(from), 0)
+            case dict.get(game.board, to) {
+              Ok(piece.Piece(player, _)) if player == owner -> acc
+              _ -> acc + 1
+            }
+          }
+          let castle_moves = case owner, game.castling_availability {
+            player.White, castle.CastlingAvailability(True, True, _, _) ->
+              case can_pseudolegal_castle(game, KingSide) {
+                True -> 1
+                False -> 0
+              }
+              + case can_pseudolegal_castle(game, QueenSide) {
+                True -> 1
+                False -> 0
+              }
+            player.White, castle.CastlingAvailability(True, False, _, _) ->
+              case can_pseudolegal_castle(game, KingSide) {
+                True -> 1
+                False -> 0
+              }
+            player.White, castle.CastlingAvailability(False, True, _, _) ->
+              case can_pseudolegal_castle(game, QueenSide) {
+                True -> 1
+                False -> 0
+              }
+            player.Black, castle.CastlingAvailability(_, _, True, True) ->
+              case can_pseudolegal_castle(game, KingSide) {
+                True -> 1
+                False -> 0
+              }
+              + case can_pseudolegal_castle(game, QueenSide) {
+                True -> 1
+                False -> 0
+              }
+            player.Black, castle.CastlingAvailability(_, _, True, False) ->
+              case can_pseudolegal_castle(game, KingSide) {
+                True -> 1
+                False -> 0
+              }
+            player.Black, castle.CastlingAvailability(_, _, False, True) ->
+              case can_pseudolegal_castle(game, QueenSide) {
+                True -> 1
+                False -> 0
+              }
+            _, _ -> 0
+          }
+          regular_moves + castle_moves
         }
       }
-      list.append(capture_moves, empty_square_moves)
     }
-    piece.King -> {
-      let regular_tos = {
-        use to <- list.filter_map(square.king_moves(from))
-        case dict.get(game.board, to) {
-          Ok(piece.Piece(player, _)) if player == us -> Error(Nil)
-          _ -> Ok(to)
-        }
-      }
-      let castle_tos =
-        case us, castling_availability {
-          player.White, castle.CastlingAvailability(True, True, _, _) -> [
-            generate_pseudolegal_castle_to(game, KingSide),
-            generate_pseudolegal_castle_to(game, QueenSide),
-          ]
-          player.White, castle.CastlingAvailability(True, False, _, _) -> [
-            generate_pseudolegal_castle_to(game, KingSide),
-          ]
-          player.White, castle.CastlingAvailability(False, True, _, _) -> [
-            generate_pseudolegal_castle_to(game, QueenSide),
-          ]
-          player.Black, castle.CastlingAvailability(_, _, True, True) -> [
-            generate_pseudolegal_castle_to(game, KingSide),
-            generate_pseudolegal_castle_to(game, QueenSide),
-          ]
-          player.Black, castle.CastlingAvailability(_, _, True, False) -> [
-            generate_pseudolegal_castle_to(game, KingSide),
-          ]
-          player.Black, castle.CastlingAvailability(_, _, False, True) -> [
-            generate_pseudolegal_castle_to(game, QueenSide),
-          ]
-          _, _ -> []
-        }
-        |> result.values
-      use to <- list.map(list.append(regular_tos, castle_tos))
-      #(piece, move.new_pseudo(from:, to:, promotion: None))
-    }
+    Error(Nil) -> 0
   }
+}
+
+pub fn xrays(game: Game) {
+  let us = turn(game)
+  use acc, #(from, piece) <- list.fold(pieces(game), 0)
+  use <- bool.guard(piece.player != us, acc)
+  acc + xray_at(game, from)
 }
 
 // Zobrist below

@@ -17,17 +17,30 @@ pub fn main() {
     game.load_fen(
       "rnb1kb1r/pp3ppp/2ppp3/4P1N1/3P4/3B1P2/PPP4P/RN1QK2n b Qkq - 1 10",
     )
-  bencher.run(dict.from_list([#("game.valid_moves", game.valid_moves)]), [
-    bencher.Warmup(2),
-    bencher.Parallel(2),
-    bencher.Inputs(
-      [
-        #("starting pos", starting),
-        #("kiwipete", kiwipete),
-        #("position3", position3),
-        #("midgame_1", midgame_1),
-      ]
-      |> dict.from_list,
-    ),
-  ])
+  bencher.run(
+    dict.from_list([
+      #("game.valid_moves", fn(x) {
+        game.valid_moves(x)
+        Nil
+      }),
+      #("game.xrays", fn(x) {
+        game.xrays(x)
+        Nil
+      }),
+    ]),
+    [
+      bencher.Warmup(2),
+      bencher.Parallel(2),
+      bencher.Time(5),
+      bencher.Inputs(
+        [
+          #("starting pos", starting),
+          #("kiwipete", kiwipete),
+          #("position3", position3),
+          #("midgame_1", midgame_1),
+        ]
+        |> dict.from_list,
+      ),
+    ],
+  )
 }

@@ -1,14 +1,30 @@
-import chess/evaluate/common
+import chess/evaluate/common.{type SidedScore, SidedScore}
 import chess/piece
 import chess/player
 import chess/square
 
-pub fn get_psq_score(
+pub fn sided_score(
   piece: piece.Piece,
   square: square.Square,
   phase: common.Stage,
-) {
-  case phase {
+) -> SidedScore {
+  let score = case phase {
+    common.MidGame -> get_psq_score_midgame(piece, square)
+    common.EndGame -> get_psq_score_endgame(piece, square)
+  }
+  case piece.player {
+    player.White -> SidedScore(white: score, black: 0)
+    player.Black -> SidedScore(white: 0, black: score)
+  }
+}
+
+pub fn score(
+  piece: piece.Piece,
+  square: square.Square,
+  phase: common.Stage,
+) -> Int {
+  common.player(piece.player)
+  * case phase {
     common.MidGame -> get_psq_score_midgame(piece, square)
     common.EndGame -> get_psq_score_endgame(piece, square)
   }

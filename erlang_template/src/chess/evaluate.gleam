@@ -1,5 +1,6 @@
-import chess/evaluate/common
+import chess/evaluate/common.{type SidedScore, SidedScore}
 import chess/evaluate/midgame
+import chess/evaluate/mobility
 import chess/evaluate/psqt
 import chess/game
 import chess/piece
@@ -16,37 +17,33 @@ pub type Score =
 /// < 0 means black is winning
 ///
 pub fn game(game: game.Game) -> Score {
-  let pieces = game.pieces(game)
-  // TODO: use a cached version of getting moves somehow?
-  let our_moves = game.valid_moves(game)
+  let BatchedScores(
+    npm:,
+    material_mg:,
+    material_eg:,
+    psq_mg:,
+    psq_eg:,
+    mobility_mg:,
+    mobility_eg:,
+  ) = compute_batched_scores(game)
+  let phase = phase(npm)
 
-  let scores = material_scores(pieces)
-  let phase = phase(scores.npm)
+  let material = interpolate_by_phase(material_mg, material_eg, phase)
+  let psq = interpolate_by_phase(psq_mg, psq_eg, phase)
+  let mobility = interpolate_by_phase(mobility_mg, mobility_eg, phase)
 
-  let material_score = flatten_sided_score(scores.material)
-
-  let PSQScores(mg, eg) = psq_scores(pieces)
-  let psq_score =
-    {
-      { flatten_sided_score(mg) * phase }
-      + { flatten_sided_score(eg) * { 100 - phase } }
-    }
-    / 100
-
-  // TODO: change these based on the state of the game
-  let mobility_score = midgame.mobility(our_moves)
   let king_safety_score =
     midgame.king_pawn_shield(game, player.White)
     + midgame.king_pawn_shield(game, player.Black)
   // combine scores with weight
   {
     {
-      { material_score * 850 }
-      + { psq_score * 850 }
-      + { mobility_score * 10 }
+      { material * 850 }
+      + { psq * 850 }
+      + { mobility * 850 }
       + { king_safety_score * 40 }
     }
-    / { 850 + 850 + 10 + 40 }
+    / { 850 + 850 + 850 + 40 }
   }
   |> xint.from_int
 }
@@ -56,7 +53,6 @@ pub fn game(game: game.Game) -> Score {
 /// - A value of 100 means we're completely in the midgame (or before it)
 /// - A value in between signifies the weight endgame should be given, scaling
 ///   linearly.
-/// This is closely tied to the values in common.gleam!!
 ///
 pub fn phase(npm_score: SidedScore) -> Int {
   // We'll calculate a measure, clamp them between two bounds, and then treat
@@ -73,7 +69,7 @@ pub fn phase(npm_score: SidedScore) -> Int {
   // the endgame that non-pawns start to be taken.
   //
   // This follows a similar strategy as Stockfish and gives a pretty similar
-  // result. (note they scale from 0-128).
+  // result. (note they scale from 0-128)
   // See: https://hxim.github.io/Stockfish-Evaluation-Guide/
 
   let SidedScore(npm_white, npm_black) = npm_score
@@ -88,129 +84,75 @@ pub fn phase(npm_score: SidedScore) -> Int {
   { { npm - endgame_limit } * 100 } / { midgame_limit - endgame_limit }
 }
 
+/// Interpolate a score based on the phase.
+///
+fn interpolate_by_phase(mg: Int, eg: Int, phase: Int) {
+  { { mg * phase } + { eg * { 100 - phase } } } / 100
+}
+
 pub const piece_symbol = common.piece_symbol
 
 pub const player = common.player
 
-pub type SidedScore {
-  SidedScore(white: Int, black: Int)
+/// A dummy data structure to hold all our scores as we traverse the board
+/// in a single iteration for efficiency.
+///
+type BatchedScores {
+  BatchedScores(
+    npm: SidedScore,
+    material_mg: Int,
+    material_eg: Int,
+    psq_mg: Int,
+    psq_eg: Int,
+    mobility_mg: Int,
+    mobility_eg: Int,
+  )
 }
 
-pub const empty_sided_score = SidedScore(0, 0)
-
-pub fn add_sided_score(s1: SidedScore, s2: SidedScore) {
-  SidedScore(white: s1.white + s2.white, black: s1.black + s2.black)
-}
-
-pub fn flatten_sided_score(s: SidedScore) -> Int {
-  { s.white * common.player(player.White) }
-  + { s.black * common.player(player.Black) }
-}
-
-fn process_material_score(_square, piece: piece.Piece) {
-  case piece.player {
-    player.White ->
-      SidedScore(white: common.piece_symbol(piece.symbol), black: 0)
-    player.Black ->
-      SidedScore(white: 0, black: common.piece_symbol(piece.symbol))
-  }
-}
-
-fn process_npm_score(_square, piece: piece.Piece) {
-  case piece {
-    piece.Piece(_, piece.Pawn) -> SidedScore(white: 0, black: 0)
-    piece.Piece(player.White, symbol) ->
-      SidedScore(
-        white: common.piece_value_bonus(symbol, common.MidGame),
-        black: 0,
-      )
-    piece.Piece(player.Black, symbol) ->
-      SidedScore(
-        white: 0,
-        black: common.piece_value_bonus(symbol, common.MidGame),
-      )
-  }
-}
-
-pub type MaterialScores {
-  MaterialScores(material: SidedScore, npm: SidedScore)
-}
-
-const empty_material_scores = MaterialScores(
-  empty_sided_score,
-  empty_sided_score,
+const empty_batched_scores = BatchedScores(
+  npm: common.empty_sided_score,
+  material_mg: 0,
+  material_eg: 0,
+  psq_mg: 0,
+  psq_eg: 0,
+  mobility_mg: 0,
+  mobility_eg: 0,
 )
 
-fn add_material_scores(s1: MaterialScores, s2: MaterialScores) {
-  MaterialScores(
-    add_sided_score(s1.material, s2.material),
-    add_sided_score(s1.npm, s2.npm),
+fn add_batched_scores(s1: BatchedScores, s2: BatchedScores) {
+  BatchedScores(
+    npm: common.add_sided_score(s1.npm, s2.npm),
+    material_mg: s1.material_mg + s2.material_mg,
+    material_eg: s1.material_eg + s2.material_eg,
+    psq_mg: s1.psq_mg + s2.psq_mg,
+    psq_eg: s1.psq_eg + s2.psq_eg,
+    mobility_mg: s1.mobility_mg + s2.mobility_mg,
+    mobility_eg: s1.mobility_eg + s2.mobility_eg,
   )
 }
 
-fn process_material_scores(square, piece: piece.Piece) {
-  MaterialScores(
-    material: process_material_score(square, piece),
-    npm: process_npm_score(square, piece),
-  )
-}
-
-pub fn material_scores(pieces) {
-  use acc, #(square, piece) <- list.fold(pieces, empty_material_scores)
-  process_material_scores(square, piece) |> add_material_scores(acc)
-}
-
-pub type PSQScores {
-  PSQScores(midgame: SidedScore, endgame: SidedScore)
-}
-
-const empty_psq_scores = PSQScores(empty_sided_score, empty_sided_score)
-
-fn add_psq_scores(s1: PSQScores, s2: PSQScores) {
-  PSQScores(
-    add_sided_score(s1.midgame, s2.midgame),
-    add_sided_score(s1.endgame, s2.endgame),
-  )
-}
-
-fn process_psq_mg_score(square, piece: piece.Piece) {
-  case piece.player {
-    player.White ->
-      SidedScore(
-        white: psqt.get_psq_score(piece, square, common.MidGame),
-        black: 0,
-      )
-    player.Black ->
-      SidedScore(
-        white: 0,
-        black: -psqt.get_psq_score(piece, square, common.MidGame),
-      )
+fn compute_batched_scores_at(game: game.Game, square, piece: piece.Piece) {
+  let nmoves = case piece.symbol {
+    piece.Pawn -> 0
+    piece.King -> 0
+    _ -> game.xray_at(game, square)
   }
-}
-
-fn process_psq_eg_score(square, piece: piece.Piece) {
-  case piece.player {
-    player.White ->
-      SidedScore(
-        white: psqt.get_psq_score(piece, square, common.EndGame),
-        black: 0,
-      )
-    player.Black ->
-      SidedScore(
-        white: 0,
-        black: -psqt.get_psq_score(piece, square, common.EndGame),
-      )
-  }
-}
-
-fn process_psq_scores(square, piece: piece.Piece) {
-  PSQScores(
-    process_psq_mg_score(square, piece),
-    process_psq_eg_score(square, piece),
+  BatchedScores(
+    npm: common.non_pawn_piece_value(piece, common.MidGame),
+    material_mg: common.piece(piece),
+    material_eg: common.piece(piece),
+    psq_mg: psqt.score(piece, square, common.MidGame),
+    psq_eg: psqt.score(piece, square, common.EndGame),
+    mobility_mg: mobility.score(nmoves, piece, common.MidGame),
+    mobility_eg: mobility.score(nmoves, piece, common.EndGame),
   )
 }
 
-pub fn psq_scores(pieces) {
-  use acc, #(square, piece) <- list.fold(pieces, empty_psq_scores)
-  process_psq_scores(square, piece) |> add_psq_scores(acc)
+fn compute_batched_scores(game: game.Game) {
+  use total_score, #(square, piece) <- list.fold(
+    game.pieces(game),
+    empty_batched_scores,
+  )
+  compute_batched_scores_at(game, square, piece)
+  |> add_batched_scores(total_score)
 }
