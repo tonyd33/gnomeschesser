@@ -2,6 +2,18 @@
 
 set -euo pipefail
 
+system=$(uname -sm)
+
+case "$system" in
+  "Darwin arm64")
+    default_tag="latest-arm64"
+    ;;
+  "Linux x86_64")
+    default_tag="latest"
+    ;;
+  *) echo "unknown system: $system"; exit 1;;
+esac
+
 usage() {
   cat <<EOF
 Usage: $0 [--tag tag] [-- ...docker args]
@@ -20,7 +32,7 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-tag=${tag:-latest}
+tag=${tag:-$default_tag}
 docker_args=$@
 
 # Get this command by inspecting the entrypoint.sh referenced in the Dockerfile

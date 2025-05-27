@@ -40,10 +40,10 @@ pub fn game(game: game.Game) -> Score {
     {
       { material * 850 }
       + { psq * 850 }
-      + { mobility * 10 }
+      + { mobility * 850 }
       + { king_safety_score * 40 }
     }
-    / { 850 + 850 + 850 + 10 + 50 }
+    / { 850 + 850 + 850 + 40 }
   }
   |> xint.from_int
 }
@@ -140,8 +140,8 @@ fn compute_batched_scores_at(white_xray, black_xray, square, piece: piece.Piece)
   }
   BatchedScores(
     npm: common.non_pawn_piece_value(piece, common.MidGame),
-    material_mg: common.piece_value_bonus(piece, common.MidGame),
-    material_eg: common.piece_value_bonus(piece, common.EndGame),
+    material_mg: common.piece(piece),
+    material_eg: common.piece(piece),
     psq_mg: psqt.score(piece, square, common.MidGame),
     psq_eg: psqt.score(piece, square, common.EndGame),
     mobility_mg: mobility.score(nmoves, piece, common.MidGame),

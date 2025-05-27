@@ -13,8 +13,8 @@ import chess/player
 pub fn score(nmoves, piece: piece.Piece, phase) -> Int {
   common.player(piece.player)
   * case phase {
-    common.MidGame -> mg(nmoves, piece)
-    common.EndGame -> eg(nmoves, piece)
+    common.MidGame -> mg_sf(nmoves, piece)
+    common.EndGame -> eg_sf(nmoves, piece)
   }
 }
 

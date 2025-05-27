@@ -12,9 +12,9 @@ import wisp/wisp_mist
 pub fn main() {
   let assert Ok(game) =
     game.load_fen(
-      "rnbk2nr/pp2pp1p/1qp3pb/4P3/P7/2NB1NBP/1PP1QPP1/R4RK1 w - - 7 15",
+      "r1bqkbnr/ppp1pppp/2n5/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
     )
-  echo evaluate.game(game)
+  echo evaluate.compute_batched_scores(game)
   // wisp.configure_logger()
   // let secret_key_base = wisp.random_string(64)
   //

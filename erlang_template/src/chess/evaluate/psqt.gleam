@@ -23,11 +23,11 @@ pub fn score(
   square: square.Square,
   phase: common.Stage,
 ) -> Int {
-  common.player(piece.player)
-  * case phase {
+  case phase {
     common.MidGame -> get_psq_score_midgame(piece, square)
     common.EndGame -> get_psq_score_endgame(piece, square)
   }
+  * common.player(piece.player)
 }
 
 fn get_psq_score_endgame(piece: piece.Piece, square: square.Square) {
@@ -45,12 +45,7 @@ fn get_psq_score_endgame(piece: piece.Piece, square: square.Square) {
     piece.Queen -> queen_eg
     piece.King -> king_eg
   }
-  let value = index_psqt_table(table, rank, file)
-
-  case piece.player {
-    player.White -> value
-    player.Black -> -value
-  }
+  index_psqt_table(table, rank, file)
 }
 
 fn get_psq_score_midgame(piece: piece.Piece, square: square.Square) {
@@ -68,12 +63,7 @@ fn get_psq_score_midgame(piece: piece.Piece, square: square.Square) {
     piece.Queen -> queen_mg
     piece.King -> king_mg
   }
-  let value = index_psqt_table(table, rank, file)
-
-  case piece.player {
-    player.White -> value
-    player.Black -> -value
-  }
+  index_psqt_table(table, rank, file)
 }
 
 fn index_psqt_table(
