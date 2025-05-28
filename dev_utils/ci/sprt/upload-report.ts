@@ -44,10 +44,18 @@ async function retryWithExponentialBackoff<A>(
     try {
       return await f();
     } catch (e) {
+      let message = "unknown error";
+      if (e instanceof Error) {
+        message = e.message;
+      }
+      process.stderr.write(
+        `Failed ${i}/${opts.maxRetries} times with error ${message}\n`,
+      );
       if (i >= opts.maxRetries) {
         throw e;
       } else {
-        sleep(rest);
+        process.stderr.write(`Sleeping for ${rest}ms\n`);
+        await sleep(rest);
         rest *= 2;
       }
     }
@@ -113,7 +121,11 @@ async function main() {
           .then((res) => {
             if (res.error) {
               if (typeof res.error === "string") throw new Error(res.error);
-              else throw new Error("Unknown error");
+              else if (
+                typeof res.error === "object" && "error" in res.error &&
+                typeof res.error.error === "string"
+              ) throw new Error(res.error.error);
+              else throw new Error(`Unknown error from ${JSON.stringify(res)}`);
             } else if (!res.data || !res.data.id || !res.data.url) {
               throw new Error("No data");
             }
@@ -132,6 +144,26 @@ async function main() {
   }
 
   // Format results
+  const competitors: string[] = R.flow(pgns, [
+    R.map(({ headers }) => [headers["White"], headers["Black"]]),
+    R.flatten,
+    R.uniq,
+    R.sort(R.ascend((x: string) => x)),
+  ]);
+  if (competitors.length !== 2) {
+    throw new Error("Expected exactly two competitors!");
+  }
+  const isCompetitorWin =
+    (competitor: string) =>
+    ({ headers }: { headers: Record<string, string> }) =>
+      (headers.White === competitor && headers.Result === "1-0") ||
+      (headers.Black === competitor && headers.Result === "0-1");
+
+  const [competitor1, competitor2] = competitors;
+  const competitor1Wins = pgns.filter(isCompetitorWin(competitor1)).length;
+  const competitor2Wins = pgns.filter(isCompetitorWin(competitor2)).length;
+  const draws = pgns.length - (competitor1Wins + competitor2Wins);
+
   const desiredHeaderKeys = [
     "Round",
     "White",
@@ -172,6 +204,14 @@ async function main() {
   const mdtable = tabulate(table, " | ");
   const md = `
 # 🥊 ${opts.title}
+
+## ${competitor1} - ${competitor2} Summary
+
+- ${competitor1} wins: ${competitor1Wins}
+- ${competitor2} wins: ${competitor2Wins}
+- Draws: ${draws}
+
+## Games
 
 ${mdtable}
 

@@ -220,7 +220,7 @@ fn search_with_widening_windows(
 ///
 /// TODO: Tune this later
 ///
-const tt_min_leaf_distance = 4
+const tt_min_leaf_distance = 1
 
 /// https://www.chessprogramming.org/Alpha-Beta#Negamax_Framework
 /// returns the score of the current game searched at depth
@@ -240,11 +240,14 @@ fn negamax_alphabeta_failsoft(
 ) -> State(SearchState, Evaluation) {
   let game_hash = game.hash(game)
 
-  // 3 fold repetition
-  // If we've encountered this position before, we can assume we're in a 3 fold loop
-  // and that this position will resolve to a 0
   use <- bool.guard(
-    game_history.is_previous_game(game_history, game),
+    // 3 fold repetition:
+    // If we've encountered this position before, we can assume we're in a 3 fold loop
+    // and that this position will resolve to a 0
+    game_history.is_previous_game(game_history, game)
+      // 50 moves rule:
+      // If 50 moves have passed without any captures, then the position is a draw.
+      || game.halfmove_clock(game) >= 100,
     state.return(
       Evaluation(
         score: xint.from_int(0),
@@ -334,7 +337,7 @@ fn do_negamax_alphabeta_failsoft(
       #(Evaluation(xint.NegInf, evaluation.PV, None, []), alpha, 0),
     )
 
-    // TODO: Limit conditions and re-search if fail high
+    // TODO: Limit conditions
     let context = move.get_context(move)
     let should_reduce =
       idx > 1
@@ -344,18 +347,16 @@ fn do_negamax_alphabeta_failsoft(
       // Don't reduce while "in check". This is obviously inaccurate, but
       // checking for check is expensive
       && nmoves > 4
-    let depth_reduction = {
-      case should_reduce {
-        True -> 1
-        _ -> 0
-      }
+    let depth_reduction = case should_reduce {
+      True -> 1
+      _ -> 0
     }
 
-    let go = fn(depth_reduction) {
-      use evaluation <- state.do({
+    let go = fn(e1: Evaluation, depth, alpha, beta) {
+      use e2 <- state.do({
         use neg_evaluation <- state.map(negamax_alphabeta_failsoft(
           game.apply(game, move),
-          depth - 1 - depth_reduction,
+          depth,
           xint.negate(beta),
           xint.negate(alpha),
           game_history.insert(game_history, game),
@@ -367,67 +368,62 @@ fn do_negamax_alphabeta_failsoft(
         )
       })
 
-      let best_evaluation = case
-        xint.gt(evaluation.score, best_evaluation.score)
-      {
-        True -> evaluation
-        False -> best_evaluation
-      }
-      let alpha = xint.max(alpha, evaluation.score)
-
-      state.return(#(best_evaluation, alpha))
+      state.return(#(
+        case xint.gt(e2.score, e1.score) {
+          True -> e2
+          False -> e1
+        },
+        xint.max(alpha, e2.score),
+      ))
     }
 
-    use #(best_evaluation, alpha) <- state.do(go(depth_reduction))
+    let finish = fn(e: Evaluation, alpha, beta) {
+      // beta-cutoff
+      case xint.gte(e.score, beta) {
+        True -> {
+          let new_e = Evaluation(..e, node_type: evaluation.Cut)
+          let move_context = move.get_context(move)
 
-    // beta-cutoff
-    case xint.gte(best_evaluation.score, beta), should_reduce {
-      True, True -> {
-        // TODO: Make this not cancer
-        use #(best_evaluation, alpha) <- state.do(go(0))
-        case xint.gte(best_evaluation.score, beta) {
-          True -> {
-            let best_evaluation =
-              Evaluation(..best_evaluation, node_type: evaluation.Cut)
-            let move_context = move.get_context(move)
-
-            use _ <- state.map(case move_context.capture |> option.is_none {
-              True -> {
-                // non-capture moves update the history table
-                let to = move.get_to(move)
-                let piece = move_context.piece
-                search_state.history_update(#(to, piece), depth * depth)
-              }
-              False -> state.pure(Nil)
-            })
-            #(best_evaluation, alpha, idx + 1) |> list.Stop
-          }
-          False ->
-            #(best_evaluation, alpha, idx + 1)
-            |> list.Continue
-            |> state.return
+          use _ <- state.map(case move_context.capture |> option.is_none {
+            True -> {
+              // non-capture moves update the history table
+              let to = move.get_to(move)
+              let piece = move_context.piece
+              search_state.history_update(#(to, piece), depth * depth)
+            }
+            False -> state.pure(Nil)
+          })
+          #(new_e, alpha, idx + 1) |> list.Stop
         }
+        False ->
+          #(e, alpha, idx + 1)
+          |> list.Continue
+          |> state.return
       }
-      True, False -> {
-        let best_evaluation =
-          Evaluation(..best_evaluation, node_type: evaluation.Cut)
-        let move_context = move.get_context(move)
+    }
 
-        use _ <- state.map(case move_context.capture |> option.is_none {
-          True -> {
-            // non-capture moves update the history table
-            let to = move.get_to(move)
-            let piece = move_context.piece
-            search_state.history_update(#(to, piece), depth * depth)
-          }
-          False -> state.pure(Nil)
-        })
-        #(best_evaluation, alpha, idx + 1) |> list.Stop
+    use #(tentative_evaluation, tentative_alpha) <- state.do(go(
+      best_evaluation,
+      depth - 1 - depth_reduction,
+      alpha,
+      beta,
+    ))
+
+    case xint.gte(tentative_evaluation.score, beta), should_reduce {
+      // The search on the child node caused a beta-cutoff while reducing the
+      // depth. We have to retry the search at the proper depth.
+      True, True -> {
+        // FIXME: Am I supposed to re-search with `tentative_evaluation` and
+        // `tentative_alpha`... or with the original search parameters...?
+        use #(best_evaluation, alpha) <- state.do(go(
+          tentative_evaluation,
+          depth - 1,
+          tentative_alpha,
+          beta,
+        ))
+        finish(best_evaluation, alpha, beta)
       }
-      False, _ ->
-        #(best_evaluation, alpha, idx + 1)
-        |> list.Continue
-        |> state.return
+      _, _ -> finish(tentative_evaluation, tentative_alpha, beta)
     }
   }
   |> state.map(fn(x) { x.0 })

@@ -60,9 +60,8 @@ jobs:
         run: |-
           deno task test \
             --engine ../../scripts/start-uci.sh \
-            --workers 6 \
-            --timeout 5000 \
-            --depth 8 > ${{ github.workspace }}/results/position-tests.md
+            --workers 4 \
+            --timeout 5000  > ${{ github.workspace }}/results/position-tests.md
         working-directory: dev_utils/ci/position-tests
 
       - name: Find existing PR comment
