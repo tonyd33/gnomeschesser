@@ -335,48 +335,80 @@ fn do_negamax_alphabeta_failsoft(
     )
 
     // TODO: Limit conditions and re-search if fail high
+    let context = move.get_context(move)
+    let should_reduce =
+      idx > 1
+      && depth > 2
+      // Don't reduce on captures
+      && !option.is_some(context.capture)
+      // Don't reduce while "in check". This is obviously inaccurate, but
+      // checking for check is expensive
+      && nmoves > 4
     let depth_reduction = {
-      let context = move.get_context(move)
-      let should_reduce =
-        idx > 2
-        && depth > 2
-        // Don't reduce on captures
-        && !option.is_some(context.capture)
-        // Don't reduce while "in check". This is obviously inaccurate, but
-        // checking for check is expensive
-        && nmoves > 4
       case should_reduce {
         True -> 1
         _ -> 0
       }
     }
 
-    use evaluation <- state.do({
-      use neg_evaluation <- state.map(negamax_alphabeta_failsoft(
-        game.apply(game, move),
-        depth - 1 - depth_reduction,
-        xint.negate(beta),
-        xint.negate(alpha),
-        game_history.insert(game_history, game),
-      ))
-      Evaluation(
-        ..evaluation.negate(neg_evaluation),
-        best_line: [move, ..neg_evaluation.best_line],
-        best_move: Some(move),
-      )
-    })
+    let go = fn(depth_reduction) {
+      use evaluation <- state.do({
+        use neg_evaluation <- state.map(negamax_alphabeta_failsoft(
+          game.apply(game, move),
+          depth - 1 - depth_reduction,
+          xint.negate(beta),
+          xint.negate(alpha),
+          game_history.insert(game_history, game),
+        ))
+        Evaluation(
+          ..evaluation.negate(neg_evaluation),
+          best_line: [move, ..neg_evaluation.best_line],
+          best_move: Some(move),
+        )
+      })
 
-    let best_evaluation = case
-      xint.gt(evaluation.score, best_evaluation.score)
-    {
-      True -> evaluation
-      False -> best_evaluation
+      let best_evaluation = case
+        xint.gt(evaluation.score, best_evaluation.score)
+      {
+        True -> evaluation
+        False -> best_evaluation
+      }
+      let alpha = xint.max(alpha, evaluation.score)
+
+      state.return(#(best_evaluation, alpha))
     }
-    let alpha = xint.max(alpha, evaluation.score)
+
+    use #(best_evaluation, alpha) <- state.do(go(depth_reduction))
 
     // beta-cutoff
-    case xint.gte(best_evaluation.score, beta) {
-      True -> {
+    case xint.gte(best_evaluation.score, beta), should_reduce {
+      True, True -> {
+        // TODO: Make this not cancer
+        use #(best_evaluation, alpha) <- state.do(go(0))
+        case xint.gte(best_evaluation.score, beta) {
+          True -> {
+            let best_evaluation =
+              Evaluation(..best_evaluation, node_type: evaluation.Cut)
+            let move_context = move.get_context(move)
+
+            use _ <- state.map(case move_context.capture |> option.is_none {
+              True -> {
+                // non-capture moves update the history table
+                let to = move.get_to(move)
+                let piece = move_context.piece
+                search_state.history_update(#(to, piece), depth * depth)
+              }
+              False -> state.pure(Nil)
+            })
+            #(best_evaluation, alpha, idx + 1) |> list.Stop
+          }
+          False ->
+            #(best_evaluation, alpha, idx + 1)
+            |> list.Continue
+            |> state.return
+        }
+      }
+      True, False -> {
         let best_evaluation =
           Evaluation(..best_evaluation, node_type: evaluation.Cut)
         let move_context = move.get_context(move)
@@ -392,8 +424,10 @@ fn do_negamax_alphabeta_failsoft(
         })
         #(best_evaluation, alpha, idx + 1) |> list.Stop
       }
-      False ->
-        #(best_evaluation, alpha, idx + 1) |> list.Continue |> state.return
+      False, _ ->
+        #(best_evaluation, alpha, idx + 1)
+        |> list.Continue
+        |> state.return
     }
   }
   |> state.map(fn(x) { x.0 })
