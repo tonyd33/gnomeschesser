@@ -128,6 +128,14 @@ pub fn to_int(ea) {
   }
 }
 
+pub fn to_string(ea) {
+  case ea {
+    NegInf -> "-Infinity"
+    Finite(a) -> int.to_string(a)
+    PosInf -> "Infinity"
+  }
+}
+
 pub fn compare(ea, eb) {
   case ea, eb {
     Finite(a), Finite(b) -> int.compare(a, b)

@@ -1,43 +1,11 @@
 import chess/evaluate/common
-import chess/evaluate/psqt
 import chess/game
-import chess/move
 import chess/piece
 import chess/player
 import chess/square
 import gleam/bool
 import gleam/list
 import gleam/result
-
-pub fn psqt(pieces: List(#(square.Square, piece.Piece))) {
-  pieces
-  |> list.fold(0, fn(acc, square_pieces) {
-    psqt.get_psq_score(square_pieces.1, square_pieces.0, common.MidGame) + acc
-  })
-}
-
-/// Calculate a [mobility score](https://www.chessprogramming.org/Mobility).
-///
-/// Roughly, we want to capture the idea that "the more choices we have at
-/// our disposal, the stronger our position."
-///
-/// This is implemented in a similar fashion: for every move, it counts
-/// positively towards the mobility score and is weighted by the piece.
-/// TODO: do both side's mobility
-pub fn mobility(moves: List(move.Move(move.ValidInContext))) -> Int {
-  list.fold(moves, 0, fn(acc, move) {
-    let piece = move.get_context(move).piece
-    case piece.symbol {
-      piece.Pawn | piece.Knight | piece.King -> 0
-      piece.Bishop -> 125
-      piece.Rook -> 60
-      piece.Queen -> 25
-    }
-    * common.player(piece.player)
-    + acc
-  })
-  / 10
-}
 
 /// Evaluate king safety score with a pawn shield
 /// Positive is good for white, negative is good for black

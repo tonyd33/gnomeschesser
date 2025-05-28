@@ -42,6 +42,15 @@ pub fn new_pseudo(
   Move(from:, to:, promotion:, context: None)
 }
 
+pub fn new_pseudo_with_context(
+  from from: square.Square,
+  to to: square.Square,
+  promotion promotion: Option(piece.PieceSymbol),
+  context context: Option(Context),
+) -> Move(Pseudo) {
+  Move(from:, to:, promotion:, context:)
+}
+
 pub fn new_valid(
   from from: square.Square,
   to to: square.Square,
@@ -66,6 +75,10 @@ pub fn get_promotion(move: Move(a)) {
 pub fn get_context(move: Move(ValidInContext)) {
   let assert Some(context) = move.context
   context
+}
+
+pub fn get_pseudo_context(move: Move(a)) {
+  move.context
 }
 
 pub fn to_lan(move: Move(a)) {

@@ -33,7 +33,7 @@ fn handle_request(request: Request, robot: robot.Robot) -> Response {
 }
 
 type MoveRequest {
-  MoveRequest(fen: game.SAN, turn: player.Player, failed_moves: List(game.SAN))
+  MoveRequest(fen: String, turn: player.Player, failed_moves: List(game.SAN))
 }
 
 fn move_decoder() -> decode.Decoder(MoveRequest) {
