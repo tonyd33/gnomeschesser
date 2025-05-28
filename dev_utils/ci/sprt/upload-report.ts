@@ -31,6 +31,29 @@ function tabulate(rows: string[][], colSep = "\t", rowSep = "\n"): string {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+async function retryWithExponentialBackoff<A>(
+  f: () => Promise<A>,
+  opts: { maxRetries: number; rest: number },
+) {
+  let i = 0;
+  let rest = opts.rest;
+  while (true) {
+    i++;
+    // Try to do `f`. If it fails, sleep for `rest` ms and double the `rest`
+    // before trying it again.
+    try {
+      return await f();
+    } catch (e) {
+      if (i >= opts.maxRetries) {
+        throw e;
+      } else {
+        sleep(rest);
+        rest *= 2;
+      }
+    }
+  }
+}
+
 async function main() {
   const opts = await yargs()
     .scriptName("upload-report")
@@ -41,13 +64,18 @@ async function main() {
     })
     .option("rest", {
       type: "number",
-      default: 5000,
-      describe: "time (ms) to rest between uploads",
+      default: 1000,
+      describe: "time (ms) to rest between uploads with exponential backoff",
+    })
+    .option("max-retries", {
+      type: "number",
+      default: 10,
+      describe: "max number of retries before failing",
     })
     .option("title", {
       type: "string",
       default: "SPRT Results",
-      describe: "title of the markdown result"
+      describe: "title of the markdown result",
     })
     .parse(hideBin(process.argv));
 
@@ -78,18 +106,28 @@ async function main() {
 
   // Upload PGNs
   const results = [];
+  const importGameWithRetries = (pgn: string) =>
+    retryWithExponentialBackoff(
+      () =>
+        equine.gameImport({ body: { pgn } })
+          .then((res) => {
+            if (res.error) {
+              if (typeof res.error === "string") throw new Error(res.error);
+              else throw new Error("Unknown error");
+            } else if (!res.data || !res.data.id || !res.data.url) {
+              throw new Error("No data");
+            }
+            return { id: res.data.id, url: res.data.url };
+          }),
+      {
+        maxRetries: opts.maxRetries,
+        rest: opts.rest,
+      },
+    );
+
   for await (const { pgn, headers } of pgns) {
-    const game = await equine.gameImport({ body: { pgn } })
-      .then((res) => {
-        if (res.error) {
-          if (typeof res.error === "string") throw new Error(res.error);
-          else throw new Error("Unknown error");
-        } else if (!res.data || !res.data.id || !res.data.url) {
-          throw new Error("No data");
-        }
-        return { id: res.data.id, url: res.data.url };
-      });
-    await sleep(1000);
+    const game = await importGameWithRetries(pgn);
+    await sleep(opts.rest);
     results.push({ pgn, headers, game });
   }
 
@@ -116,9 +154,9 @@ async function main() {
     tableHeader.map((_) => "---"),
     ...R.flow(results, [
       R.sortWith([
-        R.ascend(x => x.headers.Round ?? ""),
-        R.ascend(x => x.headers.White ?? ""),
-        R.descend(x => x.headers.Result ?? ""),
+        R.ascend((x) => x.headers.Round ?? ""),
+        R.ascend((x) => x.headers.White ?? ""),
+        R.descend((x) => x.headers.Result ?? ""),
       ]),
       R.map((
         { headers, game: { url } }: {
