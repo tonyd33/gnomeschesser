@@ -15,8 +15,10 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/order
 import gleam/result
+import gleam/set
 import gleam/time/duration
 import gleam/time/timestamp
+import util/order_addons
 import util/state.{type State, State}
 import util/xint.{type ExtendedInt}
 
@@ -138,7 +140,8 @@ fn search(
   // )
   // io.print_error(info)
 
-  use _ <- state.do(search_state.stats_checkpoint_time(now))
+  use <- state.discard(search_state.stats_checkpoint_time(now))
+  use <- state.discard(search_state.killer_moves_clear())
   process.send(search_subject, SearchStateUpdate(search_state:))
   process.send(
     search_subject,
@@ -285,15 +288,16 @@ fn negamax_alphabeta_failsoft(
   })
 
   // Manage stats and transposition table before returning evaluation.
-  use _ <- state.do(search_state.stats_increment_nodes_searched())
-  use _ <- state.do(case depth >= tt_min_leaf_distance {
+  use <- state.discard(search_state.stats_increment_nodes_searched())
+  use <- state.discard(case depth >= tt_min_leaf_distance {
     True -> search_state.transposition_insert(game_hash, #(depth, evaluation))
     False -> state.return(Nil)
   })
-  use _ <- state.do(search_state.transposition_prune(
+  use <- state.discard(search_state.transposition_prune(
     when: search_state.LargerThan(max_tt_size),
     do: search_state.ByRecency(max_tt_recency),
   ))
+  use <- state.discard(search_state.killer_moves_forget(depth - 3))
 
   state.return(evaluation)
 }
@@ -361,16 +365,22 @@ fn do_negamax_alphabeta_failsoft(
           Evaluation(..best_evaluation, node_type: evaluation.Cut)
         let move_context = move.get_context(move)
 
-        use _ <- state.map(case move_context.capture |> option.is_none {
+        use <- state.discard(case move.is_quiet(move) {
           True -> {
-            // non-capture moves update the history table
+            // non-capture moves update the history table and get added to
+            // the killer moves
             let to = move.get_to(move)
             let piece = move_context.piece
-            search_state.history_update(#(to, piece), depth * depth)
+            use <- state.discard(search_state.history_update(
+              #(to, piece),
+              depth * depth,
+            ))
+            use <- state.discard(search_state.killer_moves_insert(depth, move))
+            state.return(Nil)
           }
-          False -> state.pure(Nil)
+          False -> state.return(Nil)
         })
-        #(best_evaluation, alpha) |> list.Stop
+        #(best_evaluation, alpha) |> list.Stop |> state.return
       }
       False -> #(best_evaluation, alpha) |> list.Continue |> state.return
     }
@@ -538,49 +548,64 @@ fn sorted_moves(
     })
 
   // We use MVV-LVA for sorting capture_promotion moves
-  let capture_promotion_moves =
-    capture_promotion_moves
-    // first we sort least valuable attacker, least valuable first
-    // for promotions, we count it as the promoted piece
-    |> list.sort(fn(move1, move2) {
-      let piece1 = move.get_context(move1).piece.symbol
-      let piece1 =
-        move.get_promotion(move1)
-        |> option.unwrap(piece1)
-      let piece2 = move.get_context(move2).piece.symbol
-      let piece2 =
-        move.get_promotion(move2)
-        |> option.unwrap(piece2)
-      int.compare(evaluate.piece_symbol(piece1), evaluate.piece_symbol(piece2))
-    })
-    // then we sort most valuable victim, most valuable first
-    |> list.sort(fn(move1, move2) {
-      case move.get_context(move1).capture, move.get_context(move2).capture {
-        Some(#(_, piece.Piece(_, a))), Some(#(_, piece.Piece(_, b))) ->
-          int.compare(evaluate.piece_symbol(b), evaluate.piece_symbol(a))
-        Some(_), _ -> order.Lt
-        _, Some(_) -> order.Gt
-        _, _ -> order.Eq
-      }
-    })
+  let by_mvv_lva = order_addons.or(lva, mvv)
+  let capture_promotion_moves = list.sort(capture_promotion_moves, by_mvv_lva)
 
+  use killer_moves <- state.do(search_state.killer_moves_get(depth))
   use search_state: SearchState <- state.select()
-  // for quiet moves, we sort it by its quiet history score
-  let quiet_moves = {
-    let history = search_state.history
-    quiet_moves
-    |> list.sort(fn(move1, move2) {
-      let key1 = #(move.get_to(move1), move.get_context(move1).piece)
-      let key2 = #(move.get_to(move2), move.get_context(move2).piece)
-      let history1 = dict.get(history, key1) |> result.unwrap(0)
-      let history2 = dict.get(history, key2) |> result.unwrap(0)
-      // bigger history should go first
-      int.compare(history2, history1)
-    })
+
+  let history = search_state.history
+  // for quiet moves, we sort it by its quiet history score and killer moves
+  let by_quiet_history_score = fn(move1, move2) {
+    let key1 = #(move.get_to(move1), move.get_context(move1).piece)
+    let key2 = #(move.get_to(move2), move.get_context(move2).piece)
+    let history1 = dict.get(history, key1) |> result.unwrap(0)
+    let history2 = dict.get(history, key2) |> result.unwrap(0)
+    // bigger history should go first
+    int.compare(history2, history1)
   }
+  let by_killer = fn(move1, move2) {
+    let killer1 = set.contains(killer_moves, move1)
+    let killer2 = set.contains(killer_moves, move2)
+    case killer1, killer2 {
+      True, True -> order.Eq
+      False, False -> order.Eq
+      False, True -> order.Lt
+      True, False -> order.Gt
+    }
+  }
+  let by_killer_history = order_addons.or(by_killer, by_quiet_history_score)
+  let quiet_moves = list.sort(quiet_moves, by_killer_history)
 
   let non_best_move = list.append(capture_promotion_moves, quiet_moves)
 
   option.map(best_move, fn(best_move) { [best_move, ..non_best_move] })
   |> option.unwrap(non_best_move)
+}
+
+/// Sort least valuable attacker, least valuable first for
+/// promotions, we count it as the promoted piece
+///
+fn lva(move1, move2) {
+  let piece1 = move.get_context(move1).piece.symbol
+  let piece1 =
+    move.get_promotion(move1)
+    |> option.unwrap(piece1)
+  let piece2 = move.get_context(move2).piece.symbol
+  let piece2 =
+    move.get_promotion(move2)
+    |> option.unwrap(piece2)
+  int.compare(evaluate.piece_symbol(piece1), evaluate.piece_symbol(piece2))
+}
+
+/// Sort most valuable victim, most valuable first
+///
+fn mvv(move1, move2) {
+  case move.get_context(move1).capture, move.get_context(move2).capture {
+    Some(#(_, piece.Piece(_, a))), Some(#(_, piece.Piece(_, b))) ->
+      int.compare(evaluate.piece_symbol(b), evaluate.piece_symbol(a))
+    Some(_), _ -> order.Lt
+    _, Some(_) -> order.Gt
+    _, _ -> order.Eq
+  }
 }

@@ -7,8 +7,6 @@ pub type State(s, a) {
   State(run: fn(s) -> #(a, s))
 }
 
-/// Equivalent to Haskell `fmap`
-///
 pub fn map(state: State(s, a), f: fn(a) -> b) -> State(s, b) {
   State(run: fn(s) {
     let #(a, s_) = state.run(s)
@@ -16,18 +14,14 @@ pub fn map(state: State(s, a), f: fn(a) -> b) -> State(s, b) {
   })
 }
 
-/// pure
+/// Lift a value into State
 ///
 pub fn pure(a: a) -> State(s, a) {
   State(run: fn(s) { #(a, s) })
 }
 
-pub fn return(a: a) -> State(s, a) {
-  pure(a)
-}
+pub const return = pure
 
-/// Equivalent to Haskell `>>=`
-///
 pub fn bind(state: State(s, a), f: fn(a) -> State(s, b)) -> State(s, b) {
   State(run: fn(s) {
     let #(a, s_) = state.run(s)
@@ -37,6 +31,16 @@ pub fn bind(state: State(s, a), f: fn(a) -> State(s, b)) -> State(s, b) {
 }
 
 pub const do = bind
+
+/// `>>` operator. Discard the value produced by a state.
+///
+pub fn discard(state: State(s, a), f: fn() -> State(s, b)) -> State(s, b) {
+  State(run: fn(s) {
+    let #(_, s_) = state.run(s)
+    let sb = f()
+    sb.run(s_)
+  })
+}
 
 pub fn select(f: fn(s) -> a) -> State(s, a) {
   State(run: fn(s) { #(f(s), s) })

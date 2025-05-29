@@ -81,6 +81,16 @@ pub fn get_pseudo_context(move: Move(a)) {
   move.context
 }
 
+pub fn is_capture(move: Move(ValidInContext)) {
+  let assert Some(context) = move.context
+  option.is_some(context.capture)
+}
+
+pub fn is_quiet(move: Move(ValidInContext)) {
+  let assert Some(context) = move.context
+  option.is_none(context.capture)
+}
+
 pub fn to_lan(move: Move(a)) {
   square.to_string(move.from)
   <> square.to_string(move.to)

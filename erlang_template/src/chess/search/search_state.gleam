@@ -1,19 +1,25 @@
+import chess/move.{type Move, type ValidInContext}
 import chess/piece
-import chess/search/evaluation.{type Evaluation, Evaluation}
+import chess/search/evaluation.{type Depth, type Evaluation, Evaluation}
 import chess/search/transposition
 import chess/square
+import gleam/bool
 import gleam/dict
 import gleam/float
 import gleam/int
+import gleam/option.{None, Some}
 import gleam/result
+import gleam/set.{type Set}
 import gleam/time/duration
 import gleam/time/timestamp
 import util/state.{type State, State}
+import util/yielder
 
 pub type SearchState {
   SearchState(
     transposition: transposition.Table,
     history: dict.Dict(#(square.Square, piece.Piece), Int),
+    killer_moves: dict.Dict(Depth, Set(Move(ValidInContext))),
     stats: SearchStats,
   )
 }
@@ -22,6 +28,7 @@ pub fn new(now: timestamp.Timestamp) {
   SearchState(
     transposition: dict.new(),
     history: dict.new(),
+    killer_moves: dict.new(),
     stats: SearchStats(
       nodes_searched: 0,
       nodes_searched_at_init_time: 0,
@@ -56,6 +63,47 @@ pub fn history_update(
     - { history_score * int.absolute_value(clamped_bonus) / max_history }
   let history = search_state.history |> dict.insert(key, history_score)
   SearchState(..search_state, history:)
+}
+
+pub fn killer_moves_insert(depth: Depth, move: Move(ValidInContext)) {
+  use search_state: SearchState <- state.modify
+  let killer_moves = {
+    use maybe_moves <- dict.upsert(search_state.killer_moves, depth)
+    case maybe_moves {
+      Some(moves) ->
+        // Only allow inserting a few killer moves
+        // TODO: Make more advanced replacement scheme
+        case set.size(moves) < 10 {
+          True -> set.insert(moves, move)
+          False -> moves
+        }
+      None -> set.from_list([move])
+    }
+  }
+  SearchState(..search_state, killer_moves:)
+}
+
+pub fn killer_moves_get(depth: Depth) {
+  use search_state: SearchState <- state.select
+  search_state.killer_moves
+  |> dict.get(depth)
+  |> result.unwrap(set.new())
+}
+
+pub fn killer_moves_forget(max_depth: Depth) {
+  use search_state: SearchState <- state.modify
+  let killer_moves =
+    yielder.range(0, max_depth)
+    |> yielder.fold(search_state.killer_moves, fn(killer_moves, depth) {
+      dict.delete(killer_moves, depth)
+    })
+
+  SearchState(..search_state, killer_moves:)
+}
+
+pub fn killer_moves_clear() {
+  use search_state: SearchState <- state.modify
+  SearchState(..search_state, killer_moves: dict.new())
 }
 
 /// When should we prune the transposition table?
