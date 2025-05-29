@@ -15,6 +15,11 @@ pub fn main() {
       "r1bqkbnr/ppp1pppp/2n5/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
     )
   echo evaluate.compute_batched_scores(game)
+  let assert Ok(game) =
+    game.load_fen(
+      "r1bqkbnr/ppp1pppp/2n5/3p4/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 2",
+    )
+  echo evaluate.compute_batched_scores(game)
   // wisp.configure_logger()
   // let secret_key_base = wisp.random_string(64)
   //

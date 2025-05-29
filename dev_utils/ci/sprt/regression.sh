@@ -14,7 +14,7 @@ challenger_args="--tag local"
 defender_args="--tag latest"
 
 fastchess_event_name="Fastchess Tournament"
-rounds=5
+rounds=8
 # run (half #cores - 2) games at a time.
 # yes, we're piping into deno just for this. yes, it's cursed
 concurrency=$(echo "Math.min(($(nproc)/2) - 2)" | NO_COLOR=1 deno repl -q)
