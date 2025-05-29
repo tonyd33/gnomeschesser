@@ -327,6 +327,35 @@ fn do_negamax_alphabeta_failsoft(
     |> state.return
   })
 
+  // Null move pruning: if a null move was made (i.e. we pass the turn) yet we
+  // caused a beta cutoff, we can be pretty sure that any legal move would
+  // cause a beta cutoff. In such a case, return early.
+  use null_evaluation <- state.do({
+    // TODO: Add further conditions to avoid zugzwangs
+    // TODO: Optimize so checking checks aren't expensive
+    let should_do_nmp = !game.is_check(game, game.turn(game))
+    use <- bool.guard(!should_do_nmp, state.return(Error(Nil)))
+
+    let r = 4
+    use evaluation <- state.map(
+      negamax_alphabeta_failsoft(
+        game.reverse_turn(game),
+        depth - 1 - r,
+        xint.negate(beta),
+        xint.negate(xint.subtract(beta, xint.from_int(1))),
+        game_history,
+        // game_history.insert(game_history, game),
+      )
+      |> state.map(evaluation.negate),
+    )
+
+    case xint.gte(evaluation.score, beta) {
+      True -> Ok(Evaluation(..evaluation, node_type: evaluation.Cut))
+      False -> Error(Nil)
+    }
+  })
+  use <- result.lazy_unwrap(result.map(null_evaluation, state.return))
+
   use #(moves, nmoves) <- state.do(sorted_moves(
     game,
     depth,
