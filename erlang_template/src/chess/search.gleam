@@ -11,11 +11,11 @@ import gleam/dict
 import gleam/erlang/process
 import gleam/float
 import gleam/int
+import gleam/io
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/order
 import gleam/result
-import gleam/time/duration
 import gleam/time/timestamp
 import util/state.{type State, State}
 import util/xint.{type ExtendedInt}
@@ -24,7 +24,7 @@ import util/xint.{type ExtendedInt}
 const max_tt_size = 100_000
 
 /// When pruning the transposition table, how recent of entries do we decide to
-/// keep? In ms
+/// keep?
 const max_tt_recency = 50_000
 
 pub type SearchMessage {
@@ -36,6 +36,7 @@ pub type SearchMessage {
     time: Int,
     nodes_searched: Int,
     nps: Int,
+    hashfull: Int,
   )
   SearchDone
 }
@@ -57,7 +58,7 @@ pub fn new(
     fn() {
       {
         let now = timestamp.system_time()
-        use _ <- state.do(search_state.stats_checkpoint_time(now))
+        use <- state.discard(search_state.stats_zero(now))
         search(search_subject, game, 1, opts, game_history)
       }
       |> state.go(initial: search_state)
@@ -119,38 +120,48 @@ fn search(
     }
   }
 
-  use search_state: SearchState <- state.do(state.get_state())
-  let now = timestamp.system_time()
-  let dt =
-    timestamp.difference(search_state.stats.init_time, now)
-    |> duration.to_seconds
-    |> float.multiply(1000.0)
-    |> float.round
-  use nps <- state.do(
-    state.select(search_state.stats_nodes_per_second(_, now))
-    |> state.map(float.round),
-  )
+  // IO actions – not related to search.
+  use <- state.discard({
+    let now = timestamp.system_time()
+    use nps <- state.do(
+      state.select(search_state.stats_nodes_per_second(_, now))
+      |> state.map(float.round),
+    )
+    use dt <- state.do(state.select(search_state.stats_delta_time_ms(_, now)))
 
-  // TODO: use a logging library for this?
-  // use info <- state.do(
-  //   search_state.stats_to_string(_, now)
-  //   |> state.select,
-  // )
-  // io.print_error(info)
+    // TODO: use a logging library for this?
+    // use info <- state.do(
+    //   search_state.stats_to_string(_, now)
+    //   |> state.select,
+    // )
+    // io.print_error(info)
 
-  use _ <- state.do(search_state.stats_checkpoint_time(now))
-  process.send(search_subject, SearchStateUpdate(search_state:))
-  process.send(
-    search_subject,
-    SearchUpdate(
-      best_evaluation:,
-      game:,
-      depth: current_depth,
-      time: dt,
-      nodes_searched: search_state.stats.nodes_searched,
-      nps:,
-    ),
-  )
+    use search_state: SearchState <- state.do(state.get_state())
+    let hashfull =
+      {
+        int.to_float(dict.size(search_state.transposition))
+        *. 1000.0
+        /. int.to_float(max_tt_size)
+      }
+      |> float.round
+
+    process.send(search_subject, SearchStateUpdate(search_state:))
+    process.send(
+      search_subject,
+      SearchUpdate(
+        best_evaluation:,
+        game:,
+        depth: current_depth,
+        time: dt,
+        // Some GUIs expect this to be positive, but if we exclusively hit
+        // the cache, this may not be incremented for speed optimizations
+        nodes_searched: int.max(search_state.stats.nodes_searched, 1),
+        nps:,
+        hashfull:,
+      ),
+    )
+    state.return(Nil)
+  })
 
   case opts.max_depth {
     Some(max_depth) if current_depth >= max_depth -> {
@@ -290,12 +301,12 @@ fn negamax_alphabeta_failsoft(
   })
 
   // Manage stats and transposition table before returning evaluation.
-  use _ <- state.do(search_state.stats_increment_nodes_searched())
-  use _ <- state.do(case depth >= tt_min_leaf_distance {
+  use <- state.discard(search_state.stats_increment_nodes_searched())
+  use <- state.discard(case depth >= tt_min_leaf_distance {
     True -> search_state.transposition_insert(game_hash, #(depth, evaluation))
     False -> state.return(Nil)
   })
-  use _ <- state.do(search_state.transposition_prune(
+  use <- state.discard(search_state.transposition_prune(
     when: search_state.LargerThan(max_tt_size),
     do: search_state.ByRecency(max_tt_recency),
   ))
@@ -328,6 +339,9 @@ fn do_negamax_alphabeta_failsoft(
     Evaluation(score:, node_type: evaluation.PV, best_move: None, best_line: [])
     |> state.return
   })
+
+  // TODO: This can be calculated in `sorted_moves` for efficiency!
+  let nmoves = list.length(moves)
 
   // We iterate through every move and perform minimax to evaluate said move
   // accumulator keeps track of best evaluation while updating the node type

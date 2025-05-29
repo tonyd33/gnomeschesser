@@ -5,7 +5,10 @@ import chess/square
 import gleam/dict
 import gleam/float
 import gleam/int
+import gleam/list
+import gleam/option.{None, Some}
 import gleam/result
+import gleam/string
 import gleam/time/duration
 import gleam/time/timestamp
 import util/state.{type State, State}
@@ -24,10 +27,11 @@ pub fn new(now: timestamp.Timestamp) {
     history: dict.new(),
     stats: SearchStats(
       nodes_searched: 0,
-      nodes_searched_at_init_time: 0,
       init_time: now,
-      hits: 0,
-      misses: 0,
+      tt_hits: 0,
+      tt_misses: 0,
+      tt_prunes: 0,
+      beta_cutoffs: dict.new(),
     ),
   )
 }
@@ -89,7 +93,7 @@ pub fn transposition_get(
           transposition: dict.insert(transposition, hash, entry),
           stats: SearchStats(
             ..search_state.stats,
-            hits: search_state.stats.hits + 1,
+            tt_hits: search_state.stats.tt_hits + 1,
           ),
         ),
       )
@@ -100,7 +104,7 @@ pub fn transposition_get(
         ..search_state,
         stats: SearchStats(
           ..search_state.stats,
-          misses: search_state.stats.misses + 1,
+          tt_misses: search_state.stats.tt_misses + 1,
         ),
       ),
     )
@@ -139,7 +143,14 @@ pub fn transposition_prune(
             <= max_recency
           })
       }
-      SearchState(..search_state, transposition:)
+      SearchState(
+        ..search_state,
+        transposition:,
+        stats: SearchStats(
+          ..search_state.stats,
+          tt_prunes: search_state.stats.tt_prunes + 1,
+        ),
+      )
     }
     False -> state.return(Nil)
   }
@@ -156,17 +167,19 @@ fn transposition_prune_policy_met(
 }
 
 pub type SearchStats {
-  /// We store extra metadata to allow us to prune the table if it
-  /// gets too large.
   SearchStats(
+    // At what amount of nodes searched did we start the current search?
     nodes_searched: Int,
-    // The node searched the last time we cleared the data
-    nodes_searched_at_init_time: Int,
-    // Same with this. The only reason we store this is so calculate the
-    // number of nodes searched per second (nps).
+    // When did we start the current search?
     init_time: timestamp.Timestamp,
-    hits: Int,
-    misses: Int,
+    // Transposition table hits
+    tt_hits: Int,
+    // Transposition table misses
+    tt_misses: Int,
+    // Number of times we had to prune
+    tt_prunes: Int,
+    // How many beta cutoffs we did per depth
+    beta_cutoffs: dict.Dict(Int, Int),
   )
 }
 
@@ -179,23 +192,46 @@ pub fn stats_increment_nodes_searched() -> State(SearchState, Nil) {
   )
 }
 
-/// "Zero" out the transposition table's log so that the next time we try
-/// to get its stats, they're calculated with respect to the current state.
-/// In particular, this is used when we want to reset the initial time for
-/// the NPS measure.
-///
-pub fn stats_checkpoint_time(
-  now: timestamp.Timestamp,
-) -> State(SearchState, Nil) {
+pub fn stats_add_beta_cutoffs(depth, n) -> State(SearchState, Nil) {
   use search_state: SearchState <- state.modify
-  let nodes_searched_at_init_time = search_state.stats.nodes_searched
+  let stats = search_state.stats
+  let beta_cutoffs = {
+    use maybe_old_n <- dict.upsert(stats.beta_cutoffs, depth)
+    case maybe_old_n {
+      Some(old_n) -> old_n + n
+      None -> n
+    }
+  }
+  SearchState(..search_state, stats: SearchStats(..stats, beta_cutoffs:))
+}
+
+/// "Zero" out the stats. This should be done only at the start of a search.
+///
+pub fn stats_zero(now: timestamp.Timestamp) -> State(SearchState, Nil) {
+  use search_state: SearchState <- state.modify
   let stats =
     SearchStats(
-      ..search_state.stats,
       init_time: now,
-      nodes_searched_at_init_time:,
+      nodes_searched: 0,
+      tt_hits: 0,
+      tt_misses: 0,
+      tt_prunes: 0,
+      beta_cutoffs: dict.new(),
     )
   SearchState(..search_state, stats:)
+}
+
+fn int_to_kilos(n: Int) {
+  let ks = n / 1000
+  let pt = n % 1000
+  int.to_string(ks) <> "." <> int.to_string(pt) <> "K"
+}
+
+fn int_to_friendly_string(n: Int) {
+  case n > 1000 {
+    True -> int_to_kilos(n)
+    False -> int.to_string(n)
+  }
 }
 
 pub fn stats_to_string(
@@ -206,36 +242,43 @@ pub fn stats_to_string(
   let stats = search_state.stats
   let nps = stats_nodes_per_second(search_state, now)
   ""
-  <> "Transposition Table Stats:\n"
+  <> "Search Stats:\n"
   <> "  NPS: "
-  <> nps |> float.to_precision(2) |> float.to_string
+  <> nps |> float.round |> int_to_friendly_string
   <> "\n"
   <> "  Nodes: "
-  <> stats.nodes_searched |> int.to_string
+  <> stats.nodes_searched |> int_to_friendly_string
   <> "\n"
-  <> "  Checkpoint: "
-  <> stats.nodes_searched_at_init_time |> int.to_string
-  <> "\n"
-  <> "  Nodes in Depth: "
-  <> { stats.nodes_searched - stats.nodes_searched_at_init_time }
-  |> int.to_string
-  <> "\n"
-  <> "  Size: "
-  <> dict.size(transposition) |> int.to_string
+  <> "  TT size: "
+  <> dict.size(transposition) |> int_to_friendly_string
   <> "\n"
   <> {
-    "  Cache hits, misses, %: "
-    <> int.to_string(stats.hits)
-    <> ", "
-    <> int.to_string(stats.misses)
-    <> ", "
+    "  TT hits/misses/%: "
+    <> int_to_friendly_string(stats.tt_hits)
+    <> "/"
+    <> int_to_friendly_string(stats.tt_misses)
+    <> "/"
     <> float.to_string(float.to_precision(
-      int.to_float(stats.hits)
+      int.to_float(stats.tt_hits)
         *. 100.0
-        /. int.to_float(stats.hits + stats.misses),
+        /. int.to_float(stats.tt_hits + stats.tt_misses),
       2,
     ))
     <> "%"
+    <> "\n"
+  }
+  <> "  TT prunes: "
+  <> stats.tt_prunes |> int_to_friendly_string
+  <> "\n"
+  <> {
+    "  Beta cutoffs:"
+    <> "\n    "
+    <> dict.to_list(stats.beta_cutoffs)
+    |> list.sort(fn(x, y) { int.compare(y.0, x.0) })
+    |> list.map(fn(x) {
+      "Depth " <> int.to_string(x.0) <> ": " <> int_to_friendly_string(x.1)
+    })
+    |> string.join("\n    ")
     <> "\n"
   }
 }
@@ -245,17 +288,28 @@ pub fn stats_nodes_per_second(
   now: timestamp.Timestamp,
 ) -> Float {
   let stats = search_state.stats
-  let dt =
-    timestamp.difference(stats.init_time, now)
-    |> duration.to_seconds
+  let assert Ok(dt) =
+    stats_delta_time_ms(search_state, now)
+    |> int.to_float
+    |> float.divide(1000.0)
+
   case dt {
-    0.0 -> 0.0
+    0.0 -> 1.0
     _ -> {
       let assert Ok(nps) =
-        { stats.nodes_searched - stats.nodes_searched_at_init_time }
+        stats.nodes_searched
         |> int.to_float
         |> float.divide(dt)
       nps
     }
   }
+}
+
+pub fn stats_delta_time_ms(
+  search_state: SearchState,
+  now: timestamp.Timestamp,
+) -> Int {
+  let duration = timestamp.difference(search_state.stats.init_time, now)
+  let #(s, ns) = duration.to_seconds_and_nanoseconds(duration)
+  { s * 1000 } + { ns / 1_000_000 }
 }

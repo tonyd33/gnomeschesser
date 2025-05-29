@@ -1358,7 +1358,30 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
   list.flatten([king_moves, regular_moves, en_passant_move, castling_moves])
 }
 
-pub fn give_better_name(game: Game) -> fn(square.Square, piece.Piece) -> Int {
+/// Read this function with a signature of:
+/// ```gleam
+/// fn(Game, Square, Piece) -> Int
+/// ```
+/// The translation can be done by uncurrying the function.
+/// (Bah, only in impure languages is such a distinction second-class!)
+///
+/// When read as such, this function can be interpreted as returns how
+/// many squares the `piece` at `square` "controls".
+///
+/// *IMPORTANT*: The piece at `square` should match the `piece` on the board!
+/// The reason it's still required is purely for optimization reasons: we use
+/// this function when looping over the board, in which we already have the
+/// square and piece and don't need to make another lookup on the square to
+/// get the piece.
+///
+/// There's a lot of logic similar to move generation logic in here, but it's
+/// not quite move generation: for example, rooks and bishops get to "xray"
+/// through themselves and through queens, and we don't check if this piece
+/// can actually even move, given that the king may be in check. However, if
+/// the piece is pinned to the king, the piece does indeed lose squares it
+/// controls, now only being able to control squares along the pin direction.
+///
+pub fn controls(game: Game) -> fn(square.Square, piece.Piece) -> Int {
   let us = game.active_color
   let them = player.opponent(us)
 
@@ -1415,47 +1438,6 @@ pub fn give_better_name(game: Game) -> fn(square.Square, piece.Piece) -> Int {
       piece.Pawn -> 0
     }
   }
-}
-
-pub fn xray_at(game: Game, from: square.Square) {
-  case dict.get(game.board, from) {
-    Ok(piece) -> {
-      let go_xrays = fn(rays) {
-        use acc, ray <- list.fold(rays, 0)
-        use acc, to <- list.fold_until(ray, acc)
-        case dict.get(game.board, to), piece.symbol {
-          // If we didn't hit anything, keep going
-          Error(Nil), _ -> list.Continue(acc + 1)
-          // If we're a queen and we hit anything, always stop
-          Ok(_), piece.Queen -> list.Stop(acc + 1)
-          // If we're not a queen and we hit something, xray through it if it's
-          // the same piece or its a queen
-          Ok(hit_piece), _
-            if hit_piece == piece || hit_piece.symbol == piece.Queen
-          -> list.Continue(acc + 1)
-          // Otherwise, stop at the first thing we hit
-          Ok(_), _ -> list.Stop(acc + 1)
-        }
-      }
-
-      case piece.symbol {
-        piece.Rook -> from |> square.rook_rays |> go_xrays
-        piece.Bishop -> from |> square.bishop_rays |> go_xrays
-        piece.Queen -> from |> square.queen_rays |> go_xrays
-        piece.Knight -> list.length(square.knight_moves(from))
-        piece.Pawn -> 0
-        piece.King -> 0
-      }
-    }
-    Error(Nil) -> 0
-  }
-}
-
-pub fn xrays(game: Game) {
-  let us = turn(game)
-  use acc, #(from, piece) <- list.fold(pieces(game), 0)
-  use <- bool.guard(piece.player != us, acc)
-  acc + xray_at(game, from)
 }
 
 // Zobrist below
