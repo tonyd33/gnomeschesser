@@ -413,12 +413,10 @@ fn do_negamax_alphabeta_failsoft(
       // The search on the child node caused a beta-cutoff while reducing the
       // depth. We have to retry the search at the proper depth.
       True, True -> {
-        // FIXME: Am I supposed to re-search with `tentative_evaluation` and
-        // `tentative_alpha`... or with the original search parameters...?
         use #(best_evaluation, alpha) <- state.do(go(
-          tentative_evaluation,
+          best_evaluation,
           depth - 1,
-          tentative_alpha,
+          alpha,
           beta,
         ))
         finish(best_evaluation, alpha, beta)
