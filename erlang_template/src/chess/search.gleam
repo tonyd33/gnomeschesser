@@ -327,7 +327,13 @@ fn do_negamax_alphabeta_failsoft(
     |> state.return
   })
 
-  use #(moves, nmoves) <- state.do(sorted_moves(game, depth, alpha, beta, game_history))
+  use #(moves, nmoves) <- state.do(sorted_moves(
+    game,
+    depth,
+    alpha,
+    beta,
+    game_history,
+  ))
 
   use <- bool.lazy_guard(nmoves == 0, fn() {
     // if checkmate/stalemate
