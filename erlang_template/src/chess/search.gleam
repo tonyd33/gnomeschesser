@@ -135,14 +135,14 @@ fn search(
   )
 
   // TODO: use a logging library for this?
-  use info <- state.do(
-    search_state.stats_to_string(_, now)
-    |> state.select,
-  )
-  echo current_depth
-  io.print_error(info)
+  // use info <- state.do(
+  //   search_state.stats_to_string(_, now)
+  //   |> state.select,
+  // )
+  // io.print_error(info)
 
-  process.send(search_subject, SearchStateUpdate(search_state:))
+  // Send the search update first! Doing it in the other order with large
+  // large transposition tables may be slow enough to miss a deadline.
   process.send(
     search_subject,
     SearchUpdate(
@@ -155,6 +155,7 @@ fn search(
       hashfull: dict.size(search_state.transposition) * 1000 / max_tt_size,
     ),
   )
+  process.send(search_subject, SearchStateUpdate(search_state:))
 
   case opts.max_depth {
     Some(max_depth) if current_depth >= max_depth -> {

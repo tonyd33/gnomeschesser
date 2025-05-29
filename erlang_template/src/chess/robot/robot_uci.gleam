@@ -173,10 +173,9 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
                     best_evaluation
 
                   let info_score = case score {
-                    // TODO: Give proper mate score
-                    xint.PosInf -> uci.ScoreMate(-1)
                     xint.Finite(score) -> uci.ScoreCentipawns(n: score)
-                    xint.NegInf -> uci.ScoreMate(-1)
+                    _ ->
+                      uci.ScoreMate(xint.sign(score) * list.length(best_line))
                   }
                   uci.GUICmdInfo([
                     uci.InfoDepth(depth),
