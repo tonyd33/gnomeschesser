@@ -26,6 +26,7 @@ pub fn new(now: timestamp.Timestamp) {
     transposition: dict.new(),
     history: dict.new(),
     stats: SearchStats(
+      total_nodes_searched: 0,
       nodes_searched: 0,
       init_time: now,
       tt_hits: 0,
@@ -117,7 +118,7 @@ pub fn transposition_insert(
 ) -> State(SearchState, Nil) {
   let #(depth, eval) = entry
   use search_state: SearchState <- state.modify
-  let last_accessed = search_state.stats.nodes_searched
+  let last_accessed = search_state.stats.total_nodes_searched
   let entry = transposition.Entry(depth:, eval:, last_accessed:)
   let transposition = dict.insert(search_state.transposition, hash, entry)
   SearchState(..search_state, transposition:)
@@ -139,7 +140,7 @@ pub fn transposition_prune(
         ByRecency(max_recency:) ->
           search_state.transposition
           |> dict.filter(fn(_, entry) {
-            search_state.stats.nodes_searched - entry.last_accessed
+            search_state.stats.total_nodes_searched - entry.last_accessed
             <= max_recency
           })
       }
@@ -168,6 +169,9 @@ fn transposition_prune_policy_met(
 
 pub type SearchStats {
   SearchStats(
+    // The total amount of nodes we searched across the lifecycle of an entire
+    // game.
+    total_nodes_searched: Int,
     // At what amount of nodes searched did we start the current search?
     nodes_searched: Int,
     // When did we start the current search?
@@ -188,7 +192,11 @@ pub fn stats_increment_nodes_searched() -> State(SearchState, Nil) {
   let stats = search_state.stats
   SearchState(
     ..search_state,
-    stats: SearchStats(..stats, nodes_searched: stats.nodes_searched + 1),
+    stats: SearchStats(
+      ..stats,
+      total_nodes_searched: stats.total_nodes_searched + 1,
+      nodes_searched: stats.nodes_searched + 1,
+    ),
   )
 }
 
@@ -206,12 +214,15 @@ pub fn stats_add_beta_cutoffs(depth, n) -> State(SearchState, Nil) {
 }
 
 /// "Zero" out the stats. This should be done only at the start of a search.
+/// The only thing that's left untouched is `total_nodes_searched` which is
+/// currently still needed for transposition table pruning.
 ///
 pub fn stats_zero(now: timestamp.Timestamp) -> State(SearchState, Nil) {
   use search_state: SearchState <- state.modify
   let stats =
     SearchStats(
       init_time: now,
+      total_nodes_searched: search_state.stats.total_nodes_searched,
       nodes_searched: 0,
       tt_hits: 0,
       tt_misses: 0,
