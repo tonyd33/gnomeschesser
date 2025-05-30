@@ -267,6 +267,30 @@ fn do_negamax_alphabeta_failsoft(
     use score <- interruptable.map(quiesce(game, alpha, beta))
     Evaluation(score:, node_type: evaluation.PV, best_move: None, best_line: [])
   })
+  let is_check = game.is_check(game, game.turn(game))
+
+  let rfp_evaluation = {
+    let should_do_rfp = depth > 1 && !is_check
+    use <- bool.guard(!should_do_rfp, Error(Nil))
+
+    let score =
+      evaluate.game(game)
+      |> xint.multiply(evaluate.player(game.turn(game)) |> xint.from_int)
+    // TODO: Tweak margin
+    let margin = 50 * depth
+
+    case xint.gte(score, xint.add(beta, xint.from_int(margin))) {
+      True ->
+        Ok(Evaluation(
+          score:,
+          best_move: None,
+          best_line: [],
+          node_type: evaluation.Cut,
+        ))
+      False -> Error(Nil)
+    }
+  }
+  use <- result.lazy_unwrap(result.map(rfp_evaluation, interruptable.return))
 
   let is_check = game.is_check(game, game.turn(game))
   // Null move pruning: if a null move was made (i.e. we pass the turn) yet we
