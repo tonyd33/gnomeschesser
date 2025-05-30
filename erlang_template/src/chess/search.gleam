@@ -337,10 +337,12 @@ fn do_negamax_alphabeta_failsoft(
       // Disable NMP during "endgame". This is not accurate, but doing a phase
       // calculation like we do in evaluation is expensive: it requires us to
       // do an entire iteration over the pieces.
-      && game.fullmove_number(game) < 30
+      // TODO: See if we can get a non-expensive endgame check and give more
+      // specific conditions so we can do more NMPs
+      && game.fullmove_number(game) < 20
     use <- bool.guard(!should_do_nmp, state.return(Error(Nil)))
 
-    let r = 3
+    let r = 4
     use evaluation <- state.map(
       negamax_alphabeta_failsoft(
         game.reverse_turn(game),
