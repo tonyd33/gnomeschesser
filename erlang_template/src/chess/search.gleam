@@ -296,6 +296,7 @@ fn do_negamax_alphabeta_failsoft(
   // Null move pruning: if a null move was made (i.e. we pass the turn) yet we
   // caused a beta cutoff, we can be pretty sure that any legal move would
   // cause a beta cutoff. In such a case, return early.
+  // https://www.chessprogramming.org/Null_Move_Pruning
   use null_evaluation <- interruptable.do({
     let should_do_nmp =
       !is_check
