@@ -71,6 +71,7 @@ void PGBuilder::startPgn() {
   keep_game = true;
   white_elo = -1;
   black_elo = -1;
+  plies = 0;
 
   static int last_num_entries_logged = 0;
   if (entries.size() - last_num_entries_logged > 100000) {
@@ -100,7 +101,7 @@ void PGBuilder::startMoves() {
 }
 
 void PGBuilder::move(std::string_view san, std::string_view comment) {
-  if (!keep_game)
+  if (!keep_game || plies > max_plies)
     return;
 
   Move move = uci::parseSan(board, san);
@@ -110,6 +111,7 @@ void PGBuilder::move(std::string_view san, std::string_view comment) {
   entries.push_back(be);
 
   board.makeMove(move);
+  plies++;
 }
 
 void PGBuilder::endPgn() {}

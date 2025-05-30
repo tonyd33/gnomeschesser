@@ -7,7 +7,8 @@
 #include <cstdlib>
 #include <fstream>
 
-int build(string pgn, string bin, int elo_cutoff, int max_elo_diff) {
+int build(string pgn, string bin, int max_plies, int elo_cutoff,
+          int max_elo_diff) {
   ifstream pgn_strm(pgn);
   ofstream bin_strm(bin, ios::binary);
 
@@ -23,6 +24,7 @@ int build(string pgn, string bin, int elo_cutoff, int max_elo_diff) {
   PGBuilder pg_builder;
   pg_builder.elo_cutoff = elo_cutoff;
   pg_builder.max_elo_diff = max_elo_diff;
+  pg_builder.max_plies = max_plies;
 
   pgn::StreamParser parser(pgn_strm);
   auto error = parser.readGames(pg_builder);
@@ -77,12 +79,11 @@ int codegen(string bin, string out) {
 
   auto &group_key = reduced_entries[0].key;
   vector<struct BookEntry> group;
-  out_strm << "pub fn move_lookup(x) {" << endl;
-  out_strm << "case x {" << endl;
+  out_strm << "pub const shit = [" << endl;
   for (auto &be : reduced_entries) {
     if (be.key != group_key) {
       // New group. Emit the current group and set new group
-      out_strm << "0x" << hex << swap64(be.key) << "->[";
+      out_strm << "#(0x" << hex << swap64(be.key) << ",[";
       // Iterate through all of the group except last
       for (int j = 0; j < group.size() - 1; j++) {
         auto &ge = group[j];
@@ -93,7 +94,7 @@ int codegen(string bin, string out) {
       // Last one has no comma
       // TODO: Consider adding weight
       out_strm << "0x" << hex << swap16(group[group.size() - 1].move);
-      out_strm << "]" << endl;
+      out_strm << "])," << endl;
 
       group_key = be.key;
       group.clear();
@@ -102,9 +103,7 @@ int codegen(string bin, string out) {
     group.push_back(be);
   }
 
-  out_strm << "_->[]" << endl; // catch-all
-  out_strm << "}" << endl;     // end case
-  out_strm << "}" << endl;     // end function
+  out_strm << "]" << endl;
 
   out_strm.close();
   bin_strm.close();
@@ -160,6 +159,10 @@ int main(int argc, char **argv) {
   build_command.add_argument("--bin")
       .default_value("polyglot.bin")
       .help("Polyglot file to output to");
+  build_command.add_argument("--max-plies")
+      .default_value(16)
+      .scan<'i', int>()
+      .help("Max plies to take from each game");
   build_command.add_argument("--elo-cutoff")
       .default_value(2200)
       .scan<'i', int>()
@@ -179,7 +182,7 @@ int main(int argc, char **argv) {
 
   argparse::ArgumentParser merge_command("merge");
   merge_command.add_description("Merge Polyglot files");
-  merge_command.add_argument("--bins").nargs(1, 128).required().help(
+  merge_command.add_argument("--bins").nargs(1, 256).required().help(
       "Polyglot files to merge");
   merge_command.add_argument("--output").required().help("File to merge into");
 
@@ -218,7 +221,8 @@ int main(int argc, char **argv) {
     string bin = build_command.get("--bin");
     auto elo_cutoff = build_command.get<int>("--elo-cutoff");
     auto max_elo_diff = build_command.get<int>("--max-elo-diff");
-    return build(pgn, bin, elo_cutoff, max_elo_diff);
+    auto max_plies = build_command.get<int>("--max-plies");
+    return build(pgn, bin, max_plies, elo_cutoff, max_elo_diff);
   } else if (program.is_subcommand_used(codegen_command)) {
     string bin = codegen_command.get("--bin");
     string out = codegen_command.get("--output");

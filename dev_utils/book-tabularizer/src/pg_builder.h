@@ -9,7 +9,7 @@ public:
   vector<struct BookEntry> entries;
   int elo_cutoff = 0;
   int max_elo_diff = 10000;
-  int max_ply = 20;
+  int max_plies = 20;
 
   PGBuilder();
 
@@ -33,5 +33,6 @@ private:
 
   int black_elo = -1;
   int white_elo = -1;
+  int plies = 0;
   bool keep_game = true;
 };
