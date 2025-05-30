@@ -327,6 +327,40 @@ fn do_negamax_alphabeta_failsoft(
     |> state.return
   })
 
+  let is_check = game.is_check(game, game.turn(game))
+  // Null move pruning: if a null move was made (i.e. we pass the turn) yet we
+  // caused a beta cutoff, we can be pretty sure that any legal move would
+  // cause a beta cutoff. In such a case, return early.
+  use null_evaluation <- state.do({
+    let should_do_nmp =
+      !is_check
+      // Disable NMP during "endgame". This is not accurate, but doing a phase
+      // calculation like we do in evaluation is expensive: it requires us to
+      // do an entire iteration over the pieces.
+      // TODO: See if we can get a non-expensive endgame check and give more
+      // specific conditions so we can do more NMPs
+      && game.fullmove_number(game) < 20
+    use <- bool.guard(!should_do_nmp, state.return(Error(Nil)))
+
+    let r = 4
+    use evaluation <- state.map(
+      negamax_alphabeta_failsoft(
+        game.reverse_turn(game),
+        depth - 1 - r,
+        xint.negate(beta),
+        xint.negate(xint.subtract(beta, xint.from_int(1))),
+        game_history.insert(game_history, game),
+      )
+      |> state.map(evaluation.negate),
+    )
+
+    case xint.gte(evaluation.score, beta) {
+      True -> Ok(Evaluation(..evaluation, node_type: evaluation.Cut))
+      False -> Error(Nil)
+    }
+  })
+  use <- result.lazy_unwrap(result.map(null_evaluation, state.return))
+
   use #(moves, nmoves) <- state.do(sorted_moves(
     game,
     depth,
@@ -337,7 +371,7 @@ fn do_negamax_alphabeta_failsoft(
 
   use <- bool.lazy_guard(nmoves == 0, fn() {
     // if checkmate/stalemate
-    let score = case game.is_check(game, game.turn(game)) {
+    let score = case is_check {
       True -> xint.NegInf
       False -> xint.Finite(0)
     }
@@ -353,16 +387,15 @@ fn do_negamax_alphabeta_failsoft(
       #(Evaluation(xint.NegInf, evaluation.PV, None, []), alpha, 0),
     )
 
-    // TODO: Limit conditions
+    // TODO: Limit conditions more
+    // https://www.chessprogramming.org/Late_Move_Reductions#Common_Conditions
     let context = move.get_context(move)
     let should_reduce =
       idx > 1
       && depth > 2
       // Don't reduce on captures
       && !option.is_some(context.capture)
-      // Don't reduce while "in check". This is obviously inaccurate, but
-      // checking for check is expensive
-      && nmoves > 4
+      && !is_check
     let depth_reduction = case should_reduce {
       True -> 1
       _ -> 0

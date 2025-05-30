@@ -14,7 +14,6 @@ import gleam/result
 import gleam/set
 import gleam/string
 import util/direction
-import util/yielder
 
 pub const start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
@@ -217,11 +216,16 @@ pub fn fullmove_number(game: Game) -> Int {
 
 pub fn reverse_turn(game: Game) -> Game {
   let them = player.opponent(game.active_color)
-  Game(..game, active_color: them)
+  let hash = int.bitwise_exclusive_or(game.hash, hashes.780)
+  Game(..game, active_color: them, hash:)
 }
 
 pub fn set_turn(game: Game, player: player.Player) -> Game {
-  Game(..game, active_color: player)
+  let hash = case game.active_color == player {
+    True -> game.hash
+    False -> int.bitwise_exclusive_or(game.hash, hashes.780)
+  }
+  Game(..game, active_color: player, hash:)
 }
 
 pub fn to_fen(game: Game) -> String {
@@ -790,9 +794,9 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     _, _ -> halfmove_clock + 1
   }
 
-  // Turn hash
   let hash =
     hash
+    // Turn hash
     |> int.bitwise_exclusive_or(hashes.780)
     // En passant hash
     |> int.bitwise_exclusive_or(ep_hash(prev_en_passant_target_square))
