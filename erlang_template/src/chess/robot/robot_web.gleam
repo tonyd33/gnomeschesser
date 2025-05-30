@@ -4,16 +4,17 @@ import chess/search
 import chess/search/evaluation
 import chess/search/search_state
 import chess/search/transposition
+import chess/tablebase
 import gleam/bool
 import gleam/dict
 import gleam/erlang/process.{type Subject}
 import gleam/function
 import gleam/io
-import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/time/timestamp
 import util/dict_addons
+import util/xint
 
 pub opaque type Robot {
   Robot(main_subject: Subject(RobotMessage))
@@ -33,6 +34,8 @@ type RobotState {
     searcher: #(Option(process.Pid), Subject(search.SearchMessage)),
     search_state: search_state.SearchState,
     history: List(game.Game),
+    tablebase: tablebase.Tablebase,
+    tablebasehit: Option(move.Move(move.ValidInContext)),
   )
 }
 
@@ -126,6 +129,8 @@ fn create_robot_thread() -> Subject(RobotMessage) {
           searcher: #(Some(search_pid), search_subject),
           search_state:,
           history: history,
+          tablebase: tablebase.load(),
+          tablebasehit: None,
         ),
         // This selector allows is to merge the different subjects (like from the searcher) into one selector
         process.new_selector()
@@ -147,9 +152,24 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
       game.apply(state.game, move)
       |> update_state_with_new_game(state, _)
     GetBestEvaluation(response:) -> {
-      state.best_evaluation
-      |> option.to_result(Nil)
-      |> process.send(response, _)
+      case state.tablebasehit {
+        Some(move) -> {
+          echo "got here"
+          evaluation.Evaluation(
+            score: xint.from_int(0),
+            best_move: Some(move),
+            best_line: [],
+            node_type: evaluation.PV,
+          )
+          |> Ok
+          |> process.send(response, _)
+        }
+        None -> {
+          state.best_evaluation
+          |> option.to_result(Nil)
+          |> process.send(response, _)
+        }
+      }
 
       io.println_error("Requested best move")
       //echo state.best_evaluation
@@ -220,6 +240,7 @@ fn update_state_with_new_game(state: RobotState, game: game.Game) -> RobotState 
     Ok(transposition.Entry(_, best_evaluation, _)) -> Some(best_evaluation)
     Error(Nil) -> None
   }
+  let tablebasehit = option.from_result(tablebase.query(state.tablebase, game))
 
   RobotState(
     searcher: #(Some(search_pid), state.searcher.1),
@@ -227,5 +248,7 @@ fn update_state_with_new_game(state: RobotState, game: game.Game) -> RobotState 
     best_evaluation:,
     search_state: state.search_state,
     history:,
+    tablebase: state.tablebase,
+    tablebasehit:,
   )
 }

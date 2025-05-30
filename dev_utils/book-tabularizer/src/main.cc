@@ -78,14 +78,27 @@ int codegen(string bin, string out) {
 
   auto &group_key = reduced_entries[0].key;
   vector<struct BookEntry> group;
-  auto emit_group = [&group, &out_strm]() {
-    if (group.size() == 0) return;
 
+  // Sorts by weight, descending
+  auto cmp_by_weight = [](struct BookEntry &be1, struct BookEntry &be2) {
+    return be1.weight > be2.weight;
+  };
+
+  // Emit a group. Each group is a collection of entries with the same key.
+  auto emit_group = [&group, &out_strm, &cmp_by_weight]() {
+    if (group.size() == 0)
+      return;
+
+    // Sort the entries by weight, descending
+    sort(group.begin(), group.end(), cmp_by_weight);
+
+    // NOTE: We emit all the moves, but we may consider only emitting a few,
+    // or maybe even only one.
     out_strm << "#(0x" << hex << group[0].key << ",[";
     // Iterate through all of the group except last
     for (int j = 0; j < group.size() - 1; j++) {
       auto &ge = group[j];
-      // TODO: Consider adding weight
+      // NOTE: Weight is omitted here, but we may want that.
       out_strm << "0x" << hex << ge.move << ",";
     }
 

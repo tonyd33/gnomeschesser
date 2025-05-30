@@ -4,6 +4,7 @@ import chess/player
 import chess/search
 import chess/search/evaluation
 import chess/search/search_state
+import chess/tablebase
 import chess/uci
 import gleam/bool
 import gleam/dict
@@ -57,6 +58,8 @@ type RobotState {
     searcher: #(Option(process.Pid), Subject(search.SearchMessage)),
     search_state: search_state.SearchState,
     subject: Subject(RobotMessage),
+    tablebase: tablebase.Tablebase,
+    sent_reply: Bool,
   )
 }
 
@@ -81,6 +84,8 @@ fn create_robot_thread() -> Subject(RobotMessage) {
           searcher: #(None, search_subject),
           search_state:,
           subject: robot_subject,
+          tablebase: tablebase.load(),
+          sent_reply: False,
         ),
         // This selector allows is to merge the different subjects (like from the searcher) into one selector
         process.new_selector()
@@ -108,7 +113,7 @@ fn set_fen(state, fen, moves) {
       Ok(#(head1, [head, ..tail]))
     })
 
-    Ok(RobotState(..state, game: Some(game), history:))
+    Ok(RobotState(..state, game: Some(game), history:, sent_reply: False))
   }
 
   case robot_result {
@@ -149,6 +154,7 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
             game: None,
             history: [],
             best_evaluation: None,
+            sent_reply: False,
           )
         }
         IsReady -> {
@@ -167,6 +173,8 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
               nps:,
               hashfull:,
             ) -> {
+              use <- bool.guard(state.sent_reply, state)
+
               case option.map(state.game, game.equal(_, game)) {
                 Some(True) -> {
                   let evaluation.Evaluation(score:, best_move:, best_line:, ..) =
@@ -227,6 +235,20 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
           start_searcher(state, search.default_search_opts)
         }
         GoGeneral(time, depth) -> {
+          let assert Some(game) = state.game
+          let move = tablebase.query(state.tablebase, game)
+
+          case move {
+            Ok(move) -> {
+              uci.GUICmdBestMove(move: move.to_lan(move), ponder: None)
+              |> uci.serialize_gui_cmd
+              |> io.println
+
+              Nil
+            }
+            Error(_) -> Nil
+          }
+
           case time {
             // TODO: it's possible this will mess up if there's no valid game state
             // Then we won't have a searcher, but we will have a Stop message
@@ -238,7 +260,10 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
           }
 
           let search_opts = search.SearchOpts(depth)
-          start_searcher(state, search_opts)
+          RobotState(
+            ..start_searcher(state, search_opts),
+            sent_reply: result.is_ok(move),
+          )
         }
         GoInfinite -> start_searcher(state, search.default_search_opts)
         Stop -> {
@@ -247,23 +272,26 @@ fn main_loop(state: RobotState, update: process.Selector(RobotMessage)) {
             process.kill(pid)
           })
 
-          case state.best_evaluation {
+          case state.best_evaluation, state.sent_reply {
             Some(evaluation.Evaluation(
               score: _,
               node_type: _,
               best_move: Some(move),
               best_line: _,
-            )) ->
+            )),
+              False
+            ->
               uci.GUICmdBestMove(move: move.to_lan(move), ponder: None)
               |> uci.serialize_gui_cmd
               |> io.println
-            _ -> Nil
+            _, _ -> Nil
           }
 
           RobotState(
             ..state,
             searcher: #(None, state.searcher.1),
             best_evaluation: None,
+            sent_reply: True,
           )
         }
       }
