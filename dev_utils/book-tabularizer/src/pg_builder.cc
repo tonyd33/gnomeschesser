@@ -29,13 +29,29 @@
  * that in that case one might as well delete the entry from the book.
  */
 uint16_t encode_move(Move &move) {
-  uint8_t to_file = move.to().file();
-  uint8_t to_row = move.to().rank();
-  uint8_t from_file = move.from().file();
-  uint8_t from_row = move.from().rank();
+  auto from = move.from();
+  auto to = move.to();
+  uint8_t promotion_piece = 0;
 
-  uint8_t promotion_piece;
-  if (move.typeOf() == Move::PROMOTION) {
+  if (move.typeOf() == Move::CASTLING) {
+    if (from == Square::SQ_E1 && to == Square::SQ_G1) {
+      // White short
+      from = Square::SQ_E1;
+      to = Square::SQ_H1;
+    } else if (from == Square::SQ_E1 && to == Square::SQ_C1) {
+      // White long
+      from = Square::SQ_E1;
+      to = Square::SQ_A1;
+    } else if (from == Square::SQ_E8 && to == Square::SQ_G8) {
+      // Black short
+      from = Square::SQ_E8;
+      to = Square::SQ_H8;
+    } else if (from == Square::SQ_E8 && to == Square::SQ_C8) {
+      // Black long
+      from = Square::SQ_E8;
+      to = Square::SQ_H8;
+    }
+  } else if (move.typeOf() == Move::PROMOTION) {
     switch (move.promotionType()) {
     case PieceType(PieceType::KNIGHT):
       promotion_piece = 1;
@@ -50,15 +66,19 @@ uint16_t encode_move(Move &move) {
       promotion_piece = 4;
       break;
     }
-  } else {
-    promotion_piece = 0;
   }
 
-  uint16_t encoded = ((promotion_piece & ((1U << 3) - 1)) << 12) |
-                     ((from_row & ((1U << 3) - 1)) << 9) |
-                     ((from_file & ((1U << 3) - 1)) << 6) |
-                     ((to_row & ((1U << 3) - 1)) << 3) |
-                     ((to_file & ((1U << 3) - 1)));
+  uint16_t to_file = to.file();
+  uint16_t to_row = to.rank();
+  uint16_t from_file = from.file();
+  uint16_t from_row = from.rank();
+
+  uint16_t encoded =
+    ( to_file                & 0b0000000000000111) |
+    ((to_row          <<  3) & 0b0000000000111000) |
+    ((from_file       <<  6) & 0b0000000111000000) |
+    ((from_row        <<  9) & 0b0000111000000000) |
+    ((promotion_piece << 12) & 0b0111000000000000);
 
   return encoded;
 }

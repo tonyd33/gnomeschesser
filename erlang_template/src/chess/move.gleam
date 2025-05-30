@@ -2,7 +2,9 @@ import chess/game/castle
 import chess/piece
 import chess/player
 import chess/square
+import gleam/int
 import gleam/option.{type Option, None, Some}
+import gleam/result
 import gleam/string
 
 /// Validated from a game
@@ -103,6 +105,34 @@ pub fn from_lan(lan: String) -> Move(Pseudo) {
     Ok(from), Ok(to) -> new_pseudo(from:, to:, promotion:)
     _, _ -> panic as { lan <> " is an invalid lan" }
   }
+}
+
+/// Decode a move according to the polyglot format:
+/// http://hgm.nubati.net/book_format.html
+///
+///
+pub fn decode_pg(move: Int) -> Result(Move(Pseudo), Nil) {
+  let to_file = int.bitwise_and(move, 0b111)
+  let to_rank = int.bitwise_and(move, 0b111_000) |> int.bitwise_shift_right(3)
+  let from_file =
+    int.bitwise_and(move, 0b111_000_000) |> int.bitwise_shift_right(6)
+  let from_rank =
+    int.bitwise_and(move, 0b111_000_000_000) |> int.bitwise_shift_right(9)
+  let promotion_piece =
+    int.bitwise_and(move, 0b111_000_000_000_000) |> int.bitwise_shift_right(12)
+
+  use from <- result.try(square.from_rank_file(from_rank, from_file))
+  use to <- result.try(square.from_rank_file(to_rank, to_file))
+  use promotion <- result.try(case promotion_piece {
+    0 -> Ok(None)
+    1 -> Ok(Some(piece.Knight))
+    2 -> Ok(Some(piece.Bishop))
+    3 -> Ok(Some(piece.Rook))
+    4 -> Ok(Some(piece.Queen))
+    _ -> Error(Nil)
+  })
+
+  Ok(Move(from, to, promotion, None))
 }
 
 /// Compares equality but don't compare the context

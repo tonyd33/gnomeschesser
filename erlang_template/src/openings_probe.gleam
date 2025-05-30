@@ -1,13 +1,19 @@
-import gleam/list
-import chess/tables
 import chess/game
+import chess/move
+import chess/table.{table}
+import gleam/dict
+import gleam/io
+import gleam/list
+import gleam/result
 
 pub fn main() {
   let assert Ok(game) = game.load_fen(game.start_fen)
-  echo "I am alive"
   let hash = game.hash(game)
-  echo list.filter(tables.shit, fn(x) {
-    x.0 == hash
-  })
-  echo "Done"
+  let tbl = dict.from_list(table)
+  let encoded_moves = dict.get(tbl, hash)
+  encoded_moves
+  |> result.unwrap([])
+  |> list.map(move.decode_pg)
+  |> list.map(result.map(_, move.to_lan))
+  |> list.each(io.debug)
 }

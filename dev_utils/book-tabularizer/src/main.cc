@@ -3,7 +3,6 @@
 #include "pg_builder.h"
 #include "polyglot.h"
 #include "tinylogger.h"
-#include "util.h"
 #include <cstdlib>
 #include <fstream>
 
@@ -79,22 +78,32 @@ int codegen(string bin, string out) {
 
   auto &group_key = reduced_entries[0].key;
   vector<struct BookEntry> group;
-  out_strm << "pub const shit = [" << endl;
+  auto emit_group = [&group, &out_strm]() {
+    if (group.size() == 0) return;
+
+    out_strm << "#(0x" << hex << group[0].key << ",[";
+    // Iterate through all of the group except last
+    for (int j = 0; j < group.size() - 1; j++) {
+      auto &ge = group[j];
+      // TODO: Consider adding weight
+      out_strm << "0x" << hex << ge.move << ",";
+    }
+
+    // Last one has no comma. Over a large amount of tables, this is bound
+    // to save a few KB to a few MB.
+    // NOTE: Weight is omitted here, but we may want that.
+    out_strm << "0x" << hex << group[group.size() - 1].move;
+    // If this is the last group, we'll still add the trailing comma. This will
+    // mean we'll have only one unnecessary comma for this file, which is
+    // acceptable.
+    out_strm << "]),";
+  };
+
+  out_strm << "pub const table = [";
   for (auto &be : reduced_entries) {
     if (be.key != group_key) {
       // New group. Emit the current group and set new group
-      out_strm << "#(0x" << hex << swap64(be.key) << ",[";
-      // Iterate through all of the group except last
-      for (int j = 0; j < group.size() - 1; j++) {
-        auto &ge = group[j];
-        // TODO: Consider adding weight
-        out_strm << "0x" << hex << swap16(ge.move) << ",";
-      }
-
-      // Last one has no comma
-      // TODO: Consider adding weight
-      out_strm << "0x" << hex << swap16(group[group.size() - 1].move);
-      out_strm << "])," << endl;
+      emit_group();
 
       group_key = be.key;
       group.clear();
@@ -102,7 +111,7 @@ int codegen(string bin, string out) {
 
     group.push_back(be);
   }
-
+  emit_group();
   out_strm << "]" << endl;
 
   out_strm.close();

@@ -21,13 +21,17 @@ vector<struct BookEntry> read_pg_file(ifstream &strm) {
 
   vector<struct BookEntry> entries;
   struct BookEntry be;
-  while (!strm.eof()) {
+  while (1) {
     strm.read((char *)&be, sizeof(struct BookEntry));
     be.key = swap64(be.key);
     be.move = swap16(be.move);
     be.weight = swap16(be.weight);
     be.learn = swap32(be.learn);
-    entries.push_back(be);
+    if (strm.eof()) {
+      break;
+    } else {
+      entries.push_back(be);
+    }
   }
 
   return entries;
