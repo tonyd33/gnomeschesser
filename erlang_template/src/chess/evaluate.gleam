@@ -131,12 +131,12 @@ fn add_batched_scores(s1: BatchedScores, s2: BatchedScores) {
   )
 }
 
-fn compute_batched_scores_at(white_xray, black_xray, square, piece: piece.Piece) {
+fn compute_batched_scores_at(white_controls, black_controls, square, piece) {
   let nmoves = case piece {
     piece.Piece(_, piece.Pawn) -> 0
     piece.Piece(_, piece.King) -> 0
-    piece.Piece(player.White, _) -> white_xray(square, piece)
-    piece.Piece(player.Black, _) -> black_xray(square, piece)
+    piece.Piece(player.White, _) -> white_controls(square, piece)
+    piece.Piece(player.Black, _) -> black_controls(square, piece)
   }
   BatchedScores(
     npm: common.non_pawn_piece_value(piece, common.MidGame),
@@ -150,13 +150,13 @@ fn compute_batched_scores_at(white_xray, black_xray, square, piece: piece.Piece)
 }
 
 pub fn compute_batched_scores(game: game.Game) {
-  let white_xray = game.set_turn(game, player.White) |> game.give_better_name
-  let black_xray = game.set_turn(game, player.Black) |> game.give_better_name
+  let white_controls = game.set_turn(game, player.White) |> game.controls
+  let black_controls = game.set_turn(game, player.Black) |> game.controls
 
   use total_score, #(square, piece) <- list.fold(
     game.pieces(game),
     empty_batched_scores,
   )
-  compute_batched_scores_at(white_xray, black_xray, square, piece)
+  compute_batched_scores_at(white_controls, black_controls, square, piece)
   |> add_batched_scores(total_score)
 }

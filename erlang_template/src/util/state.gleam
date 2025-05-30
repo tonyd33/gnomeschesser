@@ -7,8 +7,6 @@ pub type State(s, a) {
   State(run: fn(s) -> #(a, s))
 }
 
-/// Equivalent to Haskell `fmap`
-///
 pub fn map(state: State(s, a), f: fn(a) -> b) -> State(s, b) {
   State(run: fn(s) {
     let #(a, s_) = state.run(s)
@@ -16,8 +14,6 @@ pub fn map(state: State(s, a), f: fn(a) -> b) -> State(s, b) {
   })
 }
 
-/// pure
-///
 pub fn pure(a: a) -> State(s, a) {
   State(run: fn(s) { #(a, s) })
 }
@@ -26,8 +22,6 @@ pub fn return(a: a) -> State(s, a) {
   pure(a)
 }
 
-/// Equivalent to Haskell `>>=`
-///
 pub fn bind(state: State(s, a), f: fn(a) -> State(s, b)) -> State(s, b) {
   State(run: fn(s) {
     let #(a, s_) = state.run(s)
@@ -37,6 +31,20 @@ pub fn bind(state: State(s, a), f: fn(a) -> State(s, b)) -> State(s, b) {
 }
 
 pub const do = bind
+
+/// `>>` operator. Run a state and discard its result and run the next
+/// state.
+///
+/// It may have been smarter to call this `do` instead of calling `bind` `do``,
+/// but we didn't do that and now `do` has a reserved meaning. Oh well.
+///
+pub fn discard(state: State(s, a), f: fn() -> State(s, b)) {
+  State(run: fn(s) {
+    let #(_, s_) = state.run(s)
+    let sb = f()
+    sb.run(s_)
+  })
+}
 
 pub fn select(f: fn(s) -> a) -> State(s, a) {
   State(run: fn(s) { #(f(s), s) })
