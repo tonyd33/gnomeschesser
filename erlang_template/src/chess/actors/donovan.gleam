@@ -4,27 +4,44 @@
 //// Donovan structures the search in an easily-interruptable manner so that
 //// he's responsive to messages.
 ////
+//// Donovan is extremely dumb though, only exposing a very basic interface to
+//// stop and start searches and executes his controller's callbacks. Even
+//// information flow out of this thread is dictated by the controller's
+//// callbacks.
+////
 
 import chess/game.{type Game}
+import chess/search
 import chess/search/evaluation.{type Evaluation, Evaluation}
-import chess/search/search_state2.{type SearchState, SearchState}
-import chess/search2
-import gleam/dict
+import chess/search/search_state.{type SearchState, SearchState}
 import gleam/erlang/process.{type Subject}
 import gleam/option.{type Option, None, Some}
+import gleam/result
 import gleam/time/timestamp
-import util/interruptable_state.{type InterruptableState} as interruptable
-import util/state.{type State, State}
+import util/dict_addons
+import util/interruptable_state as interruptable
+import util/state
+import util/xint
 
 pub opaque type Donovan {
   Donovan(search_state: SearchState)
 }
 
 pub type Message {
-  Go(game: Game, reply_with: Subject(Result(Evaluation, Nil)))
-  /// Stop the search immediately.
+  Go(
+    game: Game,
+    history: List(Game),
+    movetime: Option(Int),
+    depth: Option(Int),
+    // Callback to be executed *in Donovan's thread* when a checkpoint is
+    // made (when an iteration of deepening is complete).
+    on_checkpoint: fn(SearchState, evaluation.Depth, Evaluation) -> Nil,
+    // Callback to be executed *in Donovan's thread* when the search has
+    // terminated for whatever reason.
+    on_done: fn(SearchState, Game, Evaluation) -> Nil,
+  )
   Stop
-  Shutdown
+  Die
 }
 
 pub fn start() {
@@ -41,43 +58,60 @@ pub fn start() {
 }
 
 fn new() {
-  Donovan(search_state: search_state2.new(timestamp.system_time()))
+  Donovan(search_state: search_state.new(timestamp.system_time()))
 }
 
 fn loop(donovan: Donovan, recv_chan: Subject(Message)) -> Nil {
   let r = case process.receive_forever(recv_chan) {
-    Go(game, send_chan) -> {
-      let interrupt = fn() {
+    Go(game, history, movetime, depth, on_checkpoint, on_done) -> {
+      let interrupt = fn(_) {
         case process.receive(recv_chan, 0) {
           Ok(Stop) -> True
           _ -> False
         }
       }
 
-      let #(evaluation, new_state) =
+      // If movetime is set, set a timer to stop after movetime.
+      // Consider doing this timer on Blake if this is somehow unreliable
+      // on the searcher thread.
+      // TODO: Consider using deadlines instead and calculating time more
+      // accurately.
+      case movetime {
+        Some(movetime) -> {
+          process.send_after(recv_chan, { movetime * 95 } / 100, Stop)
+          Nil
+        }
+        None -> Nil
+      }
+
+      let #(evaluation, #(_, new_state)) =
         {
           let now = timestamp.system_time()
-          use <- state.discard({
-            use search_state <- state.modify
-            SearchState(..search_state, interrupt:)
-          })
-          use <- state.discard(search_state2.stats_zero(now))
+          use <- interruptable.discard(
+            interruptable.from_state(search_state.stats_zero(now)),
+          )
 
-          search2.search_loop(
+          search.checkpointed_iterative_deepening(
             game,
             1,
-            search2.SearchOpts(max_depth: None),
-            dict.new(),
+            search.SearchOpts(max_depth: depth),
+            history |> dict_addons.zip_dict_by(game.hash),
+            on_checkpoint,
           )
         }
-        |> state.go(donovan.search_state)
+        |> state.go(#(interrupt, donovan.search_state))
 
-      process.send(send_chan, evaluation)
+      let evaluation =
+        result.unwrap(
+          evaluation,
+          Evaluation(xint.NegInf, evaluation.PV, None, []),
+        )
+      on_done(new_state, game, evaluation)
 
-      Ok(Donovan(..donovan, search_state: new_state))
+      Ok(Donovan(search_state: new_state))
     }
     Stop -> Ok(donovan)
-    Shutdown -> Error(Nil)
+    Die -> Error(Nil)
   }
 
   case r {

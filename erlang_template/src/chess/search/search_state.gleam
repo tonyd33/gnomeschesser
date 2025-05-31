@@ -17,6 +17,8 @@ pub type SearchState {
   SearchState(
     transposition: transposition.Table,
     history: dict.Dict(#(square.Square, piece.Piece), Int),
+    // What iteration of iterative deepening are we on right now?
+    iteration_depth: Int,
     stats: SearchStats,
   )
 }
@@ -25,6 +27,7 @@ pub fn new(now: timestamp.Timestamp) {
   SearchState(
     transposition: dict.new(),
     history: dict.new(),
+    iteration_depth: 0,
     stats: SearchStats(
       total_nodes_searched: 0,
       nodes_searched: 0,
@@ -63,6 +66,10 @@ pub fn history_update(
   SearchState(..search_state, history:)
 }
 
+pub fn iteration_depth(search_state: SearchState) {
+  search_state.iteration_depth
+}
+
 /// When should we prune the transposition table?
 ///
 pub type TranspositionPolicy {
@@ -94,6 +101,8 @@ pub fn transposition_get(
           transposition: dict.insert(transposition, hash, entry),
           stats: SearchStats(
             ..search_state.stats,
+            total_nodes_searched: search_state.stats.total_nodes_searched + 1,
+            nodes_searched: search_state.stats.nodes_searched + 1,
             tt_hits: search_state.stats.tt_hits + 1,
           ),
         ),
@@ -105,6 +114,8 @@ pub fn transposition_get(
         ..search_state,
         stats: SearchStats(
           ..search_state.stats,
+          total_nodes_searched: search_state.stats.total_nodes_searched + 1,
+          nodes_searched: search_state.stats.nodes_searched + 1,
           tt_misses: search_state.stats.tt_misses + 1,
         ),
       ),
@@ -214,8 +225,6 @@ pub fn stats_add_beta_cutoffs(depth, n) -> State(SearchState, Nil) {
 }
 
 /// "Zero" out the stats. This should be done only at the start of a search.
-/// The only thing that's left untouched is `total_nodes_searched` which is
-/// currently still needed for transposition table pruning.
 ///
 pub fn stats_zero(now: timestamp.Timestamp) -> State(SearchState, Nil) {
   use search_state: SearchState <- state.modify
@@ -226,7 +235,7 @@ pub fn stats_zero(now: timestamp.Timestamp) -> State(SearchState, Nil) {
       nodes_searched: 0,
       tt_hits: 0,
       tt_misses: 0,
-      tt_prunes: 0,
+      tt_prunes: search_state.stats.tt_prunes,
       beta_cutoffs: dict.new(),
     )
   SearchState(..search_state, stats:)
@@ -255,8 +264,15 @@ pub fn stats_to_string(
   let dt = stats_delta_time_ms(search_state, now)
   ""
   <> "Search Stats:\n"
+  <> "  Time: "
+  <> int.to_string(dt)
+  <> "ms"
+  <> "\n"
   <> "  NPS: "
   <> nps |> float.round |> int_to_friendly_string
+  <> "\n"
+  <> "  Total nodes: "
+  <> stats.total_nodes_searched |> int_to_friendly_string
   <> "\n"
   <> "  Nodes: "
   <> stats.nodes_searched |> int_to_friendly_string
@@ -282,21 +298,21 @@ pub fn stats_to_string(
   <> "  TT prunes: "
   <> stats.tt_prunes |> int_to_friendly_string
   <> "\n"
+  <> "  Beta cutoffs: "
   <> {
-    "  Beta cutoffs:"
-    <> "\n    "
-    <> dict.to_list(stats.beta_cutoffs)
-    |> list.sort(fn(x, y) { int.compare(y.0, x.0) })
-    |> list.map(fn(x) {
-      "Depth " <> int.to_string(x.0) <> ": " <> int_to_friendly_string(x.1)
-    })
-    |> string.join("\n    ")
-    <> "\n"
+    case dict.is_empty(stats.beta_cutoffs) {
+      True -> "none"
+      False -> {
+        "\n    "
+        <> dict.to_list(stats.beta_cutoffs)
+        |> list.sort(fn(x, y) { int.compare(y.0, x.0) })
+        |> list.map(fn(x) {
+          "Depth " <> int.to_string(x.0) <> ": " <> int_to_friendly_string(x.1)
+        })
+        |> string.join("\n    ")
+      }
+    }
   }
-  <> "Time: "
-  <> int.to_string(dt)
-  <> "ms"
-  <> "\n"
 }
 
 pub fn stats_nodes_per_second(

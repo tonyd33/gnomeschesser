@@ -3,12 +3,12 @@ import chess/move
 import chess/search
 import chess/search/game_history
 import chess/search/search_state
-import gleam/erlang/process
 import gleam/list
 import gleam/option.{Some}
+import gleam/result
 import gleam/time/timestamp
 import gleeunit/should
-import util/yielder
+import util/state
 
 pub fn threefold_test() {
   let assert Ok(game) =
@@ -24,26 +24,18 @@ fn search_game_to_depth(
   depth: Int,
 ) {
   let memo = search_state.new(timestamp.system_time())
-  let subject = process.new_subject()
-  let _search_pid =
-    search.new(
+  let #(best_evaluation, _) =
+    search.checkpointed_iterative_deepening(
       game,
-      memo,
-      subject,
+      1,
       search.SearchOpts(max_depth: Some(depth)),
       game_history,
+      fn(_, _, _) { Nil },
     )
+    |> state.go(#(fn(_) { False }, memo))
 
-  yielder.repeat(subject)
-  |> yielder.fold_until([], fn(acc, subject) {
-    case process.receive_forever(subject) {
-      search.SearchDone -> list.Stop(acc)
-      search.SearchStateUpdate(_) -> list.Continue(acc)
-      search.SearchUpdate(best_evaluation:, ..) ->
-        best_evaluation.best_line
-        |> list.map(move.to_lan)
-        |> list.Continue
-    }
-  })
-  |> should.equal(["c2c1", "a1a2", "c1c2", "a2a1"])
+  let moves =
+    result.map(best_evaluation, fn(x) { list.map(x.best_line, move.to_lan) })
+
+  should.equal(moves, Ok(["c2c1", "a1a2", "c1c2", "a2a1"]))
 }
