@@ -11,10 +11,12 @@ import gleam/result
 import gleam/string
 import gleam/time/duration
 import gleam/time/timestamp
+import util/interruptable_state.{type InterruptableState} as interruptable
 import util/state.{type State, State}
 
 pub type SearchState {
   SearchState(
+    interrupt: fn() -> Bool,
     transposition: transposition.Table,
     history: dict.Dict(#(square.Square, piece.Piece), Int),
     stats: SearchStats,
@@ -23,6 +25,7 @@ pub type SearchState {
 
 pub fn new(now: timestamp.Timestamp) {
   SearchState(
+    interrupt: fn() { False },
     transposition: dict.new(),
     history: dict.new(),
     stats: SearchStats(
@@ -213,6 +216,14 @@ pub fn stats_add_beta_cutoffs(depth, n) -> State(SearchState, Nil) {
   SearchState(..search_state, stats: SearchStats(..stats, beta_cutoffs:))
 }
 
+pub fn check_interrupt(
+  f: fn() -> InterruptableState(SearchState, a),
+) -> InterruptableState(SearchState, a) {
+  use search_state: SearchState <- state.do(state.get_state())
+  use <- interruptable.interruptable(search_state.interrupt)
+  f()
+}
+
 /// "Zero" out the stats. This should be done only at the start of a search.
 /// The only thing that's left untouched is `total_nodes_searched` which is
 /// currently still needed for transposition table pruning.
@@ -293,7 +304,7 @@ pub fn stats_to_string(
     |> string.join("\n    ")
     <> "\n"
   }
-  <> "Time: "
+  <> "  Time: "
   <> int.to_string(dt)
   <> "ms"
   <> "\n"
