@@ -21,9 +21,17 @@ vector<struct BookEntry> read_pg_file(ifstream &strm) {
 
   vector<struct BookEntry> entries;
   struct BookEntry be;
-  while (!strm.eof()) {
+  while (1) {
     strm.read((char *)&be, sizeof(struct BookEntry));
-    entries.push_back(be);
+    be.key = swap64(be.key);
+    be.move = swap16(be.move);
+    be.weight = swap16(be.weight);
+    be.learn = swap32(be.learn);
+    if (strm.eof()) {
+      break;
+    } else {
+      entries.push_back(be);
+    }
   }
 
   return entries;
@@ -91,7 +99,8 @@ reduce_to_normal_form(vector<struct BookEntry> &entries) {
     const struct BookEntry &be = *it;
 
     if (curr_be.key == be.key && curr_be.move == be.move) {
-      curr_be.weight += 1;
+      if (curr_be.weight < UINT16_MAX)
+        curr_be.weight += 1;
     } else {
       reduced_entries.push_back(curr_be);
       curr_be = be;
