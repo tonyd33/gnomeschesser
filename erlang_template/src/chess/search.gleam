@@ -480,26 +480,8 @@ fn quiesce(
       interruptable.return(list.Continue(#(best_score, alpha))),
     )
 
-    // Delta pruning
-    let big_delta =
-      // Queen value. Make sure this is kept in sync with
-      // `piece_symbol(Queen)`. Inlined for optimization.
-      900
-      + {
-        case move.is_promotion(move) {
-          True -> 700
-          False -> 0
-        }
-      }
-    // if best_score < alpha - big_delta; return
-    use <- bool.guard(
-      xint.lt(best_score, xint.subtract(alpha, xint.from_int(big_delta))),
-      interruptable.return(list.Stop(#(best_score, alpha))),
-    )
-
-    let new_game = game.apply(game, move)
     use score <- interruptable.do(interruptable.map(
-      quiesce(new_game, xint.negate(beta), xint.negate(alpha)),
+      quiesce(game.apply(game, move), xint.negate(beta), xint.negate(alpha)),
       xint.negate,
     ))
 
