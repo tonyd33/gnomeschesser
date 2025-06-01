@@ -8,6 +8,8 @@ import gleam/dynamic/decode
 import gleam/erlang/process.{type Subject}
 import gleam/json
 import gleam/option.{type Option, None, Some}
+import gleam/time/duration
+import gleam/time/timestamp
 import mist
 import wisp.{type Request, type Response}
 import wisp/wisp_mist
@@ -76,6 +78,9 @@ fn move_decoder() -> decode.Decoder(MoveRequest) {
 
 fn handle_move(request: Request, robot: Robot) -> Response {
   let Robot(blake_chan:, ..) = robot
+  let deadline =
+    timestamp.system_time()
+    |> timestamp.add(duration.milliseconds(4950))
   use body <- wisp.require_string_body(request)
   case json.parse(body, move_decoder()) {
     Error(_) -> wisp.bad_request()
@@ -88,7 +93,7 @@ fn handle_move(request: Request, robot: Robot) -> Response {
       let blake_res =
         process.try_call(
           blake_chan,
-          blake.Go(movetime: Some(4950), depth: None, reply_to: _),
+          blake.Go(deadline: Some(deadline), depth: None, reply_to: _),
           4950,
         )
 

@@ -16,13 +16,12 @@ import gleam/float
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import gleam/otp/actor
 import gleam/otp/task
 import gleam/result
 import gleam/set.{type Set}
 import gleam/string
 import gleam/time/duration
-import gleam/time/timestamp
+import gleam/time/timestamp.{type Timestamp}
 import util/xint
 
 pub type Score {
@@ -66,13 +65,12 @@ type Blake {
 
 pub type Message {
   Init
+  NewGame
 
   RegisterYapper(yap_chan: Subject(yapper.Yap))
   RegisterInfoChan(info_chan: Subject(List(Info)))
 
   RequestHistory(reply_to: Subject(List(Game)))
-
-  NewGame
 
   Load(game: Game)
   LoadFEN(fen: String)
@@ -81,7 +79,11 @@ pub type Message {
   AppendHistory(game: Game)
   AppendHistoryFEN(fen: String)
 
-  Go(movetime: Option(Int), depth: Option(Int), reply_to: Subject(Response))
+  Go(
+    deadline: Option(Timestamp),
+    depth: Option(Int),
+    reply_to: Subject(Response),
+  )
   Think
 
   Stop
@@ -129,9 +131,13 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
   let r = case process.receive_forever(recv_chan) {
     Init -> Ok(Blake(..blake, tablebase: tablebase.load()))
     NewGame -> {
+      // I don't really know why but if I Clear Donovan instead of killing him,
+      // subsequent searches seem slow and time out...? At least, this seems to
+      // be the case.
       process.send(blake.donovan_chan, donovan.Stop)
+      process.send(blake.donovan_chan, donovan.Die)
       let assert Ok(game) = game.load_fen(game.start_fen)
-      Ok(Blake(..blake, game:, history: []))
+      Ok(Blake(..blake, game:, history: [], donovan_chan: donovan.start()))
     }
     RequestHistory(client) -> {
       process.send(client, blake.history)
@@ -191,7 +197,7 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
     RegisterYapper(yap_chan) -> Ok(Blake(..blake, yap_chan: Some(yap_chan)))
     RegisterInfoChan(info_chan) ->
       Ok(Blake(..blake, info_chan: Some(info_chan)))
-    Go(movetime, depth, client) -> {
+    Go(deadline, depth, client) -> {
       // Goal:
       // - Queue a task to look up a move from tablebase
       // - Start the search to find a move
@@ -206,6 +212,8 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
       let nonce =
         timestamp.system_time() |> timestamp.to_unix_seconds_and_nanoseconds
 
+      // `once` takes a callback and executes it only if the nonce wasn't
+      // already used.
       let once = fn(f: fn() -> Nil) {
         let sent = process.call_forever(recv_chan, AtomicNonceSet(nonce, _))
         case sent {
@@ -236,6 +244,8 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
         Ok(Nil)
       })
 
+      // Called every iteration of iterative deepening.
+      // Sends info.
       let on_checkpoint = fn(
         search_state: SearchState,
         current_depth,
@@ -264,6 +274,8 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
         Nil
       }
 
+      // Called when search is done. Races against tablebase query to send
+      // a move.
       let on_done = fn(s: SearchState, g, e) {
         {
           let now = timestamp.system_time()
@@ -286,12 +298,19 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
       { "Asking donovan to work." }
       |> yapper.debug
       |> yap(blake, _)
+
+      blake.history
+      |> list.length
+      |> int.to_string
+      |> yapper.debug
+      |> yap(blake, _)
+
       process.send(
         blake.donovan_chan,
         donovan.Go(
           blake.game,
           blake.history,
-          movetime,
+          deadline,
           depth,
           on_checkpoint,
           on_done,
@@ -329,7 +348,7 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
         donovan.Go(
           game: blake.game,
           history: blake.history,
-          movetime: None,
+          deadline: None,
           depth: None,
           on_checkpoint:,
           on_done:,
@@ -342,6 +361,7 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
       Ok(blake)
     }
     Shutdown -> {
+      process.send(blake.donovan_chan, donovan.Stop)
       process.send(blake.donovan_chan, donovan.Die)
       Error(Nil)
     }

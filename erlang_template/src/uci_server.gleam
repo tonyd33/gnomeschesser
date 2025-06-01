@@ -10,6 +10,9 @@ import gleam/function
 import gleam/io
 import gleam/list
 import gleam/option.{None, Some}
+import gleam/result
+import gleam/time/duration
+import gleam/time/timestamp
 import util/parser as p
 
 const name = "gnomeschesser"
@@ -103,13 +106,17 @@ fn handle_uci(s: UCIState, cmd) {
       True
     }
     uci.EngCmdGo(params:) -> {
-      let movetime =
+      let now = timestamp.system_time()
+      let deadline =
         params
         |> list.find_map(fn(x) {
           case x {
             uci.GoParamMoveTime(movetime) -> Ok(movetime)
             _ -> Error(Nil)
           }
+        })
+        |> result.map(fn(x) {
+          timestamp.add(now, duration.milliseconds({ x * 95 } / 100))
         })
         |> option.from_result
 
@@ -123,7 +130,7 @@ fn handle_uci(s: UCIState, cmd) {
         })
         |> option.from_result
 
-      s.tell_blake(blake.Go(movetime:, depth:, reply_to: s.response_chan))
+      s.tell_blake(blake.Go(deadline:, depth:, reply_to: s.response_chan))
       True
     }
     _ -> {

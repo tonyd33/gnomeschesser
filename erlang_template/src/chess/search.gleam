@@ -15,7 +15,7 @@ import gleam/order
 import gleam/result
 import util/interruptable_state.{type InterruptableState} as interruptable
 import util/order_addons
-import util/state.{type State}
+import util/state
 import util/xint.{type ExtendedInt}
 
 /// We don't let the transposition table get bigger than this
@@ -24,6 +24,13 @@ const max_tt_size = 100_000
 /// When pruning the transposition table, how recent of entries do we decide to
 /// keep?
 const max_tt_recency = 50_000
+
+/// There's no possible way we should ever be searching past this depth in
+/// a proper search.
+/// We have a soft limit in the case where our search yields that a draw
+/// is the best outcome.
+///
+const soft_max_depth = 99
 
 pub type SearchOpts {
   SearchOpts(max_depth: Option(Int))
@@ -93,10 +100,10 @@ pub fn checkpointed_iterative_deepening(
     interruptable.select(checkpoint_hook(_, current_depth, best_evaluation)),
   )
 
-  case opts.max_depth {
-    Some(max_depth) if current_depth >= max_depth ->
-      interruptable.return(best_evaluation)
-    _ ->
+  let max_depth = option.unwrap(opts.max_depth, soft_max_depth)
+  case current_depth >= max_depth {
+    True -> interruptable.return(best_evaluation)
+    False ->
       case best_evaluation.score {
         // terminate the search if we detect we're in mate
         xint.PosInf | xint.NegInf -> interruptable.return(best_evaluation)
@@ -135,7 +142,7 @@ pub fn search_with_widening_windows(
     // It's a forced checkmate in every branch
     // no point in searching more
     _, evaluation.PV | xint.PosInf, _ | xint.NegInf, _ ->
-      state.return(Ok(best_evaluation))
+      interruptable.return(best_evaluation)
     // Otherwise we call the search again with wider windows
     // The narrower the window is, the more branches are pruned
     // but if our score is not inside the window, then we're forced to re-search
@@ -188,24 +195,6 @@ fn negamax_alphabeta_failsoft(
   use <- interruptable.interruptable
 
   let game_hash = game.hash(game)
-
-  use <- bool.guard(
-    // 3 fold repetition:
-    // If we've encountered this position before, we can assume we're in a 3 fold loop
-    // and that this position will resolve to a 0
-    game_history.is_previous_game(game_history, game)
-      // 50 moves rule:
-      // If 50 moves have passed without any captures, then the position is a draw.
-      || game.halfmove_clock(game) >= 100,
-    interruptable.return(
-      Evaluation(
-        score: xint.from_int(0),
-        node_type: evaluation.PV,
-        best_move: None,
-        best_line: [],
-      ),
-    ),
-  )
 
   // return early if we find an entry in the transposition table
   use cached_evaluation <- interruptable.do({
@@ -278,6 +267,24 @@ fn do_negamax_alphabeta_failsoft(
     Evaluation(score:, node_type: evaluation.PV, best_move: None, best_line: [])
     |> interruptable.return
   })
+
+  use <- bool.guard(
+    // 3 fold repetition:
+    // If we've encountered this position before, we can assume we're in a 3 fold loop
+    // and that this position will resolve to a 0
+    game_history.is_previous_game(game_history, game)
+      // 50 moves rule:
+      // If 50 moves have passed without any captures, then the position is a draw.
+      || game.halfmove_clock(game) >= 100,
+    interruptable.return(
+      Evaluation(
+        score: xint.from_int(0),
+        node_type: evaluation.PV,
+        best_move: None,
+        best_line: [],
+      ),
+    ),
+  )
 
   let is_check = game.is_check(game, game.turn(game))
   // Null move pruning: if a null move was made (i.e. we pass the turn) yet we

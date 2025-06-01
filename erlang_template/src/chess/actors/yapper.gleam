@@ -5,7 +5,9 @@
 import gleam/erlang/process.{type Selector, type Subject}
 import gleam/function.{identity}
 import gleam/io
+import gleam/list
 import gleam/order.{Eq, Gt, Lt}
+import gleam/string
 
 pub type Level {
   Debug
@@ -67,19 +69,41 @@ pub fn err(s: String) {
 }
 
 pub fn prefix_debug() -> Transformer {
-  fn(x) { "debug " <> x }
+  // Yeah, this is inefficient, but without a proper pretty printing algorithm,
+  // it's the best we got
+  fn(x) {
+    x
+    |> string.split("\n")
+    |> list.map(fn(l) { "[debug] " <> l })
+    |> string.join("\n")
+  }
 }
 
 pub fn prefix_info() -> Transformer {
-  fn(x) { "info " <> x }
+  fn(x) {
+    x
+    |> string.split("\n")
+    |> list.map(fn(l) { "[info] " <> l })
+    |> string.join("\n")
+  }
 }
 
 pub fn prefix_warn() -> Transformer {
-  fn(x) { "warn " <> x }
+  fn(x) {
+    x
+    |> string.split("\n")
+    |> list.map(fn(l) { "[warn] " <> l })
+    |> string.join("\n")
+  }
 }
 
 pub fn prefix_err() -> Transformer {
-  fn(x) { "err " <> x }
+  fn(x) {
+    x
+    |> string.split("\n")
+    |> list.map(fn(l) { "[err] " <> l })
+    |> string.join("\n")
+  }
 }
 
 type Yapper {

@@ -17,7 +17,8 @@ import chess/search/search_state.{type SearchState, SearchState}
 import gleam/erlang/process.{type Subject}
 import gleam/option.{type Option, None, Some}
 import gleam/result
-import gleam/time/timestamp
+import gleam/time/duration
+import gleam/time/timestamp.{type Timestamp}
 import util/dict_addons
 import util/interruptable_state as interruptable
 import util/state
@@ -28,10 +29,11 @@ pub opaque type Donovan {
 }
 
 pub type Message {
+  Clear
   Go(
     game: Game,
     history: List(Game),
-    movetime: Option(Int),
+    deadline: Option(Timestamp),
     depth: Option(Int),
     // Callback to be executed *in Donovan's thread* when a checkpoint is
     // made (when an iteration of deepening is complete).
@@ -63,7 +65,8 @@ fn new() {
 
 fn loop(donovan: Donovan, recv_chan: Subject(Message)) -> Nil {
   let r = case process.receive_forever(recv_chan) {
-    Go(game, history, movetime, depth, on_checkpoint, on_done) -> {
+    Clear -> Ok(new())
+    Go(game, history, deadline, depth, on_checkpoint, on_done) -> {
       let interrupt = fn(_) {
         case process.receive(recv_chan, 0) {
           Ok(Stop) -> True
@@ -74,11 +77,15 @@ fn loop(donovan: Donovan, recv_chan: Subject(Message)) -> Nil {
       // If movetime is set, set a timer to stop after movetime.
       // Consider doing this timer on Blake if this is somehow unreliable
       // on the searcher thread.
-      // TODO: Consider using deadlines instead and calculating time more
-      // accurately.
-      case movetime {
-        Some(movetime) -> {
-          process.send_after(recv_chan, { movetime * 95 } / 100, Stop)
+      case deadline {
+        Some(deadline) -> {
+          let movetime = {
+            let now = timestamp.system_time()
+            let duration = timestamp.difference(now, deadline)
+            let #(s, ns) = duration.to_seconds_and_nanoseconds(duration)
+            { s * 1000 } + { ns / 1_000_000 }
+          }
+          process.send_after(recv_chan, movetime, Stop)
           Nil
         }
         None -> Nil
@@ -101,6 +108,9 @@ fn loop(donovan: Donovan, recv_chan: Subject(Message)) -> Nil {
         }
         |> state.go(#(interrupt, donovan.search_state))
 
+      // Eventually, we may want to get a random move and send it as a
+      // fallback. For now, I want things to fail noisily so we can detect
+      // bugs.
       let evaluation =
         result.unwrap(
           evaluation,
