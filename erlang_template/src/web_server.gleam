@@ -22,6 +22,7 @@ type Robot {
 pub fn start_robot() -> Nil {
   let #(yapper_chan, yap_chan) = yapper.start(yapper.Info)
   let blake_chan = blake.start()
+  process.send(blake_chan, blake.Init)
   process.send(blake_chan, blake.RegisterYapper(yap_chan))
   process.send(blake_chan, blake.Think)
 

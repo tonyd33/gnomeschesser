@@ -6,8 +6,9 @@ import chess/actors/donovan
 import chess/actors/yapper
 import chess/game.{type Game}
 import chess/move
-import chess/search/evaluation.{type Evaluation}
+import chess/search/evaluation.{type Evaluation, Evaluation, PV}
 import chess/search/search_state.{type SearchState, SearchState}
+import chess/tablebase.{type Tablebase}
 import gleam/bool
 import gleam/dict
 import gleam/erlang/process.{type Subject}
@@ -16,7 +17,9 @@ import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
+import gleam/otp/task
 import gleam/result
+import gleam/set.{type Set}
 import gleam/string
 import gleam/time/duration
 import gleam/time/timestamp
@@ -46,17 +49,24 @@ pub type Response {
   Response(game: Game, evaluation: Evaluation)
 }
 
+type Nonce =
+  #(Int, Int)
+
 type Blake {
   Blake(
     game: Game,
     history: List(Game),
+    tablebase: Tablebase,
     donovan_chan: Subject(donovan.Message),
     yap_chan: Option(Subject(yapper.Yap)),
     info_chan: Option(Subject(List(Info))),
+    nonces: Set(Nonce),
   )
 }
 
 pub type Message {
+  Init
+
   RegisterYapper(yap_chan: Subject(yapper.Yap))
   RegisterInfoChan(info_chan: Subject(List(Info)))
 
@@ -75,13 +85,24 @@ pub type Message {
   Think
 
   Stop
-
   Shutdown
+
+  // For Internal use. See documentation in the implemention of Go for
+  // an explanation.
+  AtomicNonceSet(Nonce, reply_to: Subject(Bool))
 }
 
 pub fn start() {
-  let assert Ok(blake) = actor.start(new(), handle_message)
-  blake
+  let out_chan = process.new_subject()
+  process.start(
+    fn() {
+      let chan = process.new_subject()
+      process.send(out_chan, chan)
+      loop(new(), chan)
+    },
+    True,
+  )
+  process.receive_forever(out_chan)
 }
 
 fn new() {
@@ -89,9 +110,11 @@ fn new() {
   Blake(
     game:,
     history: [],
+    tablebase: tablebase.empty(),
     donovan_chan: donovan.start(),
     yap_chan: None,
     info_chan: None,
+    nonces: set.new(),
   )
 }
 
@@ -102,29 +125,30 @@ fn yap(blake: Blake, m: yapper.Yap) {
   }
 }
 
-fn handle_message(message: Message, blake: Blake) -> actor.Next(Message, Blake) {
-  case message {
+fn loop(blake: Blake, recv_chan: Subject(Message)) {
+  let r = case process.receive_forever(recv_chan) {
+    Init -> Ok(Blake(..blake, tablebase: tablebase.load()))
     NewGame -> {
       process.send(blake.donovan_chan, donovan.Stop)
       let assert Ok(game) = game.load_fen(game.start_fen)
-      actor.continue(Blake(..blake, game:, history: []))
+      Ok(Blake(..blake, game:, history: []))
     }
     RequestHistory(client) -> {
       process.send(client, blake.history)
-      actor.continue(blake)
+      Ok(blake)
     }
-    Load(game) -> actor.continue(Blake(..blake, game:, history: []))
+    Load(game) -> Ok(Blake(..blake, game:, history: []))
     LoadFEN(fen) -> {
       let game = game.load_fen(fen)
 
       case game {
-        Ok(game) -> actor.continue(Blake(..blake, game:, history: []))
+        Ok(game) -> Ok(Blake(..blake, game:, history: []))
         Error(Nil) -> {
           { "Received bad FEN: " <> fen }
           |> yapper.warn
           |> yap(blake, _)
 
-          actor.continue(blake)
+          Ok(blake)
         }
       }
     }
@@ -139,36 +163,79 @@ fn handle_message(message: Message, blake: Blake) -> actor.Next(Message, Blake) 
       }
 
       case res {
-        Ok(#(game, history)) -> actor.continue(Blake(..blake, game:, history:))
+        Ok(#(game, history)) -> Ok(Blake(..blake, game:, history:))
         Error(Nil) -> {
           { "Received bad moves: " <> string.join(moves, ", ") }
           |> yapper.warn
           |> yap(blake, _)
 
-          actor.continue(blake)
+          Ok(blake)
         }
       }
     }
     AppendHistory(game:) -> {
-      actor.continue(smart_append_history(blake, game))
+      Ok(smart_append_history(blake, game))
     }
     AppendHistoryFEN(fen:) -> {
       case game.load_fen(fen) {
-        Ok(game) -> actor.continue(smart_append_history(blake, game))
+        Ok(game) -> Ok(smart_append_history(blake, game))
 
         Error(Nil) -> {
           { "Failed to load FEN: " <> fen }
           |> yapper.warn
           |> yap(blake, _)
-          actor.continue(blake)
+          Ok(blake)
         }
       }
     }
-    RegisterYapper(yap_chan) ->
-      actor.continue(Blake(..blake, yap_chan: Some(yap_chan)))
+    RegisterYapper(yap_chan) -> Ok(Blake(..blake, yap_chan: Some(yap_chan)))
     RegisterInfoChan(info_chan) ->
-      actor.continue(Blake(..blake, info_chan: Some(info_chan)))
+      Ok(Blake(..blake, info_chan: Some(info_chan)))
     Go(movetime, depth, client) -> {
+      // Goal:
+      // - Queue a task to look up a move from tablebase
+      // - Start the search to find a move
+      // - Whichever one finishes first should send a response to client
+      //
+      // This is achieved by the following:
+      // - Create a nonce
+      // - For either task, right before sending, it will check if the nonce
+      //   has already been used and only send to the client if it hasn't.
+      // - Checking the nonce atomically marks the nonce as having been
+      //   used.
+      let nonce =
+        timestamp.system_time() |> timestamp.to_unix_seconds_and_nanoseconds
+
+      let once = fn(f: fn() -> Nil) {
+        let sent = process.call_forever(recv_chan, AtomicNonceSet(nonce, _))
+        case sent {
+          True -> Nil
+          False -> f()
+        }
+      }
+
+      // This will queue a task in the background to look in the tablebase and
+      // send a move, racing against the search.
+      task.async(fn() {
+        use move <- result.try(tablebase.query(blake.tablebase, blake.game))
+        let response =
+          Response(
+            blake.game,
+            Evaluation(
+              score: xint.from_int(0),
+              best_move: Some(move),
+              node_type: PV,
+              best_line: [],
+            ),
+          )
+        {
+          use <- once
+          process.send(client, response)
+        }
+
+        Ok(Nil)
+      })
+
       let on_checkpoint = fn(
         search_state: SearchState,
         current_depth,
@@ -211,6 +278,8 @@ fn handle_message(message: Message, blake: Blake) -> actor.Next(Message, Blake) 
           |> yapper.debug
           |> yap(blake, _)
         }
+
+        use <- once
         process.send(client, Response(g, e))
       }
 
@@ -228,7 +297,7 @@ fn handle_message(message: Message, blake: Blake) -> actor.Next(Message, Blake) 
           on_done,
         ),
       )
-      actor.continue(blake)
+      Ok(blake)
     }
     Think -> {
       let on_checkpoint = fn(search_state: SearchState, _, _) {
@@ -266,16 +335,25 @@ fn handle_message(message: Message, blake: Blake) -> actor.Next(Message, Blake) 
           on_done:,
         ),
       )
-      actor.continue(blake)
+      Ok(blake)
     }
     Stop -> {
       process.send(blake.donovan_chan, donovan.Stop)
-      actor.continue(blake)
+      Ok(blake)
     }
     Shutdown -> {
       process.send(blake.donovan_chan, donovan.Die)
-      actor.Stop(process.Normal)
+      Error(Nil)
     }
+    AtomicNonceSet(nonce, client) -> {
+      process.send(client, set.contains(blake.nonces, nonce))
+      Ok(Blake(..blake, nonces: set.insert(blake.nonces, nonce)))
+    }
+  }
+
+  case r {
+    Ok(blake) -> loop(blake, recv_chan)
+    _ -> Nil
   }
 }
 

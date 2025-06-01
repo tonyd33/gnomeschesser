@@ -25,6 +25,7 @@ pub fn main() {
   let blake_chan = blake.start()
   let tell_blake = process.send(blake_chan, _)
 
+  tell_blake(blake.Init)
   tell_blake(blake.RegisterYapper(yap_chan))
   tell_blake(blake.RegisterInfoChan(info_chan))
 

@@ -25,3 +25,7 @@ pub fn query(tb: Tablebase, game: Game) -> Result(Move(ValidInContext), Nil) {
   })
   |> list.first
 }
+
+pub fn empty() -> Tablebase {
+  dict.new()
+}
