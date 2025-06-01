@@ -330,12 +330,11 @@ fn do_negamax_alphabeta_failsoft(
 
     // TODO: Limit conditions more
     // https://www.chessprogramming.org/Late_Move_Reductions#Common_Conditions
-    let context = move.get_context(move)
     let should_reduce =
       idx > 1
       && depth > 2
-      // Don't reduce on captures
-      && !option.is_some(context.capture)
+      // Only reduce on quiet moves
+      && move.is_quiet(move)
       && !is_check
     let depth_reduction = case should_reduce {
       True -> 1
@@ -450,23 +449,22 @@ fn quiesce(
     |> xint.multiply({ evaluate.player(game.turn(game)) |> xint.from_int })
 
   use <- bool.guard(xint.gte(score, beta), interruptable.return(score))
+
   let alpha = xint.max(alpha, score)
 
   {
-    use acc, move <- interruptable.list_fold_until_s(game.valid_moves(game), #(
-      score,
-      alpha,
-    ))
-    let move_context = move.get_context(move)
+    use #(best_score, alpha), move <- interruptable.list_fold_until_s(
+      game.valid_moves(game),
+      #(score, alpha),
+    )
 
     // If game isn't capture, continue
     use <- bool.guard(
-      move_context.capture |> option.is_none,
-      interruptable.return(list.Continue(acc)),
+      move.is_quiet(move),
+      interruptable.return(list.Continue(#(best_score, alpha))),
     )
-    let new_game = game.apply(game, move)
 
-    let #(best_score, alpha) = acc
+    let new_game = game.apply(game, move)
     use score <- interruptable.do(interruptable.map(
       quiesce(new_game, xint.negate(beta), xint.negate(alpha)),
       xint.negate,

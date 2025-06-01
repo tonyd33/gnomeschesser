@@ -8,6 +8,8 @@ pub type Stage {
 }
 
 pub fn piece_symbol(symbol: piece.PieceSymbol) -> Int {
+  // Make sure these are kept in sync with values in:
+  // - quiesce
   case symbol {
     piece.Pawn -> 100
     piece.Knight -> 300

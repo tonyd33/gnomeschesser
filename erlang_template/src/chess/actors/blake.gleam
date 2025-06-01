@@ -91,7 +91,8 @@ pub type Message {
 
   // For internal use. See documentation in the implemention of Go for
   // an explanation.
-  AtomicUse(Nonce, f: fn() -> Nil)
+  AtomicNonceUse(Nonce, f: fn() -> Nil)
+  NonceCheck(Nonce, Subject(Bool))
 }
 
 pub fn start() {
@@ -139,7 +140,6 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
       // I don't really know why but if I Clear Donovan instead of killing him,
       // subsequent searches seem slow and time out...? At least, this seems to
       // be the case.
-      process.send(blake.donovan_chan, donovan.Stop)
       process.send(blake.donovan_chan, donovan.Die)
       let assert Ok(game) = game.load_fen(game.start_fen)
       Ok(
@@ -228,7 +228,14 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
       // `once` takes a callback and executes it only if the nonce wasn't
       // already used.
       let once = fn(f: fn() -> Nil) {
-        process.send(recv_chan, AtomicUse(nonce, f))
+        process.send(recv_chan, AtomicNonceUse(nonce, f))
+      }
+
+      let if_nonce_free = fn(f: fn() -> Nil) {
+        case process.call_forever(recv_chan, NonceCheck(nonce, _)) {
+          True -> f()
+          False -> Nil
+        }
       }
 
       // This will queue a task in the background to look in the tablebase and
@@ -265,16 +272,19 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
         let stats = search_state.stats_to_string(search_state, now)
         stats |> yapper.debug |> yap(blake, _)
 
-        case blake.info_chan {
-          Some(info_chan) ->
-            aggregate_search_info(
-              now,
-              search_state,
-              current_depth,
-              best_evaluation,
-            )
-            |> process.send(info_chan, _)
-          None -> Nil
+        {
+          use <- if_nonce_free
+          case blake.info_chan {
+            Some(info_chan) ->
+              aggregate_search_info(
+                now,
+                search_state,
+                current_depth,
+                best_evaluation,
+              )
+              |> process.send(info_chan, _)
+            None -> Nil
+          }
         }
 
         Nil
@@ -379,12 +389,16 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
       process.send(blake.donovan_chan, donovan.Die)
       Error(Nil)
     }
-    AtomicUse(nonce, f) -> {
+    AtomicNonceUse(nonce, f) -> {
       case set.contains(blake.nonces, nonce) {
         True -> Nil
         False -> f()
       }
       Ok(Blake(..blake, nonces: set.insert(blake.nonces, nonce)))
+    }
+    NonceCheck(nonce, client) -> {
+      process.send(client, !set.contains(blake.nonces, nonce))
+      Ok(blake)
     }
   }
 

@@ -53,7 +53,7 @@ pub fn start() {
       process.send(out_chan, chan)
       loop(new(), chan)
     },
-    True,
+    False,
   )
   process.receive_forever(out_chan)
 }
@@ -69,6 +69,12 @@ fn loop(donovan: Donovan, recv_chan: Subject(Message)) -> Nil {
       let interrupt = fn(_) {
         case process.receive(recv_chan, 0) {
           Ok(Stop) -> True
+          Ok(Die) -> {
+            // If we get this command in the search loop, exiting the search
+            // loop isn't sufficient. Donovan needs to completely die.
+            process.kill(process.self())
+            True
+          }
           _ -> False
         }
       }
