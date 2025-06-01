@@ -6,16 +6,17 @@ import gleam/dict
 import gleam/float
 import gleam/int
 import gleam/list
-import gleam/option.{None, Some}
+import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import gleam/time/duration
 import gleam/time/timestamp
+import iv
 import util/state.{type State, State}
 
 pub type SearchState {
   SearchState(
-    transposition: transposition.Table,
+    transposition: iv.Array(Option(transposition.Entry)),
     history: dict.Dict(#(square.Square, piece.Piece), Int),
     // What iteration of iterative deepening are we on right now?
     iteration_depth: Int,
@@ -25,7 +26,7 @@ pub type SearchState {
 
 pub fn new(now: timestamp.Timestamp) {
   SearchState(
-    transposition: dict.new(),
+    transposition: iv.repeat(None, key_mask + 1),
     history: dict.new(),
     iteration_depth: 0,
     stats: SearchStats(
@@ -35,6 +36,7 @@ pub fn new(now: timestamp.Timestamp) {
       tt_hits: 0,
       tt_misses: 0,
       tt_prunes: 0,
+      tt_size: 0,
       beta_cutoffs: dict.new(),
     ),
   )
@@ -83,39 +85,43 @@ pub type TranspositionPruneMethod {
   ByRecency(max_recency: Int)
 }
 
+/// To reduce the need of manual trimming when the transposition table gets too
+/// large, we reduce the key space by taking only a certain amount of lower
+/// bits. This current mask gives us a max size of 2^16, or 65536 entries.
+const key_mask = 0x1FFFF
+
+fn transposition_key_reduce(key: Int) {
+  int.bitwise_and(key, key_mask)
+}
+
 pub fn transposition_get(
   hash: Int,
 ) -> State(SearchState, Result(transposition.Entry, Nil)) {
   use search_state: SearchState <- State(run: _)
   let transposition = search_state.transposition
-  let entry = dict.get(transposition, hash)
+  let key = transposition_key_reduce(hash)
+  let entry = iv.get(transposition, key)
   case entry {
-    Ok(entry) -> {
-      let last_accessed = search_state.stats.nodes_searched
-      let entry = transposition.Entry(..entry, last_accessed:)
-
+    Ok(Some(entry)) if entry.hash == hash -> {
       #(
         Ok(entry),
         SearchState(
           ..search_state,
-          transposition: dict.insert(transposition, hash, entry),
+          transposition:,
           stats: SearchStats(
             ..search_state.stats,
-            total_nodes_searched: search_state.stats.total_nodes_searched + 1,
-            nodes_searched: search_state.stats.nodes_searched + 1,
             tt_hits: search_state.stats.tt_hits + 1,
           ),
         ),
       )
     }
+    Error(_) -> panic as "shit"
     _ -> #(
-      entry,
+      Error(Nil),
       SearchState(
         ..search_state,
         stats: SearchStats(
           ..search_state.stats,
-          total_nodes_searched: search_state.stats.total_nodes_searched + 1,
-          nodes_searched: search_state.stats.nodes_searched + 1,
           tt_misses: search_state.stats.tt_misses + 1,
         ),
       ),
@@ -129,52 +135,49 @@ pub fn transposition_insert(
 ) -> State(SearchState, Nil) {
   let #(depth, eval) = entry
   use search_state: SearchState <- state.modify
-  let last_accessed = search_state.stats.total_nodes_searched
-  let entry = transposition.Entry(depth:, eval:, last_accessed:)
-  let transposition = dict.insert(search_state.transposition, hash, entry)
-  SearchState(..search_state, transposition:)
-}
+  let entry = transposition.Entry(hash:, depth:, eval:)
+  let key = transposition_key_reduce(hash)
 
-pub fn transposition_prune(
-  when policy: TranspositionPolicy,
-  do method: TranspositionPruneMethod,
-) -> State(SearchState, Nil) {
-  use policy_met <- state.do(
-    transposition_prune_policy_met(_, policy)
-    |> state.select,
-  )
+  // Update the transposition table if:
+  // - The new entry is a PV, or
+  // - The new entry replaces the existing hash, or
+  // - The new entry is deeper than the existing entry's depth
+  //   (depth-preferred)
+  let #(transposition, is_new_entry) = {
+    let assert Ok(maybe_existing_entry) =
+      iv.get(search_state.transposition, key)
 
-  case policy_met {
-    True -> {
-      use search_state: SearchState <- state.modify
-      let transposition = case method {
-        ByRecency(max_recency:) ->
-          search_state.transposition
-          |> dict.filter(fn(_, entry) {
-            search_state.stats.total_nodes_searched - entry.last_accessed
-            <= max_recency
-          })
+    let updated_entry = case maybe_existing_entry {
+      Some(existing_entry) -> {
+        let override =
+          eval.node_type == evaluation.PV
+          || existing_entry.hash != hash
+          || depth > existing_entry.depth
+        case override {
+          True -> entry
+          False -> existing_entry
+        }
       }
+      None -> entry
+    }
+
+    let assert Ok(updated_transposition) =
+      iv.set(search_state.transposition, key, Some(updated_entry))
+
+    #(updated_transposition, option.is_none(maybe_existing_entry))
+  }
+
+  case is_new_entry {
+    True ->
       SearchState(
         ..search_state,
         transposition:,
         stats: SearchStats(
           ..search_state.stats,
-          tt_prunes: search_state.stats.tt_prunes + 1,
+          tt_size: search_state.stats.tt_size + 1,
         ),
       )
-    }
-    False -> state.return(Nil)
-  }
-}
-
-fn transposition_prune_policy_met(
-  search_state: SearchState,
-  policy: TranspositionPolicy,
-) -> Bool {
-  case policy {
-    Indiscriminately -> True
-    LargerThan(max_size) -> dict.size(search_state.transposition) > max_size
+    False -> SearchState(..search_state, transposition:)
   }
 }
 
@@ -193,6 +196,7 @@ pub type SearchStats {
     tt_misses: Int,
     // Number of times we had to prune
     tt_prunes: Int,
+    tt_size: Int,
     // How many beta cutoffs we did per depth
     beta_cutoffs: dict.Dict(Int, Int),
   )
@@ -235,6 +239,7 @@ pub fn stats_zero(now: timestamp.Timestamp) -> State(SearchState, Nil) {
       nodes_searched: 0,
       tt_hits: 0,
       tt_misses: 0,
+      tt_size: search_state.stats.tt_size,
       tt_prunes: search_state.stats.tt_prunes,
       beta_cutoffs: dict.new(),
     )
@@ -258,7 +263,6 @@ pub fn stats_to_string(
   search_state: SearchState,
   now: timestamp.Timestamp,
 ) -> String {
-  let transposition = search_state.transposition
   let stats = search_state.stats
   let nps = stats_nodes_per_second(search_state, now)
   let dt = stats_delta_time_ms(search_state, now)
@@ -278,7 +282,7 @@ pub fn stats_to_string(
   <> stats.nodes_searched |> int_to_friendly_string
   <> "\n"
   <> "  TT size: "
-  <> dict.size(transposition) |> int_to_friendly_string
+  <> stats.tt_size |> int_to_friendly_string
   <> "\n"
   <> {
     "  TT hits/misses/%: "
@@ -298,10 +302,10 @@ pub fn stats_to_string(
   <> "  TT prunes: "
   <> stats.tt_prunes |> int_to_friendly_string
   <> "\n"
-  <> "  Beta cutoffs: "
+  <> "  Beta cutoffs:"
   <> {
     case dict.is_empty(stats.beta_cutoffs) {
-      True -> "none"
+      True -> " none"
       False -> {
         "\n    "
         <> dict.to_list(stats.beta_cutoffs)
@@ -344,4 +348,10 @@ pub fn stats_delta_time_ms(
   let duration = timestamp.difference(search_state.stats.init_time, now)
   let #(s, ns) = duration.to_seconds_and_nanoseconds(duration)
   { s * 1000 } + { ns / 1_000_000 }
+}
+
+pub fn stats_hashfull(search_state: SearchState) -> Int {
+  let stats = search_state.stats
+  let size = stats.tt_size
+  float.round({ int.to_float(size) *. 1000.0 } /. int.to_float(key_mask))
 }

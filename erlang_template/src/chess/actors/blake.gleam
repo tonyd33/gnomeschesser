@@ -295,13 +295,22 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
         process.send(client, Response(g, e))
       }
 
-      { "Asking donovan to work." }
-      |> yapper.debug
-      |> yap(blake, _)
+      // If movetime is set, set a timer to stop after movetime.
+      case deadline {
+        Some(deadline) -> {
+          let movetime = {
+            let now = timestamp.system_time()
+            let duration = timestamp.difference(now, deadline)
+            let #(s, ns) = duration.to_seconds_and_nanoseconds(duration)
+            { s * 1000 } + { ns / 1_000_000 }
+          }
+          process.send_after(blake.donovan_chan, movetime, donovan.Stop)
+          Nil
+        }
+        None -> Nil
+      }
 
-      blake.history
-      |> list.length
-      |> int.to_string
+      { "Asking donovan to work." }
       |> yapper.debug
       |> yap(blake, _)
 
@@ -392,9 +401,11 @@ fn aggregate_search_info(
   let nps =
     search_state.stats_nodes_per_second(search_state, now)
     |> float.round
-  let nodes_searched = search_state.stats.nodes_searched
-  // TODO: Calculate this properly
-  let hashfull = dict.size(search_state.transposition) * 1000 / 100_000
+    |> int.max(1)
+  let nodes_searched =
+    search_state.stats.nodes_searched
+    |> int.max(1)
+  let hashfull = search_state.stats_hashfull(search_state)
 
   let score = case best_evaluation.score {
     xint.Finite(score) -> Centipawns(score)

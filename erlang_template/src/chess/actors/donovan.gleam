@@ -74,23 +74,6 @@ fn loop(donovan: Donovan, recv_chan: Subject(Message)) -> Nil {
         }
       }
 
-      // If movetime is set, set a timer to stop after movetime.
-      // Consider doing this timer on Blake if this is somehow unreliable
-      // on the searcher thread.
-      case deadline {
-        Some(deadline) -> {
-          let movetime = {
-            let now = timestamp.system_time()
-            let duration = timestamp.difference(now, deadline)
-            let #(s, ns) = duration.to_seconds_and_nanoseconds(duration)
-            { s * 1000 } + { ns / 1_000_000 }
-          }
-          process.send_after(recv_chan, movetime, Stop)
-          Nil
-        }
-        None -> Nil
-      }
-
       let #(evaluation, #(_, new_state)) =
         {
           let now = timestamp.system_time()

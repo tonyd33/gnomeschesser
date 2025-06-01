@@ -18,13 +18,6 @@ import util/order_addons
 import util/state
 import util/xint.{type ExtendedInt}
 
-/// We don't let the transposition table get bigger than this
-const max_tt_size = 100_000
-
-/// When pruning the transposition table, how recent of entries do we decide to
-/// keep?
-const max_tt_recency = 50_000
-
 /// There's no possible way we should ever be searching past this depth in
 /// a proper search.
 /// We have a soft limit in the case where our search yields that a draw
@@ -196,6 +189,24 @@ fn negamax_alphabeta_failsoft(
 
   let game_hash = game.hash(game)
 
+  use <- bool.guard(
+    // 3 fold repetition:
+    // If we've encountered this position before, we can assume we're in a 3 fold loop
+    // and that this position will resolve to a 0
+    game_history.is_previous_game(game_history, game)
+      // 50 moves rule:
+      // If 50 moves have passed without any captures, then the position is a draw.
+      || game.halfmove_clock(game) >= 100,
+    interruptable.return(
+      Evaluation(
+        score: xint.from_int(0),
+        node_type: evaluation.PV,
+        best_move: None,
+        best_line: [],
+      ),
+    ),
+  )
+
   // return early if we find an entry in the transposition table
   use cached_evaluation <- interruptable.do({
     use <- bool.guard(
@@ -237,17 +248,7 @@ fn negamax_alphabeta_failsoft(
   )
   use <- interruptable.discard(
     interruptable.from_state(case depth >= tt_min_leaf_distance {
-      True -> {
-        use <- state.discard(
-          search_state.transposition_insert(game_hash, #(depth, evaluation)),
-        )
-        use <- state.discard(search_state.transposition_prune(
-          when: search_state.LargerThan(max_tt_size),
-          do: search_state.ByRecency(max_tt_recency),
-        ))
-
-        state.return(Nil)
-      }
+      True -> search_state.transposition_insert(game_hash, #(depth, evaluation))
       False -> state.return(Nil)
     }),
   )
@@ -267,24 +268,6 @@ fn do_negamax_alphabeta_failsoft(
     Evaluation(score:, node_type: evaluation.PV, best_move: None, best_line: [])
     |> interruptable.return
   })
-
-  use <- bool.guard(
-    // 3 fold repetition:
-    // If we've encountered this position before, we can assume we're in a 3 fold loop
-    // and that this position will resolve to a 0
-    game_history.is_previous_game(game_history, game)
-      // 50 moves rule:
-      // If 50 moves have passed without any captures, then the position is a draw.
-      || game.halfmove_clock(game) >= 100,
-    interruptable.return(
-      Evaluation(
-        score: xint.from_int(0),
-        node_type: evaluation.PV,
-        best_move: None,
-        best_line: [],
-      ),
-    ),
-  )
 
   let is_check = game.is_check(game, game.turn(game))
   // Null move pruning: if a null move was made (i.e. we pass the turn) yet we

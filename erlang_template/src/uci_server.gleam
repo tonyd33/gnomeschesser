@@ -215,25 +215,27 @@ fn blake_info_to_uci_info(blake_info: blake.Info) -> Result(uci.UCIInfo, Nil) {
 }
 
 fn loop_blake_handler(yap, recv_selector) {
-  let m = case process.select_forever(recv_selector) {
+  case process.select_forever(recv_selector) {
     Response(blake.Response(game:, evaluation:)) ->
       case evaluation.best_move {
         Some(best_move) -> {
           uci.GUICmdBestMove(move: move.to_lan(best_move), ponder: None)
           |> uci.serialize_gui_cmd
           |> io.println
-          True
         }
         None -> {
-          {
+          let s = {
             "Blake sent us an evaluation without a move!\n"
             <> "FEN: "
             <> game.to_fen(game)
             <> "\n"
           }
+
+          s
           |> yapper.err
           |> yap
-          False
+
+          panic as s
         }
       }
     Info(infos) -> {
@@ -242,12 +244,8 @@ fn loop_blake_handler(yap, recv_selector) {
       |> uci.GUICmdInfo
       |> uci.serialize_gui_cmd
       |> io.println
-      True
     }
   }
 
-  case m {
-    True -> loop_blake_handler(yap, recv_selector)
-    False -> Nil
-  }
+  loop_blake_handler(yap, recv_selector)
 }
