@@ -264,9 +264,8 @@ fn do_negamax_alphabeta_failsoft(
   game_history: game_history.GameHistory,
 ) -> InterruptableState(SearchState, Evaluation) {
   use <- bool.lazy_guard(depth <= 0, fn() {
-    let score = quiesce(game, alpha, beta)
+    use score <- interruptable.map(quiesce(game, alpha, beta))
     Evaluation(score:, node_type: evaluation.PV, best_move: None, best_line: [])
-    |> interruptable.return
   })
 
   let is_check = game.is_check(game, game.turn(game))
@@ -444,35 +443,45 @@ fn quiesce(
   game: game.Game,
   alpha: ExtendedInt,
   beta: ExtendedInt,
-) -> ExtendedInt {
+) -> InterruptableState(SearchState, ExtendedInt) {
+  use <- interruptable.interruptable
   let score =
     evaluate.game(game)
     |> xint.multiply({ evaluate.player(game.turn(game)) |> xint.from_int })
 
-  use <- bool.guard(xint.gte(score, beta), score)
+  use <- bool.guard(xint.gte(score, beta), interruptable.return(score))
   let alpha = xint.max(alpha, score)
 
-  let #(best_score, _) =
-    game.valid_moves(game)
-    |> list.fold_until(#(score, alpha), fn(acc, move) {
-      let move_context = move.get_context(move)
+  {
+    use acc, move <- interruptable.list_fold_until_s(game.valid_moves(game), #(
+      score,
+      alpha,
+    ))
+    let move_context = move.get_context(move)
 
-      // If game isn't capture, continue
-      use <- bool.guard(
-        move_context.capture |> option.is_none,
-        list.Continue(acc),
-      )
-      let new_game = game.apply(game, move)
+    // If game isn't capture, continue
+    use <- bool.guard(
+      move_context.capture |> option.is_none,
+      interruptable.return(list.Continue(acc)),
+    )
+    let new_game = game.apply(game, move)
 
-      let #(best_score, alpha) = acc
-      let score =
-        xint.negate(quiesce(new_game, xint.negate(beta), xint.negate(alpha)))
+    let #(best_score, alpha) = acc
+    use score <- interruptable.do(interruptable.map(
+      quiesce(new_game, xint.negate(beta), xint.negate(alpha)),
+      xint.negate,
+    ))
 
-      use <- bool.guard(xint.gte(score, beta), list.Stop(#(score, alpha)))
+    use <- bool.guard(
+      xint.gte(score, beta),
+      interruptable.return(list.Stop(#(score, alpha))),
+    )
 
-      list.Continue(#(xint.max(best_score, score), xint.max(alpha, score)))
-    })
-  best_score
+    interruptable.return(
+      list.Continue(#(xint.max(best_score, score), xint.max(alpha, score))),
+    )
+  }
+  |> interruptable.map(fn(x) { x.0 })
 }
 
 /// [Iteratively deepen](https://www.chessprogramming.org/Iterative_Deepening)
@@ -573,7 +582,6 @@ fn sorted_moves(
   SearchState,
   #(List(move.Move(move.ValidInContext)), Int),
 ) {
-  use <- interruptable.interruptable
   use best_move <- interruptable.do(get_pv_move(
     game,
     depth,

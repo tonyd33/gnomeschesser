@@ -10,8 +10,7 @@ import chess/search/evaluation.{type Evaluation, Evaluation, PV}
 import chess/search/search_state.{type SearchState, SearchState}
 import chess/tablebase.{type Tablebase}
 import gleam/bool
-import gleam/dict
-import gleam/erlang/process.{type Subject}
+import gleam/erlang/process.{type Subject, type Timer}
 import gleam/float
 import gleam/int
 import gleam/list
@@ -60,6 +59,7 @@ type Blake {
     yap_chan: Option(Subject(yapper.Yap)),
     info_chan: Option(Subject(List(Info))),
     nonces: Set(Nonce),
+    backup_timer: Option(Timer),
   )
 }
 
@@ -89,9 +89,9 @@ pub type Message {
   Stop
   Shutdown
 
-  // For Internal use. See documentation in the implemention of Go for
+  // For internal use. See documentation in the implemention of Go for
   // an explanation.
-  AtomicNonceSet(Nonce, reply_to: Subject(Bool))
+  AtomicUse(Nonce, f: fn() -> Nil)
 }
 
 pub fn start() {
@@ -117,6 +117,7 @@ fn new() {
     yap_chan: None,
     info_chan: None,
     nonces: set.new(),
+    backup_timer: None,
   )
 }
 
@@ -128,6 +129,10 @@ fn yap(blake: Blake, m: yapper.Yap) {
 }
 
 fn loop(blake: Blake, recv_chan: Subject(Message)) {
+  // TODO: To really fortify this model, we would save the checkpoints from
+  // Donovan and send them as a backup if we don't get a response fast enough
+  // somehow
+
   let r = case process.receive_forever(recv_chan) {
     Init -> Ok(Blake(..blake, tablebase: tablebase.load()))
     NewGame -> {
@@ -137,7 +142,15 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
       process.send(blake.donovan_chan, donovan.Stop)
       process.send(blake.donovan_chan, donovan.Die)
       let assert Ok(game) = game.load_fen(game.start_fen)
-      Ok(Blake(..blake, game:, history: [], donovan_chan: donovan.start()))
+      Ok(
+        Blake(
+          ..blake,
+          game:,
+          history: [],
+          donovan_chan: donovan.start(),
+          nonces: set.new(),
+        ),
+      )
     }
     RequestHistory(client) -> {
       process.send(client, blake.history)
@@ -215,11 +228,7 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
       // `once` takes a callback and executes it only if the nonce wasn't
       // already used.
       let once = fn(f: fn() -> Nil) {
-        let sent = process.call_forever(recv_chan, AtomicNonceSet(nonce, _))
-        case sent {
-          True -> Nil
-          False -> f()
-        }
+        process.send(recv_chan, AtomicUse(nonce, f))
       }
 
       // This will queue a task in the background to look in the tablebase and
@@ -253,24 +262,21 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
       ) {
         let now = timestamp.system_time()
 
-        {
-          let stats = search_state.stats_to_string(search_state, now)
-          stats |> yapper.debug |> yap(blake, _)
+        let stats = search_state.stats_to_string(search_state, now)
+        stats |> yapper.debug |> yap(blake, _)
+
+        case blake.info_chan {
+          Some(info_chan) ->
+            aggregate_search_info(
+              now,
+              search_state,
+              current_depth,
+              best_evaluation,
+            )
+            |> process.send(info_chan, _)
+          None -> Nil
         }
 
-        {
-          case blake.info_chan {
-            Some(info_chan) ->
-              aggregate_search_info(
-                now,
-                search_state,
-                current_depth,
-                best_evaluation,
-              )
-              |> process.send(info_chan, _)
-            None -> Nil
-          }
-        }
         Nil
       }
 
@@ -370,12 +376,14 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
       Ok(blake)
     }
     Shutdown -> {
-      process.send(blake.donovan_chan, donovan.Stop)
       process.send(blake.donovan_chan, donovan.Die)
       Error(Nil)
     }
-    AtomicNonceSet(nonce, client) -> {
-      process.send(client, set.contains(blake.nonces, nonce))
+    AtomicUse(nonce, f) -> {
+      case set.contains(blake.nonces, nonce) {
+        True -> Nil
+        False -> f()
+      }
       Ok(Blake(..blake, nonces: set.insert(blake.nonces, nonce)))
     }
   }

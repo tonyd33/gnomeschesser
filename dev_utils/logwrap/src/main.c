@@ -1,7 +1,10 @@
 #include <errno.h>
 #include <fcntl.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/time.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -15,8 +18,23 @@ void die(const char *msg) {
 
 void get_timestamp(char *buf, size_t size) {
   time_t now = time(NULL);
+  int ms;
   struct tm *tm_info = localtime(&now);
+  struct timeval tv;
+
+  gettimeofday(&tv, NULL);
+
+  ms = lrint(tv.tv_usec / 1000.0); // Round to nearest millisec
+  if (ms >= 1000) {                // Allow for rounding up to nearest second
+    ms -= 1000;
+    tv.tv_sec++;
+  }
+
+  tm_info = localtime(&tv.tv_sec);
+
   strftime(buf, size, "%Y-%m-%d %H:%M:%S", tm_info);
+  int len = strlen(buf);
+  sprintf(buf, "%s.%03d", buf, ms);
 }
 
 void forward_and_log(int from_fd, int to_fd, FILE *log, const char *label) {
@@ -34,7 +52,7 @@ void forward_and_log(int from_fd, int to_fd, FILE *log, const char *label) {
           line_len++;
         }
 
-        char timestamp[32];
+        char timestamp[64];
         get_timestamp(timestamp, sizeof(timestamp));
 
         if ((i + line_len) < n && buf[i + line_len] == '\n') {

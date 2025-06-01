@@ -6,11 +6,15 @@ import chess/search/evaluation.{type Evaluation}
 import chess/uci
 import gleam/erlang
 import gleam/erlang/process.{type Subject}
+import gleam/float
 import gleam/function
+import gleam/int
 import gleam/io
 import gleam/list
 import gleam/option.{None, Some}
+import gleam/otp/task
 import gleam/result
+import gleam/time/calendar
 import gleam/time/duration
 import gleam/time/timestamp
 import util/parser as p
@@ -28,22 +32,25 @@ pub fn main() {
   let blake_chan = blake.start()
   let tell_blake = process.send(blake_chan, _)
 
-  tell_blake(blake.Init)
-  tell_blake(blake.RegisterYapper(yap_chan))
-  tell_blake(blake.RegisterInfoChan(info_chan))
+  // Get to IO handling ASAP, defer this work to another thread
+  task.async(fn() {
+    tell_blake(blake.Init)
+    tell_blake(blake.RegisterYapper(yap_chan))
+    tell_blake(blake.RegisterInfoChan(info_chan))
 
-  process.send(
-    yapper_chan,
-    yapper.TransformLevel(yapper.Debug, yapper.prefix_debug()),
-  )
-  process.send(
-    yapper_chan,
-    yapper.TransformLevel(yapper.Warn, yapper.prefix_warn()),
-  )
-  process.send(
-    yapper_chan,
-    yapper.TransformLevel(yapper.Err, yapper.prefix_err()),
-  )
+    process.send(
+      yapper_chan,
+      yapper.TransformLevel(yapper.Debug, yapper.prefix_debug()),
+    )
+    process.send(
+      yapper_chan,
+      yapper.TransformLevel(yapper.Warn, yapper.prefix_warn()),
+    )
+    process.send(
+      yapper_chan,
+      yapper.TransformLevel(yapper.Err, yapper.prefix_err()),
+    )
+  })
 
   loop(UCIState(tell_blake, yap, response_chan))
 }
@@ -119,6 +126,13 @@ fn handle_uci(s: UCIState, cmd) {
           timestamp.add(now, duration.milliseconds({ x * 95 } / 100))
         })
         |> option.from_result
+
+      deadline
+      |> option.map(timestamp.to_rfc3339(_, calendar.local_offset()))
+      |> option.map(fn(x) { "deadline " <> x })
+      |> option.unwrap("no deadline")
+      |> yapper.debug
+      |> s.yap
 
       let depth =
         params

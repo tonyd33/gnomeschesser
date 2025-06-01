@@ -26,7 +26,7 @@ pub type SearchState {
 
 pub fn new(now: timestamp.Timestamp) {
   SearchState(
-    transposition: iv.repeat(None, key_mask + 1),
+    transposition: iv.repeat(None, key_size + 1),
     history: dict.new(),
     iteration_depth: 0,
     stats: SearchStats(
@@ -88,10 +88,10 @@ pub type TranspositionPruneMethod {
 /// To reduce the need of manual trimming when the transposition table gets too
 /// large, we reduce the key space by taking only a certain amount of lower
 /// bits. This current mask gives us a max size of 2^16, or 65536 entries.
-const key_mask = 0x1FFFF
+const key_size = 100_000
 
 fn transposition_key_reduce(key: Int) {
-  int.bitwise_and(key, key_mask)
+  key % key_size
 }
 
 pub fn transposition_get(
@@ -353,5 +353,5 @@ pub fn stats_delta_time_ms(
 pub fn stats_hashfull(search_state: SearchState) -> Int {
   let stats = search_state.stats
   let size = stats.tt_size
-  float.round({ int.to_float(size) *. 1000.0 } /. int.to_float(key_mask))
+  float.round({ int.to_float(size) *. 1000.0 } /. int.to_float(key_size))
 }

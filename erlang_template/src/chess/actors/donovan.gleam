@@ -17,7 +17,6 @@ import chess/search/search_state.{type SearchState, SearchState}
 import gleam/erlang/process.{type Subject}
 import gleam/option.{type Option, None, Some}
 import gleam/result
-import gleam/time/duration
 import gleam/time/timestamp.{type Timestamp}
 import util/dict_addons
 import util/interruptable_state as interruptable
@@ -66,7 +65,7 @@ fn new() {
 fn loop(donovan: Donovan, recv_chan: Subject(Message)) -> Nil {
   let r = case process.receive_forever(recv_chan) {
     Clear -> Ok(new())
-    Go(game, history, deadline, depth, on_checkpoint, on_done) -> {
+    Go(game, history, _, depth, on_checkpoint, on_done) -> {
       let interrupt = fn(_) {
         case process.receive(recv_chan, 0) {
           Ok(Stop) -> True
