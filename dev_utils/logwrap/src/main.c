@@ -115,7 +115,7 @@ int main(int argc, char *argv[]) {
 
   // Fork helper for stdin -> child stdin (log and forward)
   if (fork() == 0) {
-    forward_and_log(STDIN_FILENO, in_pipe[1], log, "stdin");
+    forward_and_log(STDIN_FILENO, in_pipe[1], log, "stdin ");
     close(in_pipe[1]);
     exit(0);
   }

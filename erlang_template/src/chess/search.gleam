@@ -452,16 +452,49 @@ fn quiesce(
 
   let alpha = xint.max(alpha, score)
 
+  // Captures should come first
+  let compare_capture = fn(move1, move2) {
+    case move.is_capture(move1), move.is_capture(move2) {
+      True, True -> order.Eq
+      True, False -> order.Lt
+      False, True -> order.Gt
+      False, False -> order.Eq
+    }
+  }
+
+  let compare_capture_mvv_lva =
+    compare_capture
+    |> order_addons.or(compare_mvv)
+    |> order_addons.or(compare_lva)
+
+  let moves = list.sort(game.valid_moves(game), compare_capture_mvv_lva)
   {
-    use #(best_score, alpha), move <- interruptable.list_fold_until_s(
-      game.valid_moves(game),
-      #(score, alpha),
-    )
+    use #(best_score, alpha), move <- interruptable.list_fold_until_s(moves, #(
+      score,
+      alpha,
+    ))
 
     // If game isn't capture, continue
     use <- bool.guard(
       move.is_quiet(move),
       interruptable.return(list.Continue(#(best_score, alpha))),
+    )
+
+    // Delta pruning
+    let big_delta =
+      // Queen value. Make sure this is kept in sync with
+      // `piece_symbol(Queen)`. Inlined for optimization.
+      900
+      + {
+        case move.is_promotion(move) {
+          True -> 700
+          False -> 0
+        }
+      }
+    // if best_score < alpha - big_delta; return
+    use <- bool.guard(
+      xint.lt(best_score, xint.subtract(alpha, xint.from_int(big_delta))),
+      interruptable.return(list.Stop(#(best_score, alpha))),
     )
 
     let new_game = game.apply(game, move)

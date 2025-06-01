@@ -12,9 +12,10 @@
 
 import chess/game.{type Game}
 import chess/search
-import chess/search/evaluation.{type Evaluation, Evaluation}
+import chess/search/evaluation.{type Evaluation, Evaluation, PV}
 import chess/search/search_state.{type SearchState, SearchState}
 import gleam/erlang/process.{type Subject}
+import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/time/timestamp.{type Timestamp}
@@ -39,7 +40,7 @@ pub type Message {
     on_checkpoint: fn(SearchState, evaluation.Depth, Evaluation) -> Nil,
     // Callback to be executed *in Donovan's thread* when the search has
     // terminated for whatever reason.
-    on_done: fn(SearchState, Game, Evaluation) -> Nil,
+    on_done: fn(SearchState, Game, Result(Evaluation, Nil)) -> Nil,
   )
   Stop
   Die
@@ -96,14 +97,6 @@ fn loop(donovan: Donovan, recv_chan: Subject(Message)) -> Nil {
         }
         |> state.go(#(interrupt, donovan.search_state))
 
-      // Eventually, we may want to get a random move and send it as a
-      // fallback. For now, I want things to fail noisily so we can detect
-      // bugs.
-      let evaluation =
-        result.unwrap(
-          evaluation,
-          Evaluation(xint.NegInf, evaluation.PV, None, []),
-        )
       on_done(new_state, game, evaluation)
 
       Ok(Donovan(search_state: new_state))

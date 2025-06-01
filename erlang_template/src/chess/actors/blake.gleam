@@ -163,8 +163,7 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
       case game {
         Ok(game) -> Ok(Blake(..blake, game:, history: []))
         Error(Nil) -> {
-          { "Received bad FEN: " <> fen }
-          |> yapper.warn
+          yapper.warn("Received bad FEN: " <> fen)
           |> yap(blake, _)
 
           Ok(blake)
@@ -200,8 +199,7 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
         Ok(game) -> Ok(smart_append_history(blake, game))
 
         Error(Nil) -> {
-          { "Failed to load FEN: " <> fen }
-          |> yapper.warn
+          yapper.warn("Failed to load FEN: " <> fen)
           |> yap(blake, _)
           Ok(blake)
         }
@@ -226,11 +224,12 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
         timestamp.system_time() |> timestamp.to_unix_seconds_and_nanoseconds
 
       // `once` takes a callback and executes it only if the nonce wasn't
-      // already used.
+      // already used and uses the nonce.
       let once = fn(f: fn() -> Nil) {
         process.send(recv_chan, AtomicNonceUse(nonce, f))
       }
 
+      // `if_nonce_free` is like `once`, but doesn't use the nonce.
       let if_nonce_free = fn(f: fn() -> Nil) {
         case process.call_forever(recv_chan, NonceCheck(nonce, _)) {
           True -> f()
@@ -270,7 +269,7 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
         let now = timestamp.system_time()
 
         let stats = search_state.stats_to_string(search_state, now)
-        stats |> yapper.debug |> yap(blake, _)
+        yapper.debug(stats) |> yap(blake, _)
 
         {
           use <- if_nonce_free
@@ -292,7 +291,11 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
 
       // Called when search is done. Races against tablebase query to send
       // a move.
-      let on_done = fn(s: SearchState, g, e) {
+      let on_done = fn(
+        s: SearchState,
+        game,
+        evaluation: Result(Evaluation, Nil),
+      ) {
         {
           let now = timestamp.system_time()
           let dt =
@@ -302,13 +305,38 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
             |> float.round
             |> int.max(1)
             |> int.to_string
-          { "Search took " <> dt <> "ms" }
-          |> yapper.debug
+
+          yapper.debug("Search took " <> dt <> "ms")
           |> yap(blake, _)
+        }
+        let evaluation = case evaluation {
+          Ok(Evaluation(best_move: None, ..)) | Error(Nil) -> {
+            yapper.warn(
+              "We got no evaluation or best move for FEN: "
+              <> game.to_fen(game)
+              <> ". Falling back to a random move",
+            )
+            |> yap(blake, _)
+
+            // If we somehow still failed to get a move, fall back to a random
+            // move.
+            let random_move =
+              game.valid_moves(blake.game)
+              |> list.shuffle
+              |> list.first
+              |> option.from_result
+            Evaluation(
+              score: xint.from_int(0),
+              best_move: random_move,
+              best_line: option.values([random_move]),
+              node_type: PV,
+            )
+          }
+          Ok(evaluation) -> evaluation
         }
 
         use <- once
-        process.send(client, Response(g, e))
+        process.send(client, Response(game, evaluation))
       }
 
       // If movetime is set, set a timer to stop after movetime.
@@ -326,8 +354,7 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
         None -> Nil
       }
 
-      { "Asking donovan to work." }
-      |> yapper.debug
+      yapper.debug("Asking donovan to work.")
       |> yap(blake, _)
 
       process.send(
@@ -360,14 +387,13 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
           |> float.round
           |> int.max(1)
           |> int.to_string
-        { "Search took " <> dt <> "ms" }
-        |> yapper.debug
+        yapper.debug("Search took " <> dt <> "ms")
         |> yap(blake, _)
       }
 
-      { "Asking donovan to think." }
-      |> yapper.debug
+      yapper.debug("Asking donovan to think.")
       |> yap(blake, _)
+
       process.send(
         blake.donovan_chan,
         donovan.Go(
@@ -476,8 +502,9 @@ fn smart_append_history(blake: Blake, game) {
       // Log that we have to flush the history if coherence conditions failed.
       case blake.history {
         [_, ..] -> {
-          "Coherence conditions were not met. History must be flushed"
-          |> yapper.warn
+          yapper.warn(
+            "Coherence conditions were not met. History must be flushed",
+          )
           |> yap(blake, _)
         }
         // Unless there was no history to begin with. Then, it was likely

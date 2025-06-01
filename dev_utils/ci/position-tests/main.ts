@@ -161,7 +161,6 @@ async function runTestCase(
       ),
     ],
   );
-  await engine.ucinewgame();
 
   return {
     ok: tc.bms.includes(bestmove),

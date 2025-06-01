@@ -6,9 +6,7 @@ import chess/search/evaluation.{type Evaluation}
 import chess/uci
 import gleam/erlang
 import gleam/erlang/process.{type Subject}
-import gleam/float
 import gleam/function
-import gleam/int
 import gleam/io
 import gleam/list
 import gleam/option.{None, Some}
@@ -148,8 +146,7 @@ fn handle_uci(s: UCIState, cmd) {
       True
     }
     _ -> {
-      "Command recognized but ignored."
-      |> yapper.warn
+      yapper.warn("Command recognized but ignored.")
       |> s.yap
       True
     }
@@ -167,8 +164,7 @@ fn loop(s: UCIState) {
       let continue = case parsed {
         Ok(cmd) -> handle_uci(s, cmd)
         Error(_) -> {
-          { "Unrecognized command: " <> line }
-          |> yapper.warn
+          yapper.warn("Unrecognized command: " <> line)
           |> s.yap
           True
         }
@@ -245,8 +241,7 @@ fn loop_blake_handler(yap, recv_selector) {
             <> "\n"
           }
 
-          s
-          |> yapper.err
+          yapper.err(s)
           |> yap
 
           panic as s
@@ -257,7 +252,8 @@ fn loop_blake_handler(yap, recv_selector) {
       |> list.filter_map(blake_info_to_uci_info)
       |> uci.GUICmdInfo
       |> uci.serialize_gui_cmd
-      |> io.println
+      |> yapper.info
+      |> yap
     }
   }
 
