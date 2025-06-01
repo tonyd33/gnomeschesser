@@ -61,14 +61,21 @@ pub fn rook_from_file(castle: Castle) {
   }
 }
 
-pub fn rook_start_position(side: player.Player, castle: Castle) {
-  let assert Ok(square) =
-    case side, castle {
-      player.White, KingSide -> 0x07
-      player.White, QueenSide -> 0x00
-      player.Black, KingSide -> 0x77
-      player.Black, QueenSide -> 0x70
-    }
-    |> square.from_ox88
-  square
+pub fn rook_from_position(side: player.Player, castle: Castle) {
+  case side, castle {
+    player.White, KingSide -> 0x07
+    player.White, QueenSide -> 0x00
+    player.Black, KingSide -> 0x77
+    player.Black, QueenSide -> 0x70
+  }
+}
+
+pub fn rook_to_position(side: player.Player, castle: Castle) {
+  let rank = square.player_rank(side)
+  let to_file = case castle {
+    KingSide -> 5
+    QueenSide -> 3
+  }
+  let assert Ok(to) = square.from_rank_file(rank, to_file)
+  to
 }

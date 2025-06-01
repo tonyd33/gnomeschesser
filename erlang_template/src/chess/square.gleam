@@ -8,9 +8,13 @@ import gleam/option
 import gleam/order
 import gleam/pair
 import gleam/result
+import gleam/set
 import gleam/string
 import util/direction
 import util/yielder
+
+type Board =
+  dict.Dict(Square, piece.Piece)
 
 pub const king_file = 4
 
@@ -114,6 +118,28 @@ pub fn from_ox88(ox88: Int) -> Result(Square, Nil) {
   }
 }
 
+/// converts to a 0-63 index
+/// equivalent to rank * 8 + file
+pub fn to_index(square: Square) {
+  int.bitwise_or(
+    int.bitwise_and(0b01110000, square)
+      |> int.bitwise_shift_right(1),
+    int.bitwise_and(0b00000111, square),
+  )
+}
+
+/// converts from a 0-63 index
+/// equivalent to rank * 8 + file
+pub fn from_index(index: Int) {
+  // TODO: remove this assert
+  let assert True = index < 64 && index >= 0
+  int.bitwise_or(
+    int.bitwise_and(0b00111000, index)
+      |> int.bitwise_shift_left(1),
+    int.bitwise_and(0b00000111, index),
+  )
+}
+
 pub fn move(
   square: Square,
   direction: direction.Direction,
@@ -135,7 +161,7 @@ pub fn add(square: Square, increment: Int) -> Result(Square, Nil) {
   from_ox88(ox88)
 }
 
-fn is_valid(ox88: Int) -> Bool {
+pub fn is_valid(ox88: Int) -> Bool {
   0 == int.bitwise_and(ox88, int.bitwise_not(0x77))
 }
 
@@ -173,58 +199,100 @@ pub fn ray_to_offset(from from: Square, to to: Square) {
 /// Shoots a ray vertical/horizontal/diagonals
 /// returns the first piece hit if it exists
 /// otherwise returns error
-pub fn piece_attacking_ray(
-  occupancy: dict.Dict(Square, piece.Piece),
-  from: Square,
-  to: Square,
-) -> Result(piece.Piece, Nil) {
-  let difference = to - from
-  use offset <- result.try({
-    case difference {
-      diff if diff % 16 == 0 -> int.clamp(diff, -16, 16) |> Ok
-      diff if diff < 8 && diff > -8 -> int.clamp(diff, -1, 1) |> Ok
-      diff if diff % 15 == 0 -> int.clamp(diff, -15, 15) |> Ok
-      diff if diff % 17 == 0 -> int.clamp(diff, -17, 17) |> Ok
-      _ -> Error(Nil)
-    }
-  })
+// pub fn piece_attacking_ray(
+//   occupancy: dict.Dict(Square, piece.Piece),
+//   from: Square,
+//   to: Square,
+// ) -> Result(piece.Piece, Nil) {
+//   let difference = to - from
+//   use offset <- result.try({
+//     case difference {
+//       diff if diff % 16 == 0 -> int.clamp(diff, -16, 16) |> Ok
+//       diff if diff < 8 && diff > -8 -> int.clamp(diff, -1, 1) |> Ok
+//       diff if diff % 15 == 0 -> int.clamp(diff, -15, 15) |> Ok
+//       diff if diff % 17 == 0 -> int.clamp(diff, -17, 17) |> Ok
+//       _ -> Error(Nil)
+//     }
+//   })
 
-  [1, 2, 3, 4, 5, 6, 7, 8]
-  |> list.find_map(fn(depth) {
-    use to <- result.try(from_ox88(offset * depth + from))
-    dict.get(occupancy, to)
-  })
+//   [1, 2, 3, 4, 5, 6, 7, 8]
+//   |> list.find_map(fn(depth) {
+//     use to <- result.try(from_ox88(offset * depth + from))
+//     dict.get(occupancy, to)
+//   })
+// }
+
+// /// considers squares that are attackable
+// /// returns a list of squares attacking until and
+// /// including the first piece hit if it's the opponent's
+// pub fn piece_attacking(
+//   occupancy: dict.Dict(Square, piece.Piece),
+//   from: Square,
+//   piece: piece.Piece,
+//   opponent_only: Bool,
+// ) -> List(Square) {
+//   let depths = case piece.symbol {
+//     piece.Knight | piece.King | piece.Pawn -> [1]
+//     piece.Bishop | piece.Queen | piece.Rook -> [1, 2, 3, 4, 5, 6, 7, 8]
+//   }
+
+//   let us = piece.player
+
+//   piece_attack_offsets(piece)
+//   |> list.flat_map(fn(offset) {
+//     list.fold_until(depths, [], fn(acc, depth) {
+//       case from_ox88(offset * depth + from) {
+//         Ok(to) ->
+//           case dict.get(occupancy, to), opponent_only {
+//             Ok(piece.Piece(player, _)), True if player == us -> list.Stop(acc)
+//             Error(Nil), _ -> list.Continue([to, ..acc])
+//             _, _ -> list.Stop([to, ..acc])
+//           }
+//         Error(Nil) -> list.Stop(acc)
+//       }
+//     })
+//   })
+// }
+
+/// maximum distance each piece can travel for attacking
+pub fn max_attackable_distance(piece: piece.PieceSymbol) {
+  case piece {
+    piece.Knight | piece.King | piece.Pawn -> 1
+    piece.Bishop | piece.Queen | piece.Rook -> 8
+  }
 }
 
-/// considers squares that are attackable
-/// returns a list of squares attacking until and
-/// including the first piece hit if it's the opponent's
-pub fn piece_attacking(
-  occupancy: dict.Dict(Square, piece.Piece),
+/// calculates the squares attacked by a piece from a square
+/// can optionally filter the offset
+pub fn attacking_squares(
+  occupancy: Board,
   from: Square,
   piece: piece.Piece,
-  opponent_only: Bool,
-) -> List(Square) {
-  let depths = case piece.symbol {
-    piece.Knight | piece.King | piece.Pawn -> [1]
-    piece.Bishop | piece.Queen | piece.Rook -> [1, 2, 3, 4, 5, 6, 7, 8]
-  }
-
+  offset_filter: option.Option(Square),
+) -> dict.Dict(Int, set.Set(Square)) {
   let us = piece.player
+  let offsets = case offset_filter {
+    option.Some(offset_filter) -> [offset_filter]
+    option.None -> piece_attack_offsets(piece)
+  }
+  let distance = max_attackable_distance(piece.symbol)
 
-  piece_attack_offsets(piece)
-  |> list.flat_map(fn(offset) {
-    list.fold_until(depths, [], fn(acc, depth) {
-      case from_ox88(offset * depth + from) {
-        Ok(to) ->
-          case dict.get(occupancy, to), opponent_only {
-            Ok(piece.Piece(player, _)), True if player == us -> list.Stop(acc)
-            Error(Nil), _ -> list.Continue([to, ..acc])
-            _, _ -> list.Stop([to, ..acc])
-          }
-        Error(Nil) -> list.Stop(acc)
-      }
-    })
+  offsets
+  |> list.fold(dict.new(), fn(acc, offset) {
+    let squares_attacking =
+      yielder.range(1, distance)
+      |> yielder.fold_until(set.new(), fn(acc, depth) {
+        case from_ox88(offset * depth + from) {
+          Ok(to) ->
+            case dict.get(occupancy, to) {
+              Error(Nil) -> list.Continue(set.insert(acc, to))
+              Ok(piece.Piece(player, _)) if player == us -> list.Stop(acc)
+              _ -> list.Stop(set.insert(acc, to))
+            }
+          Error(Nil) -> list.Stop(acc)
+        }
+      })
+    dict.insert(acc, offset, squares_attacking)
   })
 }
 
@@ -992,7 +1060,7 @@ pub fn king_moves(from: Square) {
   }
 }
 
-pub fn knight_moves(from: Square) {
+pub fn knight_moves(from: Square) -> List(Square) {
   case from {
     0 -> [18, 33]
     1 -> [19, 34, 32]
@@ -1281,7 +1349,7 @@ pub fn pawn_capture_moves(from: Square, player: player.Player) {
 }
 
 pub fn get_squares_attacking_at(
-  board: dict.Dict(Square, piece.Piece),
+  board: Board,
   at: Square,
   by: player.Player,
 ) -> List(Square) {
@@ -1340,63 +1408,12 @@ pub fn get_squares_attacking_at(
   })
 }
 
-pub fn is_attacked_at(
-  board: dict.Dict(Square, piece.Piece),
-  at: Square,
-  by: player.Player,
-) -> Bool {
-  board
-  |> dict.to_list
-  |> list.any(fn(piece) {
-    let #(from, piece) = piece
-    // We only consider attacks by a certain player
-    use <- bool.guard(piece.player != by, False)
-
-    let difference = from - at
-    // skip if to/from square are the same
-    use <- bool.guard(difference == 0, False)
-
-    // This index is used for `attacks` and `rays`, where a difference of 0 corresponds to the centre
-    let index = difference + 0x77
-
-    // `attacks` lets us index which type of piece can attack from that square
-    // if it's not the piece we currently have, we just return
-    use <- bool.guard(
-      int.bitwise_and(attacks(index), piece_masks(piece.symbol)) == 0,
-      False,
-    )
-
-    case piece.symbol {
-      // Knights and Kings can't be blocked
-      piece.Knight | piece.King -> True
-      // Pawns can't be blocked
-      piece.Pawn ->
-        // Pawns can only attack forwards, so we check which side they're on
-        case piece.player, int.compare(difference, 0) {
-          player.Black, order.Gt | player.White, order.Lt -> True
-          _, _ -> False
-        }
-      // These slide, so we check if their path is empty
-      piece.Bishop | piece.Queen | piece.Rook -> {
-        let offset = rays(index)
-        let first = from
-        let last = at - offset
-        let iterations = { last - first } / offset
-        use <- bool.guard(iterations <= 0, True)
-        yielder.iterate(first + offset, int.add(_, offset))
-        |> yielder.take(iterations)
-        |> yielder.all(fn(ox88) { dict.get(board, ox88) |> result.is_error })
-      }
-    }
-  })
-}
-
 /// calculates all attacks (and pinned pieces from attacks) to a certain square
 /// Does not handle en passant specialcase, that is specially checked later on
 /// This is for determining if the king is in check
 /// Returns a list of attackers as well as pinned piece if it exists
 pub fn attacks_and_pins_to(
-  board: dict.Dict(Square, piece.Piece),
+  board: Board,
   at: Square,
   by: player.Player,
 ) -> List(#(Square, option.Option(Square))) {

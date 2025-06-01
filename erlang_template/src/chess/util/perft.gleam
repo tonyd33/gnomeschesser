@@ -1,4 +1,5 @@
 import chess/game
+import chess/move
 import gleam/bool
 import gleam/list
 

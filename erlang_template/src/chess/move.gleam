@@ -166,3 +166,21 @@ pub fn king_castle(player: player.Player, castle: castle.Castle) -> Move(Pseudo)
   let assert Ok(to) = square.from_rank_file(rank, to_file)
   new_pseudo(from:, to:, promotion: option.None)
 }
+
+pub fn promotions_at(
+  square: square.Square,
+  piece: piece.Piece,
+) -> List(option.Option(piece.PieceSymbol)) {
+  case
+    piece.symbol == piece.Pawn
+    && square.pawn_promotion_rank(piece.player) == square.rank(square)
+  {
+    True -> [
+      Some(piece.Queen),
+      Some(piece.Knight),
+      Some(piece.Bishop),
+      Some(piece.Rook),
+    ]
+    False -> [None]
+  }
+}
