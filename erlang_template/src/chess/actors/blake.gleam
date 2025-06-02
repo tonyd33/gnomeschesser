@@ -92,7 +92,7 @@ pub type Message {
   // For internal use. See documentation in the implemention of Go for
   // an explanation.
   AtomicNonceUse(Nonce, f: fn() -> Nil)
-  NonceCheck(Nonce, Subject(Bool))
+  NonceCheck(Nonce, f: fn() -> Nil)
 }
 
 pub fn start() {
@@ -140,7 +140,11 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
       // I don't really know why but if I Clear Donovan instead of killing him,
       // subsequent searches seem slow and time out...? At least, this seems to
       // be the case.
+      let donovan_pid = process.subject_owner(blake.donovan_chan)
       process.send(blake.donovan_chan, donovan.Die)
+      // Make sure donovan is really dead
+      process.kill(donovan_pid)
+
       let assert Ok(game) = game.load_fen(game.start_fen)
       Ok(
         Blake(
@@ -231,10 +235,7 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
 
       // `if_nonce_free` is like `once`, but doesn't use the nonce.
       let if_nonce_free = fn(f: fn() -> Nil) {
-        case process.call_forever(recv_chan, NonceCheck(nonce, _)) {
-          True -> f()
-          False -> Nil
-        }
+        process.send(recv_chan, NonceCheck(nonce, f))
       }
 
       // This will queue a task in the background to look in the tablebase and
@@ -271,19 +272,20 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
         let stats = search_state.stats_to_string(search_state, now)
         yapper.debug(stats) |> yap(blake, _)
 
-        {
-          use <- if_nonce_free
-          case blake.info_chan {
-            Some(info_chan) ->
-              aggregate_search_info(
-                now,
-                search_state,
-                current_depth,
-                best_evaluation,
-              )
-              |> process.send(info_chan, _)
-            None -> Nil
+        let search_info =
+          aggregate_search_info(
+            now,
+            search_state,
+            current_depth,
+            best_evaluation,
+          )
+
+        case blake.info_chan {
+          Some(info_chan) -> {
+            use <- if_nonce_free
+            process.send(info_chan, search_info)
           }
+          None -> Nil
         }
 
         Nil
@@ -335,8 +337,10 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
           Ok(evaluation) -> evaluation
         }
 
-        use <- once
-        process.send(client, Response(game, evaluation))
+        {
+          use <- once
+          process.send(client, Response(game, evaluation))
+        }
       }
 
       // If movetime is set, set a timer to stop after movetime.
@@ -422,8 +426,11 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
       }
       Ok(Blake(..blake, nonces: set.insert(blake.nonces, nonce)))
     }
-    NonceCheck(nonce, client) -> {
-      process.send(client, !set.contains(blake.nonces, nonce))
+    NonceCheck(nonce, f) -> {
+      case set.contains(blake.nonces, nonce) {
+        True -> Nil
+        False -> f()
+      }
       Ok(blake)
     }
   }

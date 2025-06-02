@@ -35,12 +35,17 @@ done
 tag=${tag:-$default_tag}
 docker_args=$@
 
+logwrap_dir=$(realpath "$(dirname "$0")/../logwrap/")
+logfile="/tmp/uci.log"
+
 # Get this command by inspecting the entrypoint.sh referenced in the Dockerfile
 # And then modify it to run the UCI entrypoint to get this command.
 # Make sure not to use -t here; it breaks for things like fastchess
-docker run \
-  --rm -i \
-  --entrypoint=/bin/sh \
-  $docker_args \
-  "ghcr.io/tonyd33/gleam-chess-tournament/chess-bot:$tag" \
-  -c 'erl -pa /app/*/ebin -eval "erlang_template@@main:run(erlang_template_uci)" -noshell -extra'
+exec "$logwrap_dir/src/logwrap" \
+  "$logfile" \
+  docker run \
+    --rm -i \
+    --entrypoint=/bin/sh \
+    $docker_args \
+    "ghcr.io/tonyd33/gleam-chess-tournament/chess-bot:$tag" \
+    -c 'erl -pa /app/*/ebin -eval "erlang_template@@main:run(erlang_template_uci)" -noshell -extra'

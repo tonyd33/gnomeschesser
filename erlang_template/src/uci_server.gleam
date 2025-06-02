@@ -191,10 +191,11 @@ fn start_blake_handler(yap) {
       let best_evaluation_chan = process.new_subject()
       let info_chan = process.new_subject()
       let selector =
+        // DO NOT CHANGE THIS ORDER.
         process.new_selector()
-        |> process.selecting(chan, function.identity)
-        |> process.selecting(best_evaluation_chan, Response)
         |> process.selecting(info_chan, Info)
+        |> process.selecting(best_evaluation_chan, Response)
+        |> process.selecting(chan, function.identity)
       process.send(out_chan, #(chan, best_evaluation_chan, info_chan))
       loop_blake_handler(yap, selector)
     },
@@ -252,8 +253,7 @@ fn loop_blake_handler(yap, recv_selector) {
       |> list.filter_map(blake_info_to_uci_info)
       |> uci.GUICmdInfo
       |> uci.serialize_gui_cmd
-      |> yapper.info
-      |> yap
+      |> io.println
     }
   }
 

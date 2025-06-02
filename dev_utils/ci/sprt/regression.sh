@@ -12,6 +12,7 @@ run_defender="$repo_root_path/dev_utils/scripts/start-docker-uci.sh"
 # defender_args="--tag latest -- -m 500M --cpus 2"
 challenger_args="--tag local"
 defender_args="--tag latest"
+logwrap_dir=$(realpath "$(dirname "$0")/../../logwrap/")
 
 fastchess_event_name="Fastchess Tournament"
 rounds=8
@@ -119,6 +120,11 @@ if [ "$build" = yes ]; then
     -f "$repo_root_path/erlang_template/Dockerfile" \
     "$repo_root_path/erlang_template"
 fi
+
+# Compile logwrap
+cd "$logwrap_dir"
+make
+cd -
 
 # Run fastchess
 mkdir -p "$results_dir"

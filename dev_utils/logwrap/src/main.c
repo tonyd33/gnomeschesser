@@ -17,6 +17,7 @@ void die(const char *msg) {
 }
 
 void get_timestamp(char *buf, size_t size) {
+  char tmp_buf[size];
   time_t now = time(NULL);
   int ms;
   struct tm *tm_info = localtime(&now);
@@ -32,9 +33,9 @@ void get_timestamp(char *buf, size_t size) {
 
   tm_info = localtime(&tv.tv_sec);
 
-  strftime(buf, size, "%Y-%m-%d %H:%M:%S", tm_info);
+  strftime(tmp_buf, size, "%Y-%m-%d %H:%M:%S", tm_info);
   int len = strlen(buf);
-  sprintf(buf, "%s.%03d", buf, ms);
+  sprintf(buf, "%s.%03d", tmp_buf, ms);
 }
 
 void forward_and_log(int from_fd, int to_fd, FILE *log, const char *label) {
@@ -52,8 +53,8 @@ void forward_and_log(int from_fd, int to_fd, FILE *log, const char *label) {
           line_len++;
         }
 
-        char timestamp[64];
-        get_timestamp(timestamp, sizeof(timestamp));
+        char timestamp[128];
+        get_timestamp(timestamp, 128);
 
         if ((i + line_len) < n && buf[i + line_len] == '\n') {
           // Full line

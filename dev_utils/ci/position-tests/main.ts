@@ -102,6 +102,37 @@ ${suite.comment}
   return output;
 }
 
+async function retryWithExponentialBackoff<A>(
+  f: () => Promise<A>,
+  opts: { maxRetries: number; rest: number; multiplier?: number },
+) {
+  let { multiplier = 2, rest, maxRetries } = opts;
+  let i = 0;
+  while (true) {
+    i++;
+    // Try to do `f`. If it fails, sleep for `rest` ms and double the `rest`
+    // before trying it again.
+    try {
+      return await f();
+    } catch (e) {
+      let message = "unknown error";
+      if (e instanceof Error) {
+        message = e.message;
+      }
+      process.stderr.write(
+        `Failed ${i}/${opts.maxRetries} times with error ${message}\n`,
+      );
+      if (i >= maxRetries) {
+        throw e;
+      } else {
+        process.stderr.write(`Sleeping for ${rest}ms\n`);
+        await sleep(rest);
+        rest *= multiplier;
+      }
+    }
+  }
+}
+
 function generateReport(suites: TestSuite[], results: TestResult[]): string {
   const numPassed = results.filter((x) => x.ok).length;
   const numFailed = results.length - numPassed;
@@ -153,9 +184,9 @@ async function runTestCase(
   const { bestmove }: { bestmove: string; info: string[] } = await Promise.race(
     [
       engine.go({ movetime: timeout, depth }),
-      new Promise((resolve) =>
+      new Promise((_, reject) =>
         setTimeout(
-          () => resolve({ bestmove: "timeout", info: [] }),
+          () => reject(new Error("timeout")),
           timeout * 2,
         )
       ),
@@ -184,18 +215,30 @@ async function runTestCases(
   const results: TestResult[] = [];
   const engine = new Engine(enginePath);
 
+  const runTestCaseWithRetries = (test: TestCase) =>
+    retryWithExponentialBackoff(
+      () => runTestCase(test, { engine, timeout, depth }),
+      {
+        maxRetries: 10,
+        rest: 1000,
+        multiplier: 1,
+      },
+    );
+
   try {
     await engine.init();
     await engine.isready();
     for await (const test of tests) {
       process.stderr.write(`[WORKER ${workerNum}] ⏰ ${test.id}: RUN\n`);
 
-      const result = await runTestCase(test, { engine, timeout, depth });
+      const result = await runTestCaseWithRetries(test);
 
       if (result.ok) {
         process.stderr.write(`[WORKER ${workerNum}] ✅ ${test.id}: OK\n`);
       } else {
-        process.stderr.write(`[WORKER ${workerNum}] ❌ ${test.id}: FAIL\n`);
+        process.stderr.write(
+          `[WORKER ${workerNum}] ❌ ${test.id}: FAIL (expected: ${result.expected}, got: ${result.got})\n`,
+        );
       }
       results.push(result);
 
@@ -293,15 +336,17 @@ async function main() {
 
   const results = await Promise
     .all(
-      tasks.map((tests, workerNum) =>
-        runTestCases(tests, {
+      tasks.map(async (tests, workerNum) => {
+        // Stagger startups
+        await sleep(workerNum * 1000);
+        return runTestCases(tests, {
           enginePath: engineAbsPath,
           timeout: opts.timeout,
           depth: opts.depth,
           rest: opts.rest,
           workerNum: workerNum + 1,
         })
-      ),
+      }),
     )
     .then((xss) =>
       xss.flat().sort((x, y) => x.id == y.id ? 0 : (x.id < y.id ? -1 : 1))
