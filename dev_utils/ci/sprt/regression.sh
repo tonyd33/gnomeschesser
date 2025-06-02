@@ -121,11 +121,6 @@ if [ "$build" = yes ]; then
     "$repo_root_path/erlang_template"
 fi
 
-# Compile logwrap
-cd "$logwrap_dir"
-make
-cd -
-
 # Run fastchess
 mkdir -p "$results_dir"
 "$run_fastchess" \

@@ -1,6 +1,5 @@
 import { TestCase, TestSuite } from "./types.ts";
 
-/** */
 const tests: TestCase[] = [
   {
     fen: "1k1r4/pp1b1R2/3q2pp/4p3/2B5/4Q3/PPP2B2/2K5 b - - 0 1",
