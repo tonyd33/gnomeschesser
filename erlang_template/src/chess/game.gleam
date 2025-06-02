@@ -410,9 +410,47 @@ pub fn is_checkmate(game: Game) -> Bool {
 /// true iff that's the case. See the same function in chess.js:
 /// https://github.com/jhlywa/chess.js/blob/dc1f397bc0195dda45e12f0ddf3322550cbee078/src/chess.ts#L1123
 ///
-// pub fn is_insufficient_material(_game: Game) -> Bool {
-//   todo
-// }
+pub fn is_insufficient_material(game: Game) -> Bool {
+  let num_pieces = dict.size(game.board)
+  let #(per_piece_count, bishops_all_light, bishops_all_dark) = {
+    use #(per_piece_count, bishops_all_light, bishops_all_dark), square, piece <- dict.fold(
+      game.board,
+      #(dict.new(), True, True),
+    )
+    let per_piece_count = {
+      use count <- dict.upsert(per_piece_count, piece.symbol)
+      count |> option.map(int.add(_, 1)) |> option.unwrap(1)
+    }
+    let #(bishops_all_light, bishops_all_dark) = case piece.symbol {
+      piece.Bishop -> {
+        let is_light = square.is_light(square)
+        #(bishops_all_light && is_light, bishops_all_dark && !is_light)
+      }
+      _ -> #(bishops_all_light, bishops_all_dark)
+    }
+
+    #(per_piece_count, bishops_all_light, bishops_all_dark)
+  }
+
+  // k vs. k
+  use <- bool.guard(num_pieces == 2, True)
+  let num_bishops = dict.get(per_piece_count, piece.Bishop) |> result.unwrap(0)
+  let num_knights = dict.get(per_piece_count, piece.Knight) |> result.unwrap(0)
+
+  // k vs. kn .... or .... k vs. kb
+  use <- bool.guard(
+    num_pieces == 3 && { num_bishops == 1 || num_knights == 1 },
+    True,
+  )
+
+  // kb vs. kb where any number of bishops are all on the same color
+  use <- bool.guard(
+    num_pieces == num_bishops + 2 && { bishops_all_light || bishops_all_dark },
+    True,
+  )
+
+  False
+}
 
 pub fn is_stalemate(game: Game) -> Bool {
   !is_check(game, game.active_color) && valid_moves(game) |> list.is_empty
