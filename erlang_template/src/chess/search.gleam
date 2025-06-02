@@ -172,38 +172,7 @@ pub fn search_with_widening_windows(
 /// Don't even bother inserting into the transposition table unless we're past
 /// this depth!
 ///
-const tt_min_leaf_distance = 3
-
-/// Retrieve an entry from the transposition table respecting the alpha-beta
-/// bounds and the depth.
-///
-fn tt_bounded_get(game, depth, alpha, beta) {
-  let game_hash = game.hash(game)
-  // Don't even look if we're close to the leaf. We wouldn't even have
-  // inserted anything here anyway.
-  use <- bool.guard(depth < tt_min_leaf_distance, state.return(Error(Nil)))
-
-  use maybe_entry <- state.map(search_state.transposition_get(game_hash))
-  use transposition.Entry(depth: cached_depth, eval: evaluation, ..) <- result.try(
-    maybe_entry,
-  )
-  // Entry should have depth deeper than our current search depth.
-  use <- bool.guard(cached_depth < depth, Error(Nil))
-
-  case evaluation {
-    Evaluation(_, evaluation.PV, _, _) -> Ok(evaluation)
-    Evaluation(score, evaluation.Cut, _, _) ->
-      case xint.gte(score, beta) {
-        True -> Ok(evaluation)
-        False -> Error(Nil)
-      }
-    Evaluation(score, evaluation.All, _, _) ->
-      case xint.lte(score, alpha) {
-        True -> Ok(evaluation)
-        False -> Error(Nil)
-      }
-  }
-}
+const tt_min_leaf_distance = 1
 
 /// https://www.chessprogramming.org/Alpha-Beta#Negamax_Framework
 /// returns the score of the current game searched at depth
@@ -244,9 +213,33 @@ fn negamax_alphabeta_failsoft(
   )
 
   // return early if we find an entry in the transposition table
-  use cached_evaluation <- interruptable.do(
-    interruptable.from_state(tt_bounded_get(game, depth, alpha, beta)),
-  )
+  use cached_evaluation <- interruptable.do({
+    use <- bool.guard(
+      depth < tt_min_leaf_distance,
+      interruptable.return(Error(Nil)),
+    )
+
+    search_state.transposition_get(game_hash)
+    |> interruptable.from_state
+    |> interruptable.map(fn(x) {
+      use transposition.Entry(cached_depth, evaluation, _) <- result.try(x)
+      use <- bool.guard(cached_depth < depth, Error(Nil))
+      // If we find a cached entry that is deeper than our current search
+      case evaluation {
+        Evaluation(_, evaluation.PV, _, _) -> Ok(evaluation)
+        Evaluation(score, evaluation.Cut, _, _) ->
+          case xint.gte(score, beta) {
+            True -> Ok(evaluation)
+            False -> Error(Nil)
+          }
+        Evaluation(score, evaluation.All, _, _) ->
+          case xint.lte(score, alpha) {
+            True -> Ok(evaluation)
+            False -> Error(Nil)
+          }
+      }
+    })
+  })
   use <- result.lazy_unwrap(result.map(cached_evaluation, interruptable.return))
 
   // Otherwise, actually do negamax
@@ -288,7 +281,8 @@ fn do_negamax_alphabeta_failsoft(
     let score =
       evaluate.game(game)
       |> xint.multiply(evaluate.player(game.turn(game)) |> xint.from_int)
-    let margin = 100 * depth
+    // TODO: Tweak margin
+    let margin = 50 * depth
 
     case xint.gte(score, xint.add(beta, xint.from_int(margin))) {
       True -> {
@@ -387,17 +381,17 @@ fn do_negamax_alphabeta_failsoft(
       use <- bool.guard(is_check || depth < 3 || move_number < 3, 0)
 
       // Base formula from Weiss
-      // c + (ln(depth) + ln(move_number))/d
+      // c + (ln(depth) * ln(move_number))/d
       // https://www.chessprogramming.org/Late_Move_Reductions#Reduction_Depth
       let #(c, d) = case move.is_capture(move) || move.is_promotion(move) {
         // Reduce captures/promotions less
         // Original Weiss values were:
         // #(0.2, 3.35)
-        True -> #(0.2, 3.35)
+        True -> #(0.1, 6.7)
         // Reduce quiet moves more
         // Original Weiss values were:
         // #(1.35, 2.75)
-        False -> #(1.05, 2.9)
+        False -> #(0.4, 3.1)
       }
       let assert Ok(ln_depth) = maths.natural_logarithm(int.to_float(depth))
       let assert Ok(ln_move_number) =
@@ -485,6 +479,11 @@ fn do_negamax_alphabeta_failsoft(
       // The search on the child node caused a beta-cutoff while reducing the
       // depth. We have to retry the search at the proper depth.
       True, True -> {
+        // use <- interruptable.discard(
+        //   interruptable.from_state(
+        //     search_state.stats_increment_lmr_verifications(depth),
+        //   ),
+        // )
         use #(best_evaluation, alpha) <- interruptable.do(go(
           best_evaluation,
           depth - 1,
@@ -493,15 +492,13 @@ fn do_negamax_alphabeta_failsoft(
         ))
         finish(best_evaluation, alpha, beta)
       }
-      // If it didn't even cause a beta cutoff, then continue as usual.
+      // If it didn't even cause a beta-cutoff, then continue as usual.
       _, _ -> {
-        use <- interruptable.discard(case depth_reduction > 0 {
-          True ->
-            interruptable.from_state(
-              search_state.stats_increment_lmr_reductions(depth),
-            )
-          False -> interruptable.return(Nil)
-        })
+        // use <- interruptable.discard(case depth_reduction > 0 {
+        //   True ->
+        //     interruptable.from_state(search_state.stats_increment_lmrs(depth))
+        //   False -> interruptable.return(Nil)
+        // })
         finish(tentative_evaluation, tentative_alpha, beta)
       }
     }
@@ -627,7 +624,7 @@ const iid_depth = 4
 /// an IID upon cache miss. To not deepen past the leaf, this number should
 /// always be quite a bit greater than `iid_depth`.
 ///
-const iid_min_leaf_distance = 11
+const iid_min_leaf_distance = 9
 
 /// Get the PV move for a game, trying to hit the cache and falling back to
 /// (internally) iteratively deepening if we're far from the leaves.
