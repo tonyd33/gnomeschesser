@@ -1028,3 +1028,34 @@ pub fn validate_apply_test() {
     "g8h6", "h7h5", "h7h6",
   ])
 }
+
+pub fn is_insufficient_material_test() {
+  let assert Ok(kvk) = load_fen("3k4/8/8/8/8/8/8/3K4 w - - 0 1")
+  game.is_insufficient_material(kvk) |> should.equal(True)
+
+  let assert Ok(kvkb) = load_fen("3k4/5b2/8/8/8/8/8/3K4 w - - 0 1")
+  game.is_insufficient_material(kvkb) |> should.equal(True)
+
+  let assert Ok(kbvk) = load_fen("3k4/8/8/8/8/8/5B2/3K4 w - - 0 1")
+  game.is_insufficient_material(kbvk) |> should.equal(True)
+
+  let assert Ok(kvkn) = load_fen("3k4/5n2/8/8/8/8/8/3K4 w - - 0 1")
+  game.is_insufficient_material(kvkn) |> should.equal(True)
+
+  let assert Ok(knvk) = load_fen("3k4/8/8/8/8/8/5N2/3K4 w - - 0 1")
+  game.is_insufficient_material(knvk) |> should.equal(True)
+
+  let assert Ok(kbvkb_2_light) = load_fen("3k4/5b2/8/8/8/8/6B1/3K4 w - - 0 1")
+  game.is_insufficient_material(kbvkb_2_light) |> should.equal(True)
+
+  let assert Ok(kbvkb_2_dark) = load_fen("3k4/4b3/8/8/8/8/5B2/3K4 w - - 0 1")
+  game.is_insufficient_material(kbvkb_2_dark) |> should.equal(True)
+
+  let assert Ok(kbvkb_n_light) =
+    load_fen("4k3/3b1b2/2b3b1/1b5b/B5B1/1B3B2/2B1B3/3K4 w - - 0 1")
+  game.is_insufficient_material(kbvkb_n_light) |> should.equal(True)
+
+  let assert Ok(kbvkb_n_dark) =
+    load_fen("3k4/2b1b3/1b3b2/b5b1/1B5B/2B3B1/3B1B2/4K3 w - - 0 1")
+  game.is_insufficient_material(kbvkb_n_dark) |> should.equal(True)
+}

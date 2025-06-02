@@ -201,7 +201,10 @@ fn negamax_alphabeta_failsoft(
     game_history.is_previous_game(game_history, game)
       // 50 moves rule:
       // If 50 moves have passed without any captures, then the position is a draw.
-      || game.halfmove_clock(game) >= 100,
+      || game.halfmove_clock(game) >= 100
+      // Insufficient material:
+      // If there isn't enough material to mate, consider this position a draw.
+      || game.is_insufficient_material(game),
     interruptable.return(
       Evaluation(
         score: xint.from_int(0),

@@ -69,6 +69,12 @@ pub fn file_to_string(file: Int) -> String {
   string.from_utf_codepoints([file_utf])
 }
 
+/// Returns if a square is a light square.
+///
+pub fn is_light(square: Square) -> Bool {
+  { rank(square) + file(square) } % 2 == 0
+}
+
 pub fn to_string(square: Square) -> String {
   file_to_string(file(square)) <> rank_to_string(rank(square))
 }
