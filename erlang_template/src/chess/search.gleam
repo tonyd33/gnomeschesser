@@ -40,6 +40,11 @@ pub fn checkpointed_iterative_deepening(
 ) -> InterruptableState(SearchState, Evaluation) {
   use best_evaluation: Evaluation <- interruptable.do({
     use <- interruptable.interruptable
+    use <- interruptable.discard(
+      interruptable.from_state(search_state.stats_set_iteration_depth(
+        current_depth,
+      )),
+    )
     let game_hash = game.hash(game)
     use cached_evaluation <- interruptable.do(
       interruptable.from_state(search_state.transposition_get(game_hash)),
@@ -269,9 +274,9 @@ fn do_negamax_alphabeta_failsoft(
   })
   let is_check = game.is_check(game, game.turn(game))
 
-  let rfp_evaluation = {
+  use rfp_evaluation <- interruptable.do({
     let should_do_rfp = depth > 1 && !is_check
-    use <- bool.guard(!should_do_rfp, Error(Nil))
+    use <- bool.guard(!should_do_rfp, interruptable.return(Error(Nil)))
 
     let score =
       evaluate.game(game)
@@ -280,19 +285,24 @@ fn do_negamax_alphabeta_failsoft(
     let margin = 50 * depth
 
     case xint.gte(score, xint.add(beta, xint.from_int(margin))) {
-      True ->
-        Ok(Evaluation(
-          score:,
-          best_move: None,
-          best_line: [],
-          node_type: evaluation.Cut,
-        ))
-      False -> Error(Nil)
+      True -> {
+        use <- interruptable.discard(
+          interruptable.from_state(search_state.stats_add_rfp_cutoffs(depth, 1)),
+        )
+        interruptable.return(
+          Ok(Evaluation(
+            score:,
+            best_move: None,
+            best_line: [],
+            node_type: evaluation.Cut,
+          )),
+        )
+      }
+      False -> interruptable.return(Error(Nil))
     }
-  }
+  })
   use <- result.lazy_unwrap(result.map(rfp_evaluation, interruptable.return))
 
-  let is_check = game.is_check(game, game.turn(game))
   // Null move pruning: if a null move was made (i.e. we pass the turn) yet we
   // caused a beta cutoff, we can be pretty sure that any legal move would
   // cause a beta cutoff. In such a case, return early.
@@ -309,7 +319,7 @@ fn do_negamax_alphabeta_failsoft(
     use <- bool.guard(!should_do_nmp, interruptable.return(Error(Nil)))
 
     let r = 4
-    use evaluation <- interruptable.map(
+    use evaluation <- interruptable.do(
       negamax_alphabeta_failsoft(
         game.reverse_turn(game),
         depth - 1 - r,
@@ -321,8 +331,17 @@ fn do_negamax_alphabeta_failsoft(
     )
 
     case xint.gte(evaluation.score, beta) {
-      True -> Ok(Evaluation(..evaluation, node_type: evaluation.Cut))
-      False -> Error(Nil)
+      True -> {
+        use <- interruptable.discard(
+          interruptable.from_state(search_state.stats_add_nmp_cutoffs(depth, 1)),
+        )
+        interruptable.return(Ok(
+          Evaluation(..evaluation, node_type: evaluation.Cut),
+        ))
+      }
+      False -> {
+        interruptable.return(Error(Nil))
+      }
     }
   })
   use <- result.lazy_unwrap(result.map(null_evaluation, interruptable.return))
