@@ -121,6 +121,38 @@ pub fn from_lan(lan: String) -> Move(Pseudo) {
   }
 }
 
+pub fn encode_pg(move: Move(a)) {
+  let to_file = square.file(move.to)
+  let to_rank = square.rank(move.to)
+  let from_file = square.file(move.from)
+  let from_rank = square.rank(move.from)
+  let promotion_piece = case move.promotion {
+    None -> 0
+    Some(piece.Knight) -> 1
+    Some(piece.Bishop) -> 2
+    Some(piece.Rook) -> 3
+    Some(piece.Queen) -> 4
+    _ -> panic as "Bad promotion"
+  }
+  int.bitwise_and(to_file, 0b111)
+  |> int.bitwise_or(int.bitwise_and(
+    int.bitwise_shift_left(to_rank, 3),
+    0b111_000,
+  ))
+  |> int.bitwise_or(int.bitwise_and(
+    int.bitwise_shift_left(from_file, 6),
+    0b111_000_000,
+  ))
+  |> int.bitwise_or(int.bitwise_and(
+    int.bitwise_shift_left(from_rank, 9),
+    0b111_000_000_000,
+  ))
+  |> int.bitwise_or(int.bitwise_and(
+    int.bitwise_shift_left(promotion_piece, 12),
+    0b111_000_000_000_000,
+  ))
+}
+
 /// Decode a move according to the polyglot format:
 /// http://hgm.nubati.net/book_format.html
 ///

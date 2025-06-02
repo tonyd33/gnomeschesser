@@ -73,7 +73,7 @@ pub fn history_update(
 /// To reduce the need of manual trimming when the transposition table gets too
 /// large, we reduce the key space by taking only a certain amount of lower
 /// bits. This current mask gives us a max size of 2^16, or 65536 entries.
-const key_size = 100_000
+const key_size = 75_000
 
 fn transposition_key_reduce(key: Int) {
   key % key_size
@@ -92,7 +92,6 @@ pub fn transposition_get(
         Ok(entry),
         SearchState(
           ..search_state,
-          transposition:,
           stats: SearchStats(
             ..search_state.stats,
             tt_hits: search_state.stats.tt_hits + 1,
@@ -177,11 +176,12 @@ pub type SearchStats {
     nodes_searched: Int,
     // When did we start the current search?
     init_time: timestamp.Timestamp,
+    // Transposition table size
+    tt_size: Int,
     // Transposition table hits
     tt_hits: Int,
     // Transposition table misses
     tt_misses: Int,
-    tt_size: Int,
     // How many regular beta cutoffs we did per depth
     beta_cutoffs: dict.Dict(Int, Int),
     // How many reverse futility pruning cutoffs we did per depth
