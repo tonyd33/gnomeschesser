@@ -8,11 +8,8 @@ repo_root_path=$(realpath "$script_path/../../../")
 run_challenger="$repo_root_path/dev_utils/scripts/start-docker-uci.sh"
 run_defender="$repo_root_path/dev_utils/scripts/start-docker-uci.sh"
 # TODO: Constrain resources again once we properly manage memory
-# challenger_args="--tag local -- -m 500M --cpus 2"
-# defender_args="--tag latest -- -m 500M --cpus 2"
-challenger_args="--tag local"
-defender_args="--tag latest"
-logwrap_dir=$(realpath "$(dirname "$0")/../../logwrap/")
+challenger_args="--tag local -- -m 500M --cpus 2"
+defender_args="--tag latest -- -m 500M --cpus 2"
 
 fastchess_event_name="Fastchess Tournament"
 rounds=8
