@@ -7,7 +7,9 @@ import chess/actors/yapper
 import chess/game.{type Game}
 import chess/move
 import chess/search/evaluation.{type Evaluation, Evaluation, PV}
-import chess/search/search_state.{type SearchState, SearchState}
+import chess/search/search_state.{
+  type SearchState, type SearchStats, SearchState,
+}
 import chess/tablebase.{type Tablebase}
 import gleam/bool
 import gleam/erlang/process.{type Subject, type Timer}
@@ -257,22 +259,17 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
       // Called every iteration of iterative deepening.
       // Sends info.
       let on_checkpoint = fn(
-        search_state: SearchState,
+        stats: SearchStats,
         current_depth,
         best_evaluation: Evaluation,
       ) {
         let now = timestamp.system_time()
 
-        let stats = search_state.stats_to_string(search_state, now)
-        yapper.debug(stats) |> yap(blake, _)
+        let stats_str = search_state.stats_to_string(stats, now)
+        yapper.debug(stats_str) |> yap(blake, _)
 
         let search_info =
-          aggregate_search_info(
-            now,
-            search_state,
-            current_depth,
-            best_evaluation,
-          )
+          aggregate_search_info(now, stats, current_depth, best_evaluation)
 
         case blake.info_chan {
           Some(info_chan) -> {
@@ -288,14 +285,14 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
       // Called when search is done. Races against tablebase query to send
       // a move.
       let on_done = fn(
-        s: SearchState,
+        stats: SearchStats,
         game,
         evaluation: Result(Evaluation, Nil),
       ) {
         {
           let now = timestamp.system_time()
           let dt =
-            timestamp.difference(s.stats.init_time, now)
+            timestamp.difference(stats.init_time, now)
             |> duration.to_seconds
             |> float.multiply(1000.0)
             |> float.round
@@ -368,20 +365,17 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
       Ok(blake)
     }
     Think -> {
-      let on_checkpoint = fn(search_state: SearchState, _, _) {
+      let on_checkpoint = fn(stats: SearchStats, _, _) {
         let now = timestamp.system_time()
 
-        let stats = search_state.stats_to_string(search_state, now)
+        let stats = search_state.stats_to_string(stats, now)
         stats |> yapper.debug |> yap(blake, _)
       }
 
-      let on_done = fn(search_state: SearchState, _, _) {
+      let on_done = fn(stats: SearchStats, _, _) {
         let now = timestamp.system_time()
         let dt =
-          timestamp.difference(search_state.stats.init_time, now)
-          |> duration.to_seconds
-          |> float.multiply(1000.0)
-          |> float.round
+          search_state.stats_delta_time_ms(stats, now)
           |> int.max(1)
           |> int.to_string
         yapper.debug("Search took " <> dt <> "ms")
@@ -435,24 +429,15 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
 
 fn aggregate_search_info(
   now,
-  search_state: SearchState,
+  stats: SearchStats,
   current_depth,
   best_evaluation: Evaluation,
 ) {
-  let dt =
-    timestamp.difference(search_state.stats.init_time, now)
-    |> duration.to_seconds
-    |> float.multiply(1000.0)
-    |> float.round
-    |> int.max(1)
+  let dt = search_state.stats_delta_time_ms(stats, now) |> int.max(1)
   let nps =
-    search_state.stats_nodes_per_second(search_state, now)
-    |> float.round
-    |> int.max(1)
-  let nodes_searched =
-    search_state.stats.nodes_searched
-    |> int.max(1)
-  let hashfull = search_state.stats_hashfull(search_state)
+    search_state.stats_nodes_per_second(stats, now) |> float.round |> int.max(1)
+  let nodes_searched = stats.nodes_searched |> int.max(1)
+  let hashfull = search_state.stats_hashfull(stats)
 
   let score = case best_evaluation.score {
     xint.Finite(score) -> Centipawns(score)

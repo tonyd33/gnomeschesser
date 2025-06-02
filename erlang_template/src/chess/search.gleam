@@ -4,7 +4,7 @@ import chess/move
 import chess/piece
 import chess/search/evaluation.{type Evaluation, Evaluation}
 import chess/search/game_history
-import chess/search/search_state.{type SearchState}
+import chess/search/search_state.{type SearchState, type SearchStats}
 import chess/search/transposition
 import gleam/bool
 import gleam/dict
@@ -38,7 +38,7 @@ pub fn checkpointed_iterative_deepening(
   current_depth: evaluation.Depth,
   opts: SearchOpts,
   game_history: game_history.GameHistory,
-  checkpoint_hook: fn(SearchState, evaluation.Depth, Evaluation) -> Nil,
+  checkpoint_hook: fn(SearchStats, evaluation.Depth, Evaluation) -> Nil,
 ) -> InterruptableState(SearchState, Evaluation) {
   use best_evaluation: Evaluation <- interruptable.do({
     use <- interruptable.interruptable
@@ -96,9 +96,10 @@ pub fn checkpointed_iterative_deepening(
   })
 
   use <- interruptable.checkpoint(best_evaluation)
-  use <- interruptable.discard(
-    interruptable.select(checkpoint_hook(_, current_depth, best_evaluation)),
-  )
+  use <- interruptable.discard({
+    use search_state: SearchState <- interruptable.select
+    checkpoint_hook(search_state.stats, current_depth, best_evaluation)
+  })
 
   let max_depth = option.unwrap(opts.max_depth, soft_max_depth)
   case current_depth >= max_depth {
