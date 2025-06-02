@@ -8,11 +8,13 @@ import chess/search/search_state.{type SearchState}
 import chess/search/transposition
 import gleam/bool
 import gleam/dict
+import gleam/float
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/order
 import gleam/result
+import gleam_community/maths
 import util/interruptable_state.{type InterruptableState} as interruptable
 import util/order_addons
 import util/state
@@ -170,9 +172,38 @@ pub fn search_with_widening_windows(
 /// Don't even bother inserting into the transposition table unless we're past
 /// this depth!
 ///
-/// TODO: Tune this later
+const tt_min_leaf_distance = 3
+
+/// Retrieve an entry from the transposition table respecting the alpha-beta
+/// bounds and the depth.
 ///
-const tt_min_leaf_distance = 1
+fn tt_bounded_get(game, depth, alpha, beta) {
+  let game_hash = game.hash(game)
+  // Don't even look if we're close to the leaf. We wouldn't even have
+  // inserted anything here anyway.
+  use <- bool.guard(depth < tt_min_leaf_distance, state.return(Error(Nil)))
+
+  use maybe_entry <- state.map(search_state.transposition_get(game_hash))
+  use transposition.Entry(depth: cached_depth, eval: evaluation, ..) <- result.try(
+    maybe_entry,
+  )
+  // Entry should have depth deeper than our current search depth.
+  use <- bool.guard(cached_depth < depth, Error(Nil))
+
+  case evaluation {
+    Evaluation(_, evaluation.PV, _, _) -> Ok(evaluation)
+    Evaluation(score, evaluation.Cut, _, _) ->
+      case xint.gte(score, beta) {
+        True -> Ok(evaluation)
+        False -> Error(Nil)
+      }
+    Evaluation(score, evaluation.All, _, _) ->
+      case xint.lte(score, alpha) {
+        True -> Ok(evaluation)
+        False -> Error(Nil)
+      }
+  }
+}
 
 /// https://www.chessprogramming.org/Alpha-Beta#Negamax_Framework
 /// returns the score of the current game searched at depth
@@ -213,33 +244,9 @@ fn negamax_alphabeta_failsoft(
   )
 
   // return early if we find an entry in the transposition table
-  use cached_evaluation <- interruptable.do({
-    use <- bool.guard(
-      depth < tt_min_leaf_distance,
-      interruptable.return(Error(Nil)),
-    )
-
-    search_state.transposition_get(game_hash)
-    |> interruptable.from_state
-    |> interruptable.map(fn(x) {
-      use transposition.Entry(cached_depth, evaluation, _) <- result.try(x)
-      use <- bool.guard(cached_depth < depth, Error(Nil))
-      // If we find a cached entry that is deeper than our current search
-      case evaluation {
-        Evaluation(_, evaluation.PV, _, _) -> Ok(evaluation)
-        Evaluation(score, evaluation.Cut, _, _) ->
-          case xint.gte(score, beta) {
-            True -> Ok(evaluation)
-            False -> Error(Nil)
-          }
-        Evaluation(score, evaluation.All, _, _) ->
-          case xint.lte(score, alpha) {
-            True -> Ok(evaluation)
-            False -> Error(Nil)
-          }
-      }
-    })
-  })
+  use cached_evaluation <- interruptable.do(
+    interruptable.from_state(tt_bounded_get(game, depth, alpha, beta)),
+  )
   use <- result.lazy_unwrap(result.map(cached_evaluation, interruptable.return))
 
   // Otherwise, actually do negamax
@@ -281,8 +288,7 @@ fn do_negamax_alphabeta_failsoft(
     let score =
       evaluate.game(game)
       |> xint.multiply(evaluate.player(game.turn(game)) |> xint.from_int)
-    // TODO: Tweak margin
-    let margin = 50 * depth
+    let margin = 100 * depth
 
     case xint.gte(score, xint.add(beta, xint.from_int(margin))) {
       True -> {
@@ -367,23 +373,41 @@ fn do_negamax_alphabeta_failsoft(
   // We iterate through every move and perform minimax to evaluate said move
   // accumulator keeps track of best evaluation while updating the node type
   {
-    use #(best_evaluation, alpha, idx), move <- interruptable.list_fold_until_s(
+    use #(best_evaluation, alpha, move_number), move <- interruptable.list_fold_until_s(
       moves,
       #(Evaluation(xint.NegInf, evaluation.PV, None, []), alpha, 0),
     )
 
-    // TODO: Limit conditions more
-    // https://www.chessprogramming.org/Late_Move_Reductions#Common_Conditions
-    let should_reduce =
-      idx > 1
-      && depth > 2
-      // Only reduce on quiet moves
-      && move.is_quiet(move)
-      && !is_check
-    let depth_reduction = case should_reduce {
-      True -> 1
-      _ -> 0
+    let lmr_depth_reduction = {
+      // Late move reduction (LMR).
+      // Do not reduce if:
+      // - we're currently in check, or
+      // - depth < 3, or
+      // - we're searching the first few moves
+      use <- bool.guard(is_check || depth < 3 || move_number < 3, 0)
+
+      // Base formula from Weiss
+      // c + (ln(depth) + ln(move_number))/d
+      // https://www.chessprogramming.org/Late_Move_Reductions#Reduction_Depth
+      let #(c, d) = case move.is_capture(move) || move.is_promotion(move) {
+        // Reduce captures/promotions less
+        // Original Weiss values were:
+        // #(0.2, 3.35)
+        True -> #(0.2, 3.35)
+        // Reduce quiet moves more
+        // Original Weiss values were:
+        // #(1.35, 2.75)
+        False -> #(1.05, 2.9)
+      }
+      let assert Ok(ln_depth) = maths.natural_logarithm(int.to_float(depth))
+      let assert Ok(ln_move_number) =
+        maths.natural_logarithm(int.to_float(move_number))
+      float.round(c +. { { ln_depth *. ln_move_number } /. d })
     }
+
+    // Currently we only have one factor contributing to any depth reductions,
+    // but this is subject to change if we add null move reductions (NMR).
+    let depth_reduction = lmr_depth_reduction
 
     let go = fn(e1: Evaluation, depth, alpha, beta) -> InterruptableState(
       SearchState,
@@ -437,18 +461,19 @@ fn do_negamax_alphabeta_failsoft(
           use <- interruptable.discard(
             interruptable.from_state(search_state.stats_add_beta_cutoffs(
               depth,
-              nmoves - idx + 1,
+              nmoves - move_number + 1,
             )),
           )
-          #(new_e, alpha, idx + 1) |> list.Stop |> interruptable.return
+          #(new_e, alpha, move_number + 1) |> list.Stop |> interruptable.return
         }
         False ->
-          #(e, alpha, idx + 1)
+          #(e, alpha, move_number + 1)
           |> list.Continue
           |> interruptable.return
       }
     }
 
+    // Try to do a reduced search to see if it causes a beta-cutoff.
     use #(tentative_evaluation, tentative_alpha) <- interruptable.do(go(
       best_evaluation,
       depth - 1 - depth_reduction,
@@ -456,7 +481,7 @@ fn do_negamax_alphabeta_failsoft(
       beta,
     ))
 
-    case xint.gte(tentative_evaluation.score, beta), should_reduce {
+    case xint.gte(tentative_evaluation.score, beta), depth_reduction > 0 {
       // The search on the child node caused a beta-cutoff while reducing the
       // depth. We have to retry the search at the proper depth.
       True, True -> {
@@ -468,7 +493,17 @@ fn do_negamax_alphabeta_failsoft(
         ))
         finish(best_evaluation, alpha, beta)
       }
-      _, _ -> finish(tentative_evaluation, tentative_alpha, beta)
+      // If it didn't even cause a beta cutoff, then continue as usual.
+      _, _ -> {
+        use <- interruptable.discard(case depth_reduction > 0 {
+          True ->
+            interruptable.from_state(
+              search_state.stats_increment_lmr_reductions(depth),
+            )
+          False -> interruptable.return(Nil)
+        })
+        finish(tentative_evaluation, tentative_alpha, beta)
+      }
     }
   }
   |> interruptable.map(fn(x) { x.0 })
@@ -592,7 +627,7 @@ const iid_depth = 4
 /// an IID upon cache miss. To not deepen past the leaf, this number should
 /// always be quite a bit greater than `iid_depth`.
 ///
-const iid_min_leaf_distance = 9
+const iid_min_leaf_distance = 11
 
 /// Get the PV move for a game, trying to hit the cache and falling back to
 /// (internally) iteratively deepening if we're far from the leaves.
@@ -618,6 +653,11 @@ fn get_pv_move(game: game.Game, depth: evaluation.Depth, alpha, beta, history) {
         SearchOpts(max_depth: Some(iid_depth)),
         history,
       ))
+      use <- interruptable.discard(
+        interruptable.from_state(search_state.stats_increment_iid_triggers(
+          depth,
+        )),
+      )
       interruptable.return(eval.best_move)
     }
     // Cache miss but we're close to the leaves. Too bad.
