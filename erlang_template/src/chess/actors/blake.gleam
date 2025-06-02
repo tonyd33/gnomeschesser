@@ -70,8 +70,6 @@ pub type Message {
   RegisterYapper(yap_chan: Subject(yapper.Yap))
   RegisterInfoChan(info_chan: Subject(List(Info)))
 
-  RequestHistory(reply_to: Subject(List(Game)))
-
   Load(game: Game)
   LoadFEN(fen: String)
 
@@ -155,10 +153,6 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
           nonces: set.new(),
         ),
       )
-    }
-    RequestHistory(client) -> {
-      process.send(client, blake.history)
-      Ok(blake)
     }
     Load(game) -> Ok(Blake(..blake, game:, history: []))
     LoadFEN(fen) -> {
@@ -364,12 +358,11 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
       process.send(
         blake.donovan_chan,
         donovan.Go(
-          blake.game,
-          blake.history,
-          deadline,
-          depth,
-          on_checkpoint,
-          on_done,
+          game: blake.game,
+          history: blake.history,
+          depth:,
+          on_checkpoint:,
+          on_done:,
         ),
       )
       Ok(blake)
@@ -403,7 +396,6 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
         donovan.Go(
           game: blake.game,
           history: blake.history,
-          deadline: None,
           depth: None,
           on_checkpoint:,
           on_done:,

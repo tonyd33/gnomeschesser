@@ -26,6 +26,7 @@ pub fn main() {
 
   let yap = process.send(yap_chan, _)
   let #(_, response_chan, info_chan) = start_blake_handler(yap)
+  let set_yap_level = fn(x) { process.send(yapper_chan, yapper.SetLevel(x)) }
 
   let blake_chan = blake.start()
   let tell_blake = process.send(blake_chan, _)
@@ -50,12 +51,13 @@ pub fn main() {
     )
   })
 
-  loop(UCIState(tell_blake, yap, response_chan))
+  loop(UCIState(tell_blake, set_yap_level, yap, response_chan))
 }
 
 type UCIState {
   UCIState(
     tell_blake: fn(blake.Message) -> Nil,
+    set_yap_level: fn(yapper.Level) -> Nil,
     yap: fn(yapper.Yap) -> Nil,
     response_chan: Subject(blake.Response),
   )
@@ -143,6 +145,17 @@ fn handle_uci(s: UCIState, cmd) {
         |> option.from_result
 
       s.tell_blake(blake.Go(deadline:, depth:, reply_to: s.response_chan))
+      True
+    }
+    uci.EngCmdDebug(on:) -> {
+      case on {
+        Some(True) | None -> {
+          s.set_yap_level(yapper.Debug)
+        }
+        Some(False) -> {
+          s.set_yap_level(yapper.Info)
+        }
+      }
       True
     }
     _ -> {

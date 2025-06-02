@@ -7,7 +7,8 @@ import chess/search/evaluation.{Evaluation}
 import gleam/dynamic/decode
 import gleam/erlang/process.{type Subject}
 import gleam/json
-import gleam/option.{type Option, None, Some}
+import gleam/option.{None, Some}
+import gleam/otp/task
 import gleam/time/duration
 import gleam/time/timestamp
 import mist
@@ -24,22 +25,25 @@ type Robot {
 pub fn start_robot() -> Nil {
   let #(yapper_chan, yap_chan) = yapper.start(yapper.Info)
   let blake_chan = blake.start()
-  process.send(blake_chan, blake.Init)
-  process.send(blake_chan, blake.RegisterYapper(yap_chan))
-  process.send(blake_chan, blake.Think)
+  // Do this in the background to get to startup ASAP
+  task.async(fn() {
+    process.send(blake_chan, blake.Init)
+    process.send(blake_chan, blake.RegisterYapper(yap_chan))
+    process.send(blake_chan, blake.Think)
 
-  process.send(
-    yapper_chan,
-    yapper.TransformLevel(yapper.Debug, yapper.prefix_debug()),
-  )
-  process.send(
-    yapper_chan,
-    yapper.TransformLevel(yapper.Warn, yapper.prefix_warn()),
-  )
-  process.send(
-    yapper_chan,
-    yapper.TransformLevel(yapper.Err, yapper.prefix_err()),
-  )
+    process.send(
+      yapper_chan,
+      yapper.TransformLevel(yapper.Debug, yapper.prefix_debug()),
+    )
+    process.send(
+      yapper_chan,
+      yapper.TransformLevel(yapper.Warn, yapper.prefix_warn()),
+    )
+    process.send(
+      yapper_chan,
+      yapper.TransformLevel(yapper.Err, yapper.prefix_err()),
+    )
+  })
 
   let robot = Robot(blake_chan, yapper_chan)
 

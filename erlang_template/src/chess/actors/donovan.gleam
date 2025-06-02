@@ -12,17 +12,14 @@
 
 import chess/game.{type Game}
 import chess/search
-import chess/search/evaluation.{type Evaluation, Evaluation, PV}
+import chess/search/evaluation.{type Evaluation, Evaluation}
 import chess/search/search_state.{type SearchState, SearchState}
 import gleam/erlang/process.{type Subject}
-import gleam/list
-import gleam/option.{type Option, None, Some}
-import gleam/result
-import gleam/time/timestamp.{type Timestamp}
+import gleam/option.{type Option}
+import gleam/time/timestamp
 import util/dict_addons
 import util/interruptable_state as interruptable
 import util/state
-import util/xint
 
 pub opaque type Donovan {
   Donovan(search_state: SearchState)
@@ -33,7 +30,6 @@ pub type Message {
   Go(
     game: Game,
     history: List(Game),
-    deadline: Option(Timestamp),
     depth: Option(Int),
     // Callback to be executed *in Donovan's thread* when a checkpoint is
     // made (when an iteration of deepening is complete).
@@ -66,7 +62,7 @@ fn new() {
 fn loop(donovan: Donovan, recv_chan: Subject(Message)) -> Nil {
   let r = case process.receive_forever(recv_chan) {
     Clear -> Ok(new())
-    Go(game, history, _, depth, on_checkpoint, on_done) -> {
+    Go(game, history, depth, on_checkpoint, on_done) -> {
       let interrupt = fn(_) {
         case process.receive(recv_chan, 0) {
           Ok(Stop) -> True
