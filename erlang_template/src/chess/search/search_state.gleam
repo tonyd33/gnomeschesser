@@ -2,7 +2,6 @@ import chess/piece
 import chess/search/evaluation.{type Evaluation, Evaluation}
 import chess/search/transposition
 import chess/square
-import gleam/bool
 import gleam/dict
 import gleam/float
 import gleam/int
@@ -38,6 +37,9 @@ pub fn new(now: timestamp.Timestamp) {
       beta_cutoffs: dict.new(),
       rfp_cutoffs: dict.new(),
       nmp_cutoffs: dict.new(),
+      iid_triggers: dict.new(),
+      lmrs: dict.new(),
+      lmr_verifications: dict.new(),
     ),
   )
 }
@@ -186,6 +188,12 @@ pub type SearchStats {
     rfp_cutoffs: dict.Dict(Int, Int),
     // How many null move pruning cutoffs we did per depth
     nmp_cutoffs: dict.Dict(Int, Int),
+    // How many times IID was triggered per depth
+    iid_triggers: dict.Dict(Int, Int),
+    // How many times late move reductions was triggered per depth
+    lmrs: dict.Dict(Int, Int),
+    // How many times we had to re search when LMR failed high per depth
+    lmr_verifications: dict.Dict(Int, Int),
   )
 }
 
@@ -209,6 +217,45 @@ pub fn stats_increment_nodes_searched() -> State(SearchState, Nil) {
       nodes_searched: stats.nodes_searched + 1,
     ),
   )
+}
+
+pub fn stats_increment_iid_triggers(depth) -> State(SearchState, Nil) {
+  use search_state: SearchState <- state.modify
+  let stats = search_state.stats
+  let iid_triggers = {
+    use maybe_old_n <- dict.upsert(stats.iid_triggers, depth)
+    case maybe_old_n {
+      Some(old_n) -> old_n + 1
+      None -> 1
+    }
+  }
+  SearchState(..search_state, stats: SearchStats(..stats, iid_triggers:))
+}
+
+pub fn stats_increment_lmrs(depth) -> State(SearchState, Nil) {
+  use search_state: SearchState <- state.modify
+  let stats = search_state.stats
+  let lmrs = {
+    use maybe_old_n <- dict.upsert(stats.lmrs, depth)
+    case maybe_old_n {
+      Some(old_n) -> old_n + 1
+      None -> 1
+    }
+  }
+  SearchState(..search_state, stats: SearchStats(..stats, lmrs:))
+}
+
+pub fn stats_increment_lmr_verifications(depth) -> State(SearchState, Nil) {
+  use search_state: SearchState <- state.modify
+  let stats = search_state.stats
+  let lmr_verifications = {
+    use maybe_old_n <- dict.upsert(stats.lmr_verifications, depth)
+    case maybe_old_n {
+      Some(old_n) -> old_n + 1
+      None -> 1
+    }
+  }
+  SearchState(..search_state, stats: SearchStats(..stats, lmr_verifications:))
 }
 
 pub fn stats_add_beta_cutoffs(depth, n) -> State(SearchState, Nil) {
@@ -266,6 +313,9 @@ pub fn stats_zero(now: timestamp.Timestamp) -> State(SearchState, Nil) {
       beta_cutoffs: dict.new(),
       rfp_cutoffs: dict.new(),
       nmp_cutoffs: dict.new(),
+      iid_triggers: dict.new(),
+      lmrs: dict.new(),
+      lmr_verifications: dict.new(),
     )
   SearchState(..search_state, stats:)
 }
@@ -349,6 +399,12 @@ pub fn stats_to_string(
   <> per_depth_stats("RFP cutoffs", stats.rfp_cutoffs)
   <> "\n"
   <> per_depth_stats("NMP cutoffs", stats.nmp_cutoffs)
+  <> "\n"
+  <> per_depth_stats("IID triggers", stats.iid_triggers)
+  <> "\n"
+  <> per_depth_stats("LMRs", stats.lmrs)
+  <> "\n"
+  <> per_depth_stats("LMR verifications", stats.lmr_verifications)
   <> "\n"
 }
 
