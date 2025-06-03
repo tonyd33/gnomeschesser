@@ -752,7 +752,7 @@ fn sorted_moves(
 fn compare_mvv(move1, move2) {
   case move.get_context(move1).capture, move.get_context(move2).capture {
     Some(#(_, piece.Piece(_, a))), Some(#(_, piece.Piece(_, b))) ->
-      int.compare(evaluate.piece_symbol(b), evaluate.piece_symbol(a))
+      piece.compare_symbol(b, a)
     Some(_), _ -> order.Lt
     _, Some(_) -> order.Gt
     _, _ -> order.Eq
@@ -779,7 +779,8 @@ fn compare_lva(move1, move2) {
   let piece2 =
     move.get_promotion(move2)
     |> option.unwrap(piece2)
-  int.compare(evaluate.piece_symbol(piece1), evaluate.piece_symbol(piece2))
+
+  piece.compare_symbol(piece1, piece2)
 }
 
 /// Compare a move by the PSQ score of the square the piece lands on, highest

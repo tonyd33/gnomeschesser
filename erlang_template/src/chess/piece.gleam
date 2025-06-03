@@ -1,4 +1,5 @@
 import chess/player
+import gleam/int
 import gleam/result
 import gleam/string
 import util/direction
@@ -59,4 +60,26 @@ pub fn pawn_direction(player: player.Player) {
     player.White -> direction.Up
     player.Black -> direction.Down
   }
+}
+
+/// TODO: see if comparing directly is faster
+pub fn compare_symbol(symbol1: PieceSymbol, symbol2: PieceSymbol) {
+  int.compare(
+    case symbol1 {
+      King -> 0
+      Queen -> 4
+      Rook -> 3
+      Bishop -> 2
+      Knight -> 2
+      Pawn -> 1
+    },
+    case symbol2 {
+      King -> 0
+      Queen -> 4
+      Rook -> 3
+      Bishop -> 2
+      Knight -> 2
+      Pawn -> 1
+    },
+  )
 }

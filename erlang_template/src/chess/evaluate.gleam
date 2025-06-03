@@ -18,7 +18,7 @@ pub type Score =
 ///
 pub fn game(game: game.Game) -> Score {
   let BatchedScores(
-    npm:,
+    npm,
     material_mg:,
     material_eg:,
     psq_mg:,
@@ -27,7 +27,6 @@ pub fn game(game: game.Game) -> Score {
     mobility_eg:,
   ) = compute_batched_scores(game)
   let phase = phase(npm)
-
   let material = taper(material_mg, material_eg, phase)
   let psq = taper(psq_mg, psq_eg, phase)
   let mobility = taper(mobility_mg, mobility_eg, phase)
@@ -54,7 +53,7 @@ pub fn game(game: game.Game) -> Score {
 /// - A value in between signifies the weight endgame should be given, scaling
 ///   linearly.
 ///
-pub fn phase(npm_score: SidedScore) -> Int {
+pub fn phase(npm_score: Int) -> Int {
   // We'll calculate a measure, clamp them between two bounds, and then treat
   // it as the interpolated value between midgame and endgame after scaling.
   //
@@ -72,13 +71,11 @@ pub fn phase(npm_score: SidedScore) -> Int {
   // result. (note they scale from 0-128)
   // See: https://hxim.github.io/Stockfish-Evaluation-Guide/
 
-  let SidedScore(npm_white, npm_black) = npm_score
-
   let midgame_limit = 15_258
   let endgame_limit = 3915
 
   let npm =
-    { npm_white + npm_black }
+    npm_score
     |> int.max(endgame_limit)
     |> int.min(midgame_limit)
   { { npm - endgame_limit } * 100 } / { midgame_limit - endgame_limit }
@@ -90,8 +87,6 @@ fn taper(mg: Int, eg: Int, phase: Int) {
   { { mg * phase } + { eg * { 100 - phase } } } / 100
 }
 
-pub const piece_symbol = common.piece_symbol
-
 pub const player = common.player
 
 /// A dummy data structure to hold all our scores as we traverse the board
@@ -99,7 +94,7 @@ pub const player = common.player
 ///
 pub type BatchedScores {
   BatchedScores(
-    npm: SidedScore,
+    npm: Int,
     material_mg: Int,
     material_eg: Int,
     psq_mg: Int,
@@ -110,7 +105,7 @@ pub type BatchedScores {
 }
 
 const empty_batched_scores = BatchedScores(
-  npm: common.empty_sided_score,
+  npm: 0,
   material_mg: 0,
   material_eg: 0,
   psq_mg: 0,
@@ -121,7 +116,7 @@ const empty_batched_scores = BatchedScores(
 
 fn add_batched_scores(s1: BatchedScores, s2: BatchedScores) {
   BatchedScores(
-    npm: common.add_sided_score(s1.npm, s2.npm),
+    npm: s1.npm + s2.npm,
     material_mg: s1.material_mg + s2.material_mg,
     material_eg: s1.material_eg + s2.material_eg,
     psq_mg: s1.psq_mg + s2.psq_mg,
@@ -138,10 +133,21 @@ fn compute_batched_scores_at(white_controls, black_controls, square, piece) {
     piece.Piece(player.White, _) -> white_controls(square, piece)
     piece.Piece(player.Black, _) -> black_controls(square, piece)
   }
+
+  let material_mg = common.piece_symbol_mg(piece.symbol)
+  let material_eg = common.piece_symbol_eg(piece.symbol)
+
+  let npm = case piece.symbol {
+    piece.Pawn | piece.King -> material_mg
+    _ -> 0
+  }
+
+  let player = piece.player |> common.player
+
   BatchedScores(
-    npm: common.non_pawn_piece_value(piece, common.MidGame),
-    material_mg: common.piece(piece),
-    material_eg: common.piece(piece),
+    npm:,
+    material_mg: material_mg * player,
+    material_eg: material_eg * player,
     psq_mg: psqt.score(piece, square, common.MidGame),
     psq_eg: psqt.score(piece, square, common.EndGame),
     mobility_mg: mobility.score(nmoves, piece, common.MidGame),
