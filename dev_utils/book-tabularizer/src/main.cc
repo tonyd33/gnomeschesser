@@ -107,15 +107,12 @@ int codegen(string bin, string out, uint64_t min_position_frequency,
 
   LOG_DEBUG("got %d groups\n", groups.size());
 
-  // Get the max frequency. This is used later when we filter out
-  // positions.
-  // We also find the frequencies for each group/position by iterating over the
+  // We find the frequencies for each group/position by iterating over the
   // groups and summing up the weight of its entries.
   // We could've done all of this in one pass earlier, but it would be a lot
   // harder to read for being only slightly more efficient.
   vector<uint64_t> position_frequencies;
   vector<uint16_t> max_weights;
-  uint64_t max_position_frequency = 0;
   {
     // No need for resizing later.
     position_frequencies.resize(groups.size());
@@ -129,15 +126,14 @@ int codegen(string bin, string out, uint64_t min_position_frequency,
         position_frequency += be->weight;
         max_weights[i] = max(max_weights[i], be->weight);
       }
-      max_position_frequency = max(max_position_frequency, position_frequency);
       position_frequencies[i] = position_frequency;
     }
   }
-  LOG_DEBUG("max position frequency is %llu\n", max_position_frequency);
 
   // We begin writing to the file:
   // - Iterate through each group
-  // - Sort the moves in the group. Keep the top K moves.
+  // - Sort the moves in the group. Keep the top K moves that are above the
+  //   frequency filter.
   // - Write the group
   {
     uint32_t groups_kept = 0;

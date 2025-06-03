@@ -7,6 +7,7 @@ import chess/uci
 import gleam/erlang
 import gleam/erlang/process.{type Subject}
 import gleam/function
+import gleam/int
 import gleam/io
 import gleam/list
 import gleam/option.{None, Some}
@@ -116,14 +117,21 @@ fn handle_uci(s: UCIState, cmd) {
       let now = timestamp.system_time()
       let deadline =
         params
-        |> list.find_map(fn(x) {
-          case x {
+        |> list.find_map(fn(param) {
+          case param {
             uci.GoParamMoveTime(movetime) -> Ok(movetime)
             _ -> Error(Nil)
           }
         })
-        |> result.map(fn(x) {
-          timestamp.add(now, duration.milliseconds({ x * 95 } / 100))
+        |> result.map(fn(movetime) {
+          // We expect about a constant time overhead for information transfer
+          // and whatever other overhead to do the search. Account for that in
+          // the deadline.
+          let budget = 100
+          timestamp.add(
+            now,
+            duration.milliseconds(int.max(movetime - budget, 0)),
+          )
         })
         |> option.from_result
 
@@ -144,7 +152,12 @@ fn handle_uci(s: UCIState, cmd) {
         })
         |> option.from_result
 
-      s.tell_blake(blake.Go(deadline:, depth:, reply_to: s.response_chan))
+      s.tell_blake(blake.Go(
+        deadline:,
+        depth:,
+        stats_start_time: Some(now),
+        reply_to: s.response_chan,
+      ))
       True
     }
     uci.EngCmdDebug(on:) -> {

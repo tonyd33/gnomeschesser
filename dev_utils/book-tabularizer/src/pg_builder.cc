@@ -73,11 +73,12 @@ uint16_t encode_move(Move &move) {
   uint16_t from_file = from.file();
   uint16_t from_row = from.rank();
 
-  uint16_t encoded = (to_file & 0b0000000000000111) |
-                     ((to_row << 3) & 0b0000000000111000) |
-                     ((from_file << 6) & 0b0000000111000000) |
-                     ((from_row << 9) & 0b0000111000000000) |
-                     ((promotion_piece << 12) & 0b0111000000000000);
+  uint16_t encoded =
+    ( to_file                & 0b0000000000000111) |
+    ((to_row          <<  3) & 0b0000000000111000) |
+    ((from_file       <<  6) & 0b0000000111000000) |
+    ((from_row        <<  9) & 0b0000111000000000) |
+    ((promotion_piece << 12) & 0b0111000000000000);
 
   return encoded;
 }

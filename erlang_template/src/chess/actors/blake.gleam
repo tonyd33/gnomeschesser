@@ -80,6 +80,7 @@ pub type Message {
   Go(
     deadline: Option(Timestamp),
     depth: Option(Int),
+    stats_start_time: Option(Timestamp),
     reply_to: Subject(Response),
   )
   Think
@@ -206,7 +207,7 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
     RegisterYapper(yap_chan) -> Ok(Blake(..blake, yap_chan: Some(yap_chan)))
     RegisterInfoChan(info_chan) ->
       Ok(Blake(..blake, info_chan: Some(info_chan)))
-    Go(deadline, depth, client) -> {
+    Go(deadline, depth, stats_start_time, client) -> {
       // Goal:
       // - Queue a task to look up a move from tablebase
       // - Start the search to find a move
@@ -309,7 +310,6 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
           yapper.debug("Search took " <> dt <> "ms")
           |> yap(blake, _)
         }
-
         use <- once
         let evaluation = case evaluation {
           Ok(Evaluation(best_move: None, ..)) | Error(Nil) -> {
@@ -347,8 +347,10 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
         }
         None -> Nil
       }
+      // Stop active search, if any.
+      process.send(blake.donovan_chan, donovan.Stop)
 
-      // If movetime is set, set a timer to stop after movetime.
+      // If movetime is set, set a new timer to stop after movetime.
       let stop_timer = {
         use deadline <- option.map(deadline)
         let movetime = {
@@ -369,6 +371,7 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
           game: blake.game,
           history: blake.history,
           depth:,
+          stats_start_time:,
           on_checkpoint:,
           on_done:,
         ),
@@ -416,6 +419,7 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
           game: blake.game,
           history: blake.history,
           depth: None,
+          stats_start_time: None,
           on_checkpoint:,
           on_done:,
         ),
