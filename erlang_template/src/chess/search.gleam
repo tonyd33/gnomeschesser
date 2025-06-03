@@ -101,21 +101,18 @@ pub fn checkpointed_iterative_deepening(
   )
 
   let max_depth = option.unwrap(opts.max_depth, soft_max_depth)
-  case current_depth >= max_depth {
-    True -> interruptable.return(best_evaluation)
-    False ->
-      case best_evaluation.score {
-        // terminate the search if we detect we're in mate
-        xint.PosInf | xint.NegInf -> interruptable.return(best_evaluation)
-        _ ->
-          checkpointed_iterative_deepening(
-            game,
-            current_depth + 1,
-            opts,
-            game_history,
-            checkpoint_hook,
-          )
-      }
+  case current_depth >= max_depth, best_evaluation.score {
+    // terminate the search if we detect mate or we exceeded max depth
+    True, _ | _, xint.PosInf | _, xint.NegInf ->
+      interruptable.return(best_evaluation)
+    _, _ ->
+      checkpointed_iterative_deepening(
+        game,
+        current_depth + 1,
+        opts,
+        game_history,
+        checkpoint_hook,
+      )
   }
 }
 
@@ -349,13 +346,14 @@ fn do_negamax_alphabeta_failsoft(
   })
   use <- result.lazy_unwrap(result.map(null_evaluation, interruptable.return))
 
-  use #(moves, nmoves) <- interruptable.do(sorted_moves(
+  use moves <- interruptable.do(sorted_moves(
     game,
     depth,
     alpha,
     beta,
     game_history,
   ))
+  let nmoves = list.length(moves)
 
   use <- bool.lazy_guard(nmoves == 0, fn() {
     // if checkmate/stalemate
@@ -441,20 +439,18 @@ fn do_negamax_alphabeta_failsoft(
           let new_e = Evaluation(..e, node_type: evaluation.Cut)
           let move_context = move.get_context(move)
 
-          use <- interruptable.discard(
-            case move_context.capture |> option.is_none {
-              True -> {
-                // non-capture moves update the history table
-                let to = move.get_to(move)
-                let piece = move_context.piece
-                interruptable.from_state(search_state.history_update(
-                  #(to, piece),
-                  depth * depth,
-                ))
-              }
-              False -> interruptable.return(Nil)
-            },
-          )
+          use <- interruptable.discard(case move.is_quiet(move) {
+            True -> {
+              // non-capture moves update the history table
+              let to = move.get_to(move)
+              let piece = move_context.piece
+              interruptable.from_state(search_state.history_update(
+                #(to, piece),
+                depth * depth,
+              ))
+            }
+            False -> interruptable.return(Nil)
+          })
           use <- interruptable.discard(
             interruptable.from_state(search_state.stats_add_beta_cutoffs(
               depth,
@@ -482,11 +478,11 @@ fn do_negamax_alphabeta_failsoft(
       // The search on the child node caused a beta-cutoff while reducing the
       // depth. We have to retry the search at the proper depth.
       True, True -> {
-        // use <- interruptable.discard(
-        //   interruptable.from_state(
-        //     search_state.stats_increment_lmr_verifications(depth),
-        //   ),
-        // )
+        use <- interruptable.discard(
+          interruptable.from_state(
+            search_state.stats_increment_lmr_verifications(depth),
+          ),
+        )
         use #(best_evaluation, alpha) <- interruptable.do(go(
           best_evaluation,
           depth - 1,
@@ -497,11 +493,11 @@ fn do_negamax_alphabeta_failsoft(
       }
       // If it didn't even cause a beta-cutoff, then continue as usual.
       _, _ -> {
-        // use <- interruptable.discard(case depth_reduction > 0 {
-        //   True ->
-        //     interruptable.from_state(search_state.stats_increment_lmrs(depth))
-        //   False -> interruptable.return(Nil)
-        // })
+        use <- interruptable.discard(case depth_reduction > 0 {
+          True ->
+            interruptable.from_state(search_state.stats_increment_lmrs(depth))
+          False -> interruptable.return(Nil)
+        })
         finish(tentative_evaluation, tentative_alpha, beta)
       }
     }
@@ -531,22 +527,8 @@ fn quiesce(
 
   let alpha = xint.max(alpha, score)
 
-  // Captures should come first
-  let compare_capture = fn(move1, move2) {
-    case move.is_capture(move1), move.is_capture(move2) {
-      True, True -> order.Eq
-      True, False -> order.Lt
-      False, True -> order.Gt
-      False, False -> order.Eq
-    }
-  }
-
-  let compare_capture_mvv_lva =
-    compare_capture
-    |> order_addons.or(compare_mvv)
-    |> order_addons.or(compare_lva)
-
-  let moves = list.sort(game.valid_moves(game), compare_capture_mvv_lva)
+  let compare_mvv_lva = order_addons.or(compare_mvv, compare_lva)
+  let moves = list.sort(game.valid_moves(game), compare_mvv_lva)
   {
     use #(best_score, alpha), move <- interruptable.list_fold_until_s(moves, #(
       score,
@@ -666,8 +648,6 @@ fn get_pv_move(game: game.Game, depth: evaluation.Depth, alpha, beta, history) {
 }
 
 /// Sort moves from best to worse, which improves alphabeta pruning.
-/// Also returns the number of moves, which is free because we must iterate
-/// over the moves anyway, and is added here purely for optimization.
 ///
 fn sorted_moves(
   game: game.Game,
@@ -675,10 +655,7 @@ fn sorted_moves(
   alpha,
   beta,
   history,
-) -> InterruptableState(
-  SearchState,
-  #(List(move.Move(move.ValidInContext)), Int),
-) {
+) -> InterruptableState(SearchState, List(move.Move(move.ValidInContext))) {
   use best_move <- interruptable.do(get_pv_move(
     game,
     depth,
@@ -687,51 +664,28 @@ fn sorted_moves(
     history,
   ))
 
-  // retrieve the cached transposition table data
-  let valid_moves = game.valid_moves(game)
+  let is_best_move = case best_move {
+    Some(best_move) -> fn(move) { move.equal(move, best_move) }
+    None -> fn(_) { False }
+  }
 
-  let #(best_move, capture_promotion_moves, quiet_moves, nmoves) =
-    list.fold(valid_moves, #(None, [], [], 0), fn(acc, move) {
-      // TODO: also count checking moves?
-      let #(best, capture_promotions, quiet, nmoves) = acc
-
-      // If this is the best move, just return
-      use <- bool.guard(
-        option.map(best_move, move.equal(_, move)) |> option.unwrap(False),
-        #(Some(move), capture_promotions, quiet, nmoves + 1),
-      )
-
-      // non-quiet moves (captures and promotions get sorted next)
-      let move_context = move.get_context(move)
-      let is_quiet =
-        option.is_none(move_context.capture)
-        && option.is_none(move.get_promotion(move))
-      case is_quiet {
-        True -> #(best, capture_promotions, [move, ..quiet], nmoves + 1)
-        False -> #(best, [move, ..capture_promotions], quiet, nmoves + 1)
-      }
-    })
-
-  // We use MVV-LVA for sorting capture_promotion moves:
-  // We sort most valuable victim, most valuable first, falling back to
-  // sorting by least valuable attacker, least valuable first.
-  // For promotions, we count it as the promoted piece
+  let compare_best_move = fn(move1, move2) {
+    case is_best_move(move1), is_best_move(move2) {
+      True, False -> order.Lt
+      False, True -> order.Gt
+      _, _ -> order.Eq
+    }
+  }
   let compare_mvv_lva = order_addons.or(compare_mvv, compare_lva)
-  let capture_promotion_moves =
-    list.sort(capture_promotion_moves, compare_mvv_lva)
-
   use compare_quiet_history <- interruptable.map({
     use search_state: SearchState <- interruptable.select
     compare_quiet_history(search_state.history)
   })
-  let quiet_moves = list.sort(quiet_moves, compare_quiet_history)
+  let compare =
+    order_addons.or(compare_best_move, compare_mvv_lva)
+    |> order_addons.or(compare_quiet_history)
 
-  let non_best_move = list.append(capture_promotion_moves, quiet_moves)
-
-  let sorted_moves =
-    option.map(best_move, fn(best_move) { [best_move, ..non_best_move] })
-    |> option.unwrap(non_best_move)
-  #(sorted_moves, nmoves)
+  list.sort(game.valid_moves(game), compare)
 }
 
 fn compare_mvv(move1, move2) {
@@ -741,17 +695,6 @@ fn compare_mvv(move1, move2) {
     Some(_), _ -> order.Lt
     _, Some(_) -> order.Gt
     _, _ -> order.Eq
-  }
-}
-
-fn compare_quiet_history(history) {
-  fn(move1, move2) {
-    let key1 = #(move.get_to(move1), move.get_context(move1).piece)
-    let key2 = #(move.get_to(move2), move.get_context(move2).piece)
-    let history1 = dict.get(history, key1) |> result.unwrap(0)
-    let history2 = dict.get(history, key2) |> result.unwrap(0)
-    // bigger history should go first
-    int.compare(history2, history1)
   }
 }
 
@@ -765,4 +708,15 @@ fn compare_lva(move1, move2) {
     move.get_promotion(move2)
     |> option.unwrap(piece2)
   int.compare(evaluate.piece_symbol(piece1), evaluate.piece_symbol(piece2))
+}
+
+fn compare_quiet_history(history) {
+  fn(move1, move2) {
+    let key1 = #(move.get_to(move1), move.get_context(move1).piece)
+    let key2 = #(move.get_to(move2), move.get_context(move2).piece)
+    let history1 = dict.get(history, key1) |> result.unwrap(0)
+    let history2 = dict.get(history, key2) |> result.unwrap(0)
+    // bigger history should go first
+    int.compare(history2, history1)
+  }
 }

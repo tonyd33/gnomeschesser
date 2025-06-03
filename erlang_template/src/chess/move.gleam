@@ -85,7 +85,7 @@ pub fn get_pseudo_context(move: Move(a)) {
 
 pub fn is_quiet(move: Move(ValidInContext)) {
   let assert Some(context) = move.context
-  option.is_none(context.capture)
+  option.is_none(move.promotion) && option.is_none(context.capture)
 }
 
 pub fn is_capture(move: Move(ValidInContext)) {
@@ -119,6 +119,40 @@ pub fn from_lan(lan: String) -> Move(Pseudo) {
     Ok(from), Ok(to) -> new_pseudo(from:, to:, promotion:)
     _, _ -> panic as { lan <> " is an invalid lan" }
   }
+}
+
+pub fn strip_context(move: Move(a)) {
+  Move(..move, context: None)
+}
+
+pub fn encode_pg(move: Move(a)) -> Int {
+  int.bitwise_and(square.file(move.to), 0b111)
+  |> int.bitwise_or(int.bitwise_and(
+    int.bitwise_shift_left(square.rank(move.to), 3),
+    0b111_000,
+  ))
+  |> int.bitwise_or(int.bitwise_and(
+    int.bitwise_shift_left(square.file(move.from), 6),
+    0b111_000_000,
+  ))
+  |> int.bitwise_or(int.bitwise_and(
+    int.bitwise_shift_left(square.rank(move.from), 9),
+    0b111_000_000_000,
+  ))
+  |> int.bitwise_or(int.bitwise_and(
+    int.bitwise_shift_left(
+      case move.promotion {
+        None -> 0
+        Some(piece.Knight) -> 1
+        Some(piece.Bishop) -> 2
+        Some(piece.Rook) -> 3
+        Some(piece.Queen) -> 4
+        _ -> panic
+      },
+      12,
+    ),
+    0b111_000_000_000_000,
+  ))
 }
 
 /// Decode a move according to the polyglot format:
