@@ -84,7 +84,7 @@ fn handle_move(request: Request, robot: Robot) -> Response {
   let Robot(blake_chan:, ..) = robot
   let deadline =
     timestamp.system_time()
-    |> timestamp.add(duration.milliseconds(4950))
+    |> timestamp.add(duration.milliseconds(4900))
   use body <- wisp.require_string_body(request)
   case json.parse(body, move_decoder()) {
     Error(_) -> wisp.bad_request()
@@ -98,7 +98,7 @@ fn handle_move(request: Request, robot: Robot) -> Response {
         process.try_call(
           blake_chan,
           blake.Go(deadline: Some(deadline), depth: None, reply_to: _),
-          4950,
+          4900,
         )
 
       case blake_res {

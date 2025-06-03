@@ -51,8 +51,8 @@ int build(string pgn, string bin, int max_plies, int elo_cutoff,
   return EXIT_SUCCESS;
 }
 
-int codegen(string bin, string out, uint64_t min_position_frequency_per_million,
-            uint16_t min_move_frequency_per_million) {
+int codegen(string bin, string out, uint64_t min_position_frequency,
+            uint16_t min_move_frequency, uint16_t top_k) {
   ifstream bin_strm(bin, ios::binary);
   ofstream out_strm(out);
 
@@ -105,7 +105,7 @@ int codegen(string bin, string out, uint64_t min_position_frequency_per_million,
     groups.push_back(curr_group);
   }
 
-  LOG_DEBUG("got %d reduced groups\n", reduced_entries.size());
+  LOG_DEBUG("got %d groups\n", groups.size());
 
   // Get the max frequency. This is used later when we filter out
   // positions.
@@ -134,13 +134,10 @@ int codegen(string bin, string out, uint64_t min_position_frequency_per_million,
     }
   }
   LOG_DEBUG("max position frequency is %llu\n", max_position_frequency);
-  LOG_DEBUG("position cutoff will be %llu\n",
-            min_position_frequency_per_million * max_position_frequency /
-                1000000);
 
   // We begin writing to the file:
   // - Iterate through each group
-  // - Ignore infrequent positions
+  // - Sort the moves in the group. Keep the top K moves.
   // - Write the group
   {
     uint32_t groups_kept = 0;
@@ -148,25 +145,29 @@ int codegen(string bin, string out, uint64_t min_position_frequency_per_million,
     out_strm << "pub const table = [";
     for (int i = 0; i < groups.size(); i++) {
       auto &group = groups[i];
-      uint64_t position_frequency_per_million =
-          (position_frequencies[i] * 1000000) / max_position_frequency;
       // Skip this position altogether if it's really infrequent, relative to
       // the most frequent.
-      if (position_frequency_per_million < min_position_frequency_per_million) {
+      if (position_frequencies[i] < min_position_frequency) {
         continue;
       } else {
         groups_kept++;
       }
 
+      // Sort the group.
+      sort(group.begin(), group.end(),
+           [](struct BookEntry *be1, struct BookEntry *be2) {
+             return be1->weight > be2->weight;
+           });
+
+      auto keep_k = min((uint16_t)group.size(), top_k);
+
       // Now emit the group.
       out_strm << "#(0x" << hex << group[0]->key << ",[";
       struct BookEntry *be;
       // Iterate through all of the group except last
-      for (int j = 0; j < group.size() - 1; j++) {
+      for (int j = 0; j < keep_k; j++) {
         be = group[j];
-        uint64_t move_frequency_per_million =
-            (group[j]->weight * 1000000) / max_weights[i];
-        if (move_frequency_per_million < min_move_frequency_per_million) {
+        if (group[j]->weight < min_move_frequency) {
           continue;
         } else {
           moves_kept++;
@@ -176,7 +177,7 @@ int codegen(string bin, string out, uint64_t min_position_frequency_per_million,
                  << be->weight << "),";
       }
 
-      be = group[group.size() - 1];
+      be = group[keep_k - 1];
       // Last one has no comma in the list of moves. Over a large amount of
       // tables, this is bound to save a few KB to a few MB.
       out_strm << "#(0x" << hex << be->move << "," << "0x" << hex << be->weight
@@ -265,22 +266,20 @@ int main(int argc, char **argv) {
   codegen_command.add_argument("--bin").required().help(
       "Polyglot file to read from");
   codegen_command.add_argument("--output").required().help("Codegen output");
-  codegen_command.add_argument("--min-pos-freq-per-mill")
-      .default_value(1000)
+  codegen_command.add_argument("--min-position-frequency")
+      .default_value(2)
       .scan<'i', int32_t>()
-      .help("The minimum frequency per million of a position to keep, relative "
-            "to the maximum frequency of positions. For example, if the "
-            "starting position appears 1 million times and is the most "
-            "frequent position, then setting this to N will filter out "
-            "positions that appeared less than N times.");
-  codegen_command.add_argument("--min-move-freq-per-mill")
-      .default_value(10000)
+      .help("The minimum frequency per million of a position to keep. The "
+            "frequency of a position is calculated by the sum of all the "
+            "weights of moves for a position.");
+  codegen_command.add_argument("--min-move-frequency")
+      .default_value(2)
       .scan<'i', int32_t>()
-      .help("The minimum frequency per million of a move to keep, relative "
-            "to the maximum frequency of moves on a given position. For "
-            "example, if a position contained a move with 1 million weight, "
-            "then setting this to N will filter out moves for this position "
-            "that appeared less than N times.");
+      .help("The minimum weight/frequency of a move to keep.");
+  codegen_command.add_argument("--top-k")
+      .default_value(4)
+      .scan<'i', int32_t>()
+      .help("Keep only the top k moves for a position");
 
   argparse::ArgumentParser merge_command("merge");
   merge_command.add_description("Merge Polyglot files");
@@ -328,12 +327,12 @@ int main(int argc, char **argv) {
   } else if (program.is_subcommand_used(codegen_command)) {
     string bin = codegen_command.get("--bin");
     string out = codegen_command.get("--output");
-    auto min_position_frequency_per_million =
-        codegen_command.get<int32_t>("--min-pos-freq-per-mill");
-    auto min_move_frequency_per_million =
-        codegen_command.get<int32_t>("--min-move-freq-per-mill");
-    return codegen(bin, out, min_position_frequency_per_million,
-                   min_move_frequency_per_million);
+    auto min_position_frequency =
+        codegen_command.get<int32_t>("--min-position-frequency");
+    auto min_move_frequency =
+        codegen_command.get<int32_t>("--min-move-frequency");
+    auto top_k = codegen_command.get<int32_t>("--top-k");
+    return codegen(bin, out, min_position_frequency, min_move_frequency, top_k);
   } else if (program.is_subcommand_used(merge_command)) {
     auto bins = merge_command.get<vector<string>>("--bins");
     string out = merge_command.get("--output");
