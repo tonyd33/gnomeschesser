@@ -306,19 +306,18 @@ fn do_negamax_alphabeta_failsoft(
   })
   use <- result.lazy_unwrap(result.map(rfp_evaluation, interruptable.return))
 
-  // Null move pruning: if a null move was made (i.e. we pass the turn) yet we
-  // caused a beta cutoff, we can be pretty sure that any legal move would
-  // cause a beta cutoff. In such a case, return early.
+  // Null move pruning/null move reduction: if a null move was made (i.e. we
+  // pass the turn) yet we caused a beta cutoff, we can be pretty sure that
+  // any legal move would cause a beta cutoff, so we'll return a cutoff early.
   // https://www.chessprogramming.org/Null_Move_Pruning
+  //
+  // In endgames, however, it may actually be advantageous to make null moves
+  // (called zugzwang positions).
+  // In that case, we do null move reductions instead: instead of returning
+  // early, we continue searching at a reduced depth, which makes us less
+  // vulnerable to zugzwangs.
   use null_evaluation <- interruptable.do({
-    let should_do_nmp =
-      !is_check
-      // Disable NMP during "endgame". This is not accurate, but doing a phase
-      // calculation like we do in evaluation is expensive: it requires us to
-      // do an entire iteration over the pieces.
-      // TODO: See if we can get a non-expensive endgame check and give more
-      // specific conditions so we can do more NMPs
-      && game.fullmove_number(game) < 20
+    let should_do_nmp = !is_check
     use <- bool.guard(!should_do_nmp, interruptable.return(Error(Nil)))
 
     let r = 4
@@ -347,7 +346,33 @@ fn do_negamax_alphabeta_failsoft(
       }
     }
   })
-  use <- result.lazy_unwrap(result.map(null_evaluation, interruptable.return))
+  // The intended flow control is:
+  // - If we have a null evaluation and we're not in endgame, return early
+  //   (NMP)
+  // - If we have a null evaluation and we're in endgame, reduce depth by
+  //   some amount (NMR)
+  // - Otherwise, continue as usual
+  use <- result.lazy_unwrap(result.map(
+    // Disable NMP during "endgame". This is not accurate, but doing a phase
+    // calculation like we do in evaluation is expensive: it requires us to
+    // do an entire iteration over the pieces.
+    // TODO: See if we can get a non-expensive endgame check and give more
+    // specific conditions so we can do more NMPs
+    case game.fullmove_number(game) < 28 {
+      True -> null_evaluation
+      False -> Error(Nil)
+    },
+    interruptable.return,
+  ))
+  let depth = case null_evaluation {
+    Ok(_) -> depth - 4
+    Error(Nil) -> depth
+  }
+  // We may need to evaluate now that we reduced depth. Do another check.
+  use <- bool.lazy_guard(depth <= 0, fn() {
+    use score <- interruptable.map(quiesce(game, alpha, beta))
+    Evaluation(score:, node_type: evaluation.PV, best_move: None, best_line: [])
+  })
 
   use #(moves, nmoves) <- interruptable.do(sorted_moves(
     game,
