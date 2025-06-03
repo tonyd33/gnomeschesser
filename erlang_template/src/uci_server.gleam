@@ -114,7 +114,7 @@ fn handle_uci(s: UCIState, cmd) {
       True
     }
     uci.EngCmdGo(params:) -> {
-      let now = timestamp.system_time()
+      let start = timestamp.system_time()
       let deadline =
         params
         |> list.find_map(fn(param) {
@@ -127,9 +127,9 @@ fn handle_uci(s: UCIState, cmd) {
           // We expect about a constant time overhead for information transfer
           // and whatever other overhead to do the search. Account for that in
           // the deadline.
-          let budget = 100
+          let budget = 150
           timestamp.add(
-            now,
+            start,
             duration.milliseconds(int.max(movetime - budget, 0)),
           )
         })
@@ -152,7 +152,12 @@ fn handle_uci(s: UCIState, cmd) {
         })
         |> option.from_result
 
-      s.tell_blake(blake.Go(deadline:, depth:, reply_to: s.response_chan))
+      s.tell_blake(blake.Go(
+        deadline:,
+        depth:,
+        stats_start_time: Some(start),
+        reply_to: s.response_chan,
+      ))
       True
     }
     uci.EngCmdDebug(on:) -> {

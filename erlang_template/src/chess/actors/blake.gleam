@@ -6,6 +6,7 @@ import chess/actors/donovan
 import chess/actors/yapper
 import chess/game.{type Game}
 import chess/move
+import chess/player
 import chess/search/evaluation.{type Evaluation, Evaluation, PV}
 import chess/search/search_state.{
   type SearchState, type SearchStats, SearchState,
@@ -61,7 +62,7 @@ type Blake {
     yap_chan: Option(Subject(yapper.Yap)),
     info_chan: Option(Subject(List(Info))),
     nonces: Set(Nonce),
-    backup_timer: Option(Timer),
+    stop_timer: Option(Timer),
   )
 }
 
@@ -82,6 +83,7 @@ pub type Message {
   Go(
     deadline: Option(Timestamp),
     depth: Option(Int),
+    stats_start_time: Option(Timestamp),
     reply_to: Subject(Response),
   )
   Think
@@ -118,7 +120,7 @@ fn new() {
     yap_chan: None,
     info_chan: None,
     nonces: set.new(),
-    backup_timer: None,
+    stop_timer: None,
   )
 }
 
@@ -130,9 +132,9 @@ fn yap(blake: Blake, m: yapper.Yap) {
 }
 
 fn loop(blake: Blake, recv_chan: Subject(Message)) {
-  // TODO: To really fortify this model, we would save the checkpoints from
-  // Donovan and send them as a backup if we don't get a response fast enough
-  // somehow
+  // TODO: To really fortify this model even more, we would save the
+  // checkpoints from Donovan and send them as a backup if we don't get
+  // a response fast enough somehow
 
   let r = case process.receive_forever(recv_chan) {
     Init -> Ok(Blake(..blake, tablebase: tablebase.load()))
@@ -208,8 +210,11 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
     RegisterYapper(yap_chan) -> Ok(Blake(..blake, yap_chan: Some(yap_chan)))
     RegisterInfoChan(info_chan) ->
       Ok(Blake(..blake, info_chan: Some(info_chan)))
-    Go(deadline, depth, client) -> {
+    Go(deadline, depth, stats_start_time, client) -> {
       // Goal:
+      // - Reset Donovan to a sane state
+      //   - Donovan should be not be searching
+      //   - There should be no pending timers to stop Donovan
       // - Queue a task to look up a move from tablebase
       // - Start the search to find a move
       // - Whichever one finishes first should send a response to client
@@ -220,6 +225,46 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
       //   has already been used and only send to the client if it hasn't.
       // - Checking the nonce atomically marks the nonce as having been
       //   used.
+
+      // Reset Donovan to a sane state:
+      {
+        // Stop any pending timers, if any
+        case blake.stop_timer {
+          Some(stop_timer) -> {
+            process.cancel_timer(stop_timer)
+            Nil
+          }
+          None -> Nil
+        }
+        // Make sure Donovan is not running
+        process.send(blake.donovan_chan, donovan.Stop)
+      }
+
+      // If movetime is set, set a new timer to stop after movetime.
+      let stop_timer = {
+        use deadline <- option.map(deadline)
+        let movetime = {
+          let now = timestamp.system_time()
+          let duration = timestamp.difference(now, deadline)
+          let #(s, ns) = duration.to_seconds_and_nanoseconds(duration)
+          { s * 1000 } + { ns / 1_000_000 }
+        }
+        process.send_after(blake.donovan_chan, movetime, donovan.Stop)
+      }
+
+      // This should be called after we found a move and cleans up any pending
+      // timers and stops Donovan.
+      let cleanup_donovan = fn() {
+        case stop_timer {
+          Some(stop_timer) -> {
+            process.cancel_timer(stop_timer)
+            Nil
+          }
+          None -> Nil
+        }
+        process.send(blake.donovan_chan, donovan.Stop)
+      }
+
       let nonce =
         timestamp.system_time() |> timestamp.to_unix_seconds_and_nanoseconds
 
@@ -250,6 +295,7 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
         {
           use <- once
           process.send(client, response)
+          cleanup_donovan()
         }
 
         Ok(Nil)
@@ -301,12 +347,13 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
           yapper.debug("Search took " <> dt <> "ms")
           |> yap(blake, _)
         }
+        use <- once
         let evaluation = case evaluation {
           Ok(Evaluation(best_move: None, ..)) | Error(Nil) -> {
             yapper.warn(
-              "We got no evaluation or best move for FEN: "
+              "We got no evaluation or best move through searching, for FEN: "
               <> game.to_fen(game)
-              <> ". Falling back to a random move",
+              <> ". Search will fall back to a random move.",
             )
             |> yap(blake, _)
 
@@ -325,26 +372,8 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
           }
           Ok(evaluation) -> evaluation
         }
-
-        {
-          use <- once
-          process.send(client, Response(game, evaluation))
-        }
-      }
-
-      // If movetime is set, set a timer to stop after movetime.
-      case deadline {
-        Some(deadline) -> {
-          let movetime = {
-            let now = timestamp.system_time()
-            let duration = timestamp.difference(now, deadline)
-            let #(s, ns) = duration.to_seconds_and_nanoseconds(duration)
-            { s * 1000 } + { ns / 1_000_000 }
-          }
-          process.send_after(blake.donovan_chan, movetime, donovan.Stop)
-          Nil
-        }
-        None -> Nil
+        process.send(client, Response(game, evaluation))
+        cleanup_donovan()
       }
 
       yapper.debug("Asking donovan to work.")
@@ -356,13 +385,25 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
           game: blake.game,
           history: blake.history,
           depth:,
+          stats_start_time:,
           on_checkpoint:,
           on_done:,
         ),
       )
-      Ok(blake)
+      Ok(Blake(..blake, stop_timer:))
     }
     Think -> {
+      // Stop any timers that may potentially disrupt thinking.
+      case blake.stop_timer {
+        Some(stop_timer) -> {
+          process.cancel_timer(stop_timer)
+          Nil
+        }
+        None -> Nil
+      }
+      // Stop active search, if any.
+      process.send(blake.donovan_chan, donovan.Stop)
+
       let on_checkpoint = fn(stats: SearchStats, _, _) {
         let now = timestamp.system_time()
 
@@ -389,11 +430,12 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
           game: blake.game,
           history: blake.history,
           depth: None,
+          stats_start_time: None,
           on_checkpoint:,
           on_done:,
         ),
       )
-      Ok(blake)
+      Ok(Blake(..blake, stop_timer: None))
     }
     Stop -> {
       process.send(blake.donovan_chan, donovan.Stop)
@@ -474,9 +516,17 @@ fn smart_append_history(blake: Blake, game) {
   let old_fmn = game.fullmove_number(blake.game)
 
   let new_turn = game.turn(game)
-  let old_turn = game.turn(game)
+  let old_turn = game.turn(blake.game)
 
-  let append = { new_fmn - old_fmn <= 1 } && new_turn != old_turn
+  let append =
+    {
+      new_fmn == old_fmn + 1
+      && new_turn == player.White
+      && old_turn == player.Black
+    }
+    || {
+      new_fmn == old_fmn && new_turn == player.Black && old_turn == player.White
+    }
   // let reset = !append
 
   case append {
