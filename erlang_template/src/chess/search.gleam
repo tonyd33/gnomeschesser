@@ -316,6 +316,7 @@ fn do_negamax_alphabeta_failsoft(
   // In that case, we do null move reductions instead: instead of returning
   // early, we continue searching at a reduced depth, which makes us less
   // vulnerable to zugzwangs.
+  // https://www.chessprogramming.org/Null_Move_Reductions
   use null_evaluation <- interruptable.do({
     let should_do_nmp = !is_check
     use <- bool.guard(!should_do_nmp, interruptable.return(Error(Nil)))
@@ -347,10 +348,10 @@ fn do_negamax_alphabeta_failsoft(
     }
   })
   // The intended flow control is:
-  // - If we have a null evaluation and we're not in endgame, return early
-  //   (NMP)
-  // - If we have a null evaluation and we're in endgame, reduce depth by
-  //   some amount (NMR)
+  // - If we have a null evaluation that caused a beta-cutoff and we're not in
+  //   endgame, return early (NMP)
+  // - If we have a null evaluation that caused a beta-cutoff and we're in
+  //   endgame, reduce depth by some amount (NMR)
   // - Otherwise, continue as usual
   use <- result.lazy_unwrap(result.map(
     // Disable NMP during "endgame". This is not accurate, but doing a phase
