@@ -59,7 +59,7 @@ type Blake {
     yap_chan: Option(Subject(yapper.Yap)),
     info_chan: Option(Subject(List(Info))),
     nonces: Set(Nonce),
-    stop_timer: Option(Timer),
+    backup_timer: Option(Timer),
   )
 }
 
@@ -80,7 +80,6 @@ pub type Message {
   Go(
     deadline: Option(Timestamp),
     depth: Option(Int),
-    stats_start_time: Option(Timestamp),
     reply_to: Subject(Response),
   )
   Think
@@ -117,7 +116,7 @@ fn new() {
     yap_chan: None,
     info_chan: None,
     nonces: set.new(),
-    stop_timer: None,
+    backup_timer: None,
   )
 }
 
@@ -129,9 +128,9 @@ fn yap(blake: Blake, m: yapper.Yap) {
 }
 
 fn loop(blake: Blake, recv_chan: Subject(Message)) {
-  // TODO: To really fortify this model even more, we would save the
-  // checkpoints from Donovan and send them as a backup if we don't get
-  // a response fast enough somehow
+  // TODO: To really fortify this model, we would save the checkpoints from
+  // Donovan and send them as a backup if we don't get a response fast enough
+  // somehow
 
   let r = case process.receive_forever(recv_chan) {
     Init -> Ok(Blake(..blake, tablebase: tablebase.load()))
@@ -207,7 +206,7 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
     RegisterYapper(yap_chan) -> Ok(Blake(..blake, yap_chan: Some(yap_chan)))
     RegisterInfoChan(info_chan) ->
       Ok(Blake(..blake, info_chan: Some(info_chan)))
-    Go(deadline, depth, stats_start_time, client) -> {
+    Go(deadline, depth, client) -> {
       // Goal:
       // - Queue a task to look up a move from tablebase
       // - Start the search to find a move
@@ -250,10 +249,6 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
         {
           use <- once
           process.send(client, response)
-          // Stop the search if we hit the tablebase first.
-          // It's the caller's responsibility if they want us to continue
-          // thinking.
-          process.send(blake.donovan_chan, donovan.Stop)
         }
 
         Ok(Nil)
@@ -310,13 +305,12 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
           yapper.debug("Search took " <> dt <> "ms")
           |> yap(blake, _)
         }
-        use <- once
         let evaluation = case evaluation {
           Ok(Evaluation(best_move: None, ..)) | Error(Nil) -> {
             yapper.warn(
-              "We got no evaluation or best move through searching, for FEN: "
+              "We got no evaluation or best move for FEN: "
               <> game.to_fen(game)
-              <> ". Search will fall back to a random move.",
+              <> ". Falling back to a random move",
             )
             |> yap(blake, _)
 
@@ -336,30 +330,26 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
           }
           Ok(evaluation) -> evaluation
         }
-        process.send(client, Response(game, evaluation))
+
+        {
+          use <- once
+          process.send(client, Response(game, evaluation))
+        }
       }
 
-      // Stop any active stop timers that may potentially disrupt search.
-      case blake.stop_timer {
-        Some(stop_timer) -> {
-          process.cancel_timer(stop_timer)
+      // If movetime is set, set a timer to stop after movetime.
+      case deadline {
+        Some(deadline) -> {
+          let movetime = {
+            let now = timestamp.system_time()
+            let duration = timestamp.difference(now, deadline)
+            let #(s, ns) = duration.to_seconds_and_nanoseconds(duration)
+            { s * 1000 } + { ns / 1_000_000 }
+          }
+          process.send_after(blake.donovan_chan, movetime, donovan.Stop)
           Nil
         }
         None -> Nil
-      }
-      // Stop active search, if any.
-      process.send(blake.donovan_chan, donovan.Stop)
-
-      // If movetime is set, set a new timer to stop after movetime.
-      let stop_timer = {
-        use deadline <- option.map(deadline)
-        let movetime = {
-          let now = timestamp.system_time()
-          let duration = timestamp.difference(now, deadline)
-          let #(s, ns) = duration.to_seconds_and_nanoseconds(duration)
-          { s * 1000 } + { ns / 1_000_000 }
-        }
-        process.send_after(blake.donovan_chan, movetime, donovan.Stop)
       }
 
       yapper.debug("Asking donovan to work.")
@@ -371,25 +361,13 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
           game: blake.game,
           history: blake.history,
           depth:,
-          stats_start_time:,
           on_checkpoint:,
           on_done:,
         ),
       )
-      Ok(Blake(..blake, stop_timer:))
+      Ok(blake)
     }
     Think -> {
-      // Stop any timers that may potentially disrupt thinking.
-      case blake.stop_timer {
-        Some(stop_timer) -> {
-          process.cancel_timer(stop_timer)
-          Nil
-        }
-        None -> Nil
-      }
-      // Stop active search, if any.
-      process.send(blake.donovan_chan, donovan.Stop)
-
       let on_checkpoint = fn(search_state: SearchState, _, _) {
         let now = timestamp.system_time()
 
@@ -419,12 +397,11 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
           game: blake.game,
           history: blake.history,
           depth: None,
-          stats_start_time: None,
           on_checkpoint:,
           on_done:,
         ),
       )
-      Ok(Blake(..blake, stop_timer: None))
+      Ok(blake)
     }
     Stop -> {
       process.send(blake.donovan_chan, donovan.Stop)

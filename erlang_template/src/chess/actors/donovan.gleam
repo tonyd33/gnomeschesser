@@ -16,7 +16,7 @@ import chess/search/evaluation.{type Evaluation, Evaluation}
 import chess/search/search_state.{type SearchState, SearchState}
 import gleam/erlang/process.{type Subject}
 import gleam/option.{type Option}
-import gleam/time/timestamp.{type Timestamp}
+import gleam/time/timestamp
 import util/dict_addons
 import util/interruptable_state as interruptable
 import util/state
@@ -31,7 +31,6 @@ pub type Message {
     game: Game,
     history: List(Game),
     depth: Option(Int),
-    stats_start_time: Option(Timestamp),
     // Callback to be executed *in Donovan's thread* when a checkpoint is
     // made (when an iteration of deepening is complete).
     on_checkpoint: fn(SearchState, evaluation.Depth, Evaluation) -> Nil,
@@ -63,7 +62,7 @@ fn new() {
 fn loop(donovan: Donovan, recv_chan: Subject(Message)) -> Nil {
   let r = case process.receive_forever(recv_chan) {
     Clear -> Ok(new())
-    Go(game, history, depth, stats_start_time, on_checkpoint, on_done) -> {
+    Go(game, history, depth, on_checkpoint, on_done) -> {
       let interrupt = fn(_) {
         case process.receive(recv_chan, 0) {
           Ok(Stop) -> True
@@ -79,7 +78,7 @@ fn loop(donovan: Donovan, recv_chan: Subject(Message)) -> Nil {
 
       let #(evaluation, #(_, new_state)) =
         {
-          let now = option.unwrap(stats_start_time, timestamp.system_time())
+          let now = timestamp.system_time()
           use <- interruptable.discard(
             interruptable.from_state(search_state.stats_zero(now)),
           )

@@ -152,12 +152,7 @@ fn handle_uci(s: UCIState, cmd) {
         })
         |> option.from_result
 
-      s.tell_blake(blake.Go(
-        deadline:,
-        depth:,
-        stats_start_time: Some(now),
-        reply_to: s.response_chan,
-      ))
+      s.tell_blake(blake.Go(deadline:, depth:, reply_to: s.response_chan))
       True
     }
     uci.EngCmdDebug(on:) -> {

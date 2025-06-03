@@ -31,10 +31,10 @@ pub fn pick_weighted_random(xs: List(#(a, Int))) -> Result(a, Nil) {
 
   let #(total, cdf) =
     list.map_fold(xs, 0, fn(acc, x) { #(acc + x.1, #(x.0, acc + x.1)) })
-  let roll = float.round(float.random() *. int.to_float(total))
+  let roll = float.random() *. int.to_float(total)
 
   use #(x, n) <- list.find_map(cdf)
-  case roll <= n {
+  case roll <=. int.to_float(n) {
     True -> Ok(x)
     False -> Error(Nil)
   }

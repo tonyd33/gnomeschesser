@@ -96,12 +96,7 @@ fn handle_move(request: Request, robot: Robot) -> Response {
       let blake_res =
         process.try_call(
           blake_chan,
-          blake.Go(
-            deadline: Some(deadline),
-            depth: None,
-            stats_start_time: Some(now),
-            reply_to: _,
-          ),
+          blake.Go(deadline: Some(deadline), depth: None, reply_to: _),
           4950,
         )
 
