@@ -128,9 +128,9 @@ fn yap(blake: Blake, m: yapper.Yap) {
 }
 
 fn loop(blake: Blake, recv_chan: Subject(Message)) {
-  // TODO: To really fortify this model, we would save the checkpoints from
-  // Donovan and send them as a backup if we don't get a response fast enough
-  // somehow
+  // TODO: To really fortify this model even more, we would save the
+  // checkpoints from Donovan and send them as a backup if we don't get
+  // a response fast enough somehow
 
   let r = case process.receive_forever(recv_chan) {
     Init -> Ok(Blake(..blake, tablebase: tablebase.load()))
@@ -249,6 +249,10 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
         {
           use <- once
           process.send(client, response)
+          // Stop the search if we hit the tablebase first.
+          // It's the caller's responsibility if they want us to continue
+          // thinking.
+          process.send(blake.donovan_chan, donovan.Stop)
         }
 
         Ok(Nil)
@@ -308,9 +312,11 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
         let evaluation = case evaluation {
           Ok(Evaluation(best_move: None, ..)) | Error(Nil) -> {
             yapper.warn(
-              "We got no evaluation or best move for FEN: "
+              "We got no evaluation or best move through searching, for FEN: "
               <> game.to_fen(game)
-              <> ". Falling back to a random move",
+              <> ".\n"
+              <> "This is fine if we hit the tablebase.\n"
+              <> "Search will fall back to a random move.",
             )
             |> yap(blake, _)
 

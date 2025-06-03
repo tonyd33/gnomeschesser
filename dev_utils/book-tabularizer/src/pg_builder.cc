@@ -73,12 +73,11 @@ uint16_t encode_move(Move &move) {
   uint16_t from_file = from.file();
   uint16_t from_row = from.rank();
 
-  uint16_t encoded =
-    ( to_file                & 0b0000000000000111) |
-    ((to_row          <<  3) & 0b0000000000111000) |
-    ((from_file       <<  6) & 0b0000000111000000) |
-    ((from_row        <<  9) & 0b0000111000000000) |
-    ((promotion_piece << 12) & 0b0111000000000000);
+  uint16_t encoded = (to_file & 0b0000000000000111) |
+                     ((to_row << 3) & 0b0000000000111000) |
+                     ((from_file << 6) & 0b0000000111000000) |
+                     ((from_row << 9) & 0b0000111000000000) |
+                     ((promotion_piece << 12) & 0b0111000000000000);
 
   return encoded;
 }
@@ -88,10 +87,14 @@ PGBuilder::PGBuilder() {}
 PGBuilder::~PGBuilder() {}
 
 void PGBuilder::startPgn() {
-  keep_game = true;
   white_elo = -1;
   black_elo = -1;
+
+  white_weight_multiplier = 1;
+  black_weight_multiplier = 1;
+
   plies = 0;
+  keep_game = true;
 
   static int last_num_entries_logged = 0;
   if (entries.size() - last_num_entries_logged > 100000) {
@@ -107,6 +110,13 @@ void PGBuilder::header(std::string_view key, std::string_view value) {
     white_elo = atoi(string(value).c_str());
   } else if (key == "BlackElo") {
     black_elo = atoi(string(value).c_str());
+  } else if (key == "Result") {
+    // Give more weight to the side that wins
+    if (value == "1-0") {
+      white_weight_multiplier = 2;
+    } else if (value == "0-1") {
+      black_weight_multiplier = 2;
+    }
   }
 }
 
@@ -126,8 +136,11 @@ void PGBuilder::move(std::string_view san, std::string_view comment) {
 
   Move move = uci::parseSan(board, san);
   uint64_t hash = board.hash();
+  uint16_t multiplier = board.sideToMove() == Color::WHITE
+                            ? white_weight_multiplier
+                            : black_weight_multiplier;
   struct BookEntry be = {
-      .key = hash, .move = encode_move(move), .weight = 1, .learn = 0};
+      .key = hash, .move = encode_move(move), .weight = multiplier, .learn = 0};
   entries.push_back(be);
 
   board.makeMove(move);

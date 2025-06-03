@@ -33,6 +33,12 @@ private:
 
   int black_elo = -1;
   int white_elo = -1;
+
+  // Depending on whether white wins or black wins, we assign more weight to
+  // moves
+  uint16_t white_weight_multiplier = 1;
+  uint16_t black_weight_multiplier = 1;
+
   int plies = 0;
   bool keep_game = true;
 };
