@@ -1,4 +1,5 @@
 #include "polyglot.h"
+#include "tinylogger.h"
 #include "util.h"
 #include <fstream>
 
@@ -99,8 +100,13 @@ reduce_to_normal_form(vector<struct BookEntry> &entries) {
     const struct BookEntry &be = *it;
 
     if (curr_be.key == be.key && curr_be.move == be.move) {
-      if (curr_be.weight < UINT16_MAX)
+      if (curr_be.weight < UINT16_MAX) {
         curr_be.weight += 1;
+      } else {
+        LOG_ERROR("Weight is too high for move! I don't want to handle this, "
+                  "so I'll die.");
+        exit(EXIT_FAILURE);
+      }
     } else {
       reduced_entries.push_back(curr_be);
       curr_be = be;

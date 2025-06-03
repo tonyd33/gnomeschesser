@@ -51,7 +51,8 @@ int build(string pgn, string bin, int max_plies, int elo_cutoff,
   return EXIT_SUCCESS;
 }
 
-int codegen(string bin, string out) {
+int codegen(string bin, string out, uint64_t min_position_frequency,
+            uint16_t min_move_frequency, uint16_t top_k) {
   ifstream bin_strm(bin, ios::binary);
   ofstream out_strm(out);
 
@@ -74,58 +75,118 @@ int codegen(string bin, string out) {
   auto reduced_entries = reduce_to_normal_form(entries);
   entries.clear();
 
-  LOG_DEBUG("generating %d entries into code\n", reduced_entries.size());
+  LOG_DEBUG("got %d reduced entries, filtering them down\n",
+            reduced_entries.size());
 
-  auto &group_key = reduced_entries[0].key;
-  vector<struct BookEntry> group;
+  // We're going to create groups of entries:
+  // Each group correspond to a single position. Entries in the group are
+  // weighted moves for the position.
+  // Then, we'll figure out which positions to keep by doing a frequency
+  // cutoff. The frequency of the position is determined by the total weight
+  // of the group.
 
-  // Sorts by weight, descending
-  auto cmp_by_weight = [](struct BookEntry &be1, struct BookEntry &be2) {
-    return be1.weight > be2.weight;
-  };
+  // The first step is to group the entries.
+  vector<vector<struct BookEntry *>> groups;
+  {
+    auto &group_key = reduced_entries[0].key;
+    vector<struct BookEntry *> curr_group;
+    for (auto &be : reduced_entries) {
+      if (be.key != group_key) {
+        // New group. Copy the group and push it.
+        groups.push_back(curr_group);
 
-  // Emit a group. Each group is a collection of entries with the same key.
-  auto emit_group = [&group, &out_strm, &cmp_by_weight]() {
-    if (group.size() == 0)
-      return;
+        group_key = be.key;
+        curr_group.clear();
+      }
 
-    // Sort the entries by weight, descending
-    sort(group.begin(), group.end(), cmp_by_weight);
-
-    // NOTE: We emit all the moves, but we may consider only emitting a few,
-    // or maybe even only one.
-    out_strm << "#(0x" << hex << group[0].key << ",[";
-    // Iterate through all of the group except last
-    for (int j = 0; j < group.size() - 1; j++) {
-      auto &ge = group[j];
-      // NOTE: Weight is omitted here, but we may want that.
-      out_strm << "0x" << hex << ge.move << ",";
+      curr_group.push_back(&be);
     }
-
-    // Last one has no comma. Over a large amount of tables, this is bound
-    // to save a few KB to a few MB.
-    // NOTE: Weight is omitted here, but we may want that.
-    out_strm << "0x" << hex << group[group.size() - 1].move;
-    // If this is the last group, we'll still add the trailing comma. This will
-    // mean we'll have only one unnecessary comma for this file, which is
-    // acceptable.
-    out_strm << "]),";
-  };
-
-  out_strm << "pub const table = [";
-  for (auto &be : reduced_entries) {
-    if (be.key != group_key) {
-      // New group. Emit the current group and set new group
-      emit_group();
-
-      group_key = be.key;
-      group.clear();
-    }
-
-    group.push_back(be);
+    // Don't forget the last group.
+    groups.push_back(curr_group);
   }
-  emit_group();
-  out_strm << "]" << endl;
+
+  LOG_DEBUG("got %d groups\n", groups.size());
+
+  // We find the frequencies for each group/position by iterating over the
+  // groups and summing up the weight of its entries.
+  // We could've done all of this in one pass earlier, but it would be a lot
+  // harder to read for being only slightly more efficient.
+  vector<uint64_t> position_frequencies;
+  vector<uint16_t> max_weights;
+  {
+    // No need for resizing later.
+    position_frequencies.resize(groups.size());
+    max_weights.resize(groups.size());
+
+    for (int i = 0; i < groups.size(); i++) {
+      auto &group = groups[i];
+      uint64_t position_frequency = 0;
+      max_weights[i] = 0;
+      for (auto be : group) {
+        position_frequency += be->weight;
+        max_weights[i] = max(max_weights[i], be->weight);
+      }
+      position_frequencies[i] = position_frequency;
+    }
+  }
+
+  // We begin writing to the file:
+  // - Iterate through each group
+  // - Sort the moves in the group. Keep the top K moves that are above the
+  //   frequency filter.
+  // - Write the group
+  {
+    uint32_t groups_kept = 0;
+    uint32_t moves_kept = 0;
+    out_strm << "pub const table = [";
+    for (int i = 0; i < groups.size(); i++) {
+      auto &group = groups[i];
+      // Skip this position altogether if it's really infrequent, relative to
+      // the most frequent.
+      if (position_frequencies[i] < min_position_frequency) {
+        continue;
+      } else {
+        groups_kept++;
+      }
+
+      // Sort the group.
+      sort(group.begin(), group.end(),
+           [](struct BookEntry *be1, struct BookEntry *be2) {
+             return be1->weight > be2->weight;
+           });
+
+      auto keep_k = min((uint16_t)group.size(), top_k);
+
+      // Now emit the group.
+      out_strm << "#(0x" << hex << group[0]->key << ",[";
+      struct BookEntry *be;
+      // Iterate through all of the group except last
+      for (int j = 0; j < keep_k; j++) {
+        be = group[j];
+        if (group[j]->weight < min_move_frequency) {
+          continue;
+        } else {
+          moves_kept++;
+        }
+
+        out_strm << "#(0x" << hex << be->move << "," << "0x" << hex
+                 << be->weight << "),";
+      }
+
+      be = group[keep_k - 1];
+      // Last one has no comma in the list of moves. Over a large amount of
+      // tables, this is bound to save a few KB to a few MB.
+      out_strm << "#(0x" << hex << be->move << "," << "0x" << hex << be->weight
+               << ")";
+      // If this is the last group, we'll add the trailing comma (to the outer
+      // list). This will mean we'll have only one unnecessary comma for this
+      // file, which is acceptable.
+      out_strm << "]),";
+    }
+    out_strm << "]" << endl;
+    LOG_DEBUG("kept %ld groups\n", groups_kept);
+    LOG_DEBUG("kept %ld moves\n", moves_kept);
+  }
 
   out_strm.close();
   bin_strm.close();
@@ -201,6 +262,20 @@ int main(int argc, char **argv) {
   codegen_command.add_argument("--bin").required().help(
       "Polyglot file to read from");
   codegen_command.add_argument("--output").required().help("Codegen output");
+  codegen_command.add_argument("--min-position-frequency")
+      .default_value(2)
+      .scan<'i', int32_t>()
+      .help("The minimum frequency per million of a position to keep. The "
+            "frequency of a position is calculated by the sum of all the "
+            "weights of moves for a position.");
+  codegen_command.add_argument("--min-move-frequency")
+      .default_value(2)
+      .scan<'i', int32_t>()
+      .help("The minimum weight/frequency of a move to keep.");
+  codegen_command.add_argument("--top-k")
+      .default_value(4)
+      .scan<'i', int32_t>()
+      .help("Keep only the top k moves for a position");
 
   argparse::ArgumentParser merge_command("merge");
   merge_command.add_description("Merge Polyglot files");
@@ -248,7 +323,12 @@ int main(int argc, char **argv) {
   } else if (program.is_subcommand_used(codegen_command)) {
     string bin = codegen_command.get("--bin");
     string out = codegen_command.get("--output");
-    return codegen(bin, out);
+    auto min_position_frequency =
+        codegen_command.get<int32_t>("--min-position-frequency");
+    auto min_move_frequency =
+        codegen_command.get<int32_t>("--min-move-frequency");
+    auto top_k = codegen_command.get<int32_t>("--top-k");
+    return codegen(bin, out, min_position_frequency, min_move_frequency, top_k);
   } else if (program.is_subcommand_used(merge_command)) {
     auto bins = merge_command.get<vector<string>>("--bins");
     string out = merge_command.get("--output");

@@ -26,7 +26,15 @@ jobs:
         working-directory: erlang_template
       - run: gleam test
         working-directory: erlang_template
-      - run: gleam format --check src test
+      # We don't want to format the tablebase data file. Doing so will make it
+      # large enough that we have to `gleam clean` before every rebuild.
+      - run: |-
+          gleam format --check \
+            src/*.gleam \
+            src/chess/*.gleam \
+            src/chess/{actors,evaluate,game,move,search,util} \
+            src/util \
+            test
         working-directory: erlang_template
 
   position_test:

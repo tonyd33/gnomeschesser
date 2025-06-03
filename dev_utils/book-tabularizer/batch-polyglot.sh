@@ -56,5 +56,5 @@ for book in "$books_dir"/*.pgn; do
 done
 
 
-build/polyglot-operator merge --bins "${polyglot_files[@]}" --output "$merged_file"
+build/polyglot-operator -v merge --bins "${polyglot_files[@]}" --output "$merged_file"
 build/polyglot-operator codegen --bin "$merged_file" --output "$code_file"

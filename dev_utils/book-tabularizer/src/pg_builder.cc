@@ -88,10 +88,14 @@ PGBuilder::PGBuilder() {}
 PGBuilder::~PGBuilder() {}
 
 void PGBuilder::startPgn() {
-  keep_game = true;
   white_elo = -1;
   black_elo = -1;
+
+  white_weight_multiplier = 1;
+  black_weight_multiplier = 1;
+
   plies = 0;
+  keep_game = true;
 
   static int last_num_entries_logged = 0;
   if (entries.size() - last_num_entries_logged > 100000) {
@@ -107,6 +111,13 @@ void PGBuilder::header(std::string_view key, std::string_view value) {
     white_elo = atoi(string(value).c_str());
   } else if (key == "BlackElo") {
     black_elo = atoi(string(value).c_str());
+  } else if (key == "Result") {
+    // Give more weight to the side that wins
+    if (value == "1-0") {
+      white_weight_multiplier = 2;
+    } else if (value == "0-1") {
+      black_weight_multiplier = 2;
+    }
   }
 }
 
@@ -126,8 +137,11 @@ void PGBuilder::move(std::string_view san, std::string_view comment) {
 
   Move move = uci::parseSan(board, san);
   uint64_t hash = board.hash();
+  uint16_t multiplier = board.sideToMove() == Color::WHITE
+                            ? white_weight_multiplier
+                            : black_weight_multiplier;
   struct BookEntry be = {
-      .key = hash, .move = encode_move(move), .weight = 1, .learn = 0};
+      .key = hash, .move = encode_move(move), .weight = multiplier, .learn = 0};
   entries.push_back(be);
 
   board.makeMove(move);
