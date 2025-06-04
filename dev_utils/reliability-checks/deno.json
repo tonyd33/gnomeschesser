@@ -1,0 +1,8 @@
+{
+  "imports": {
+    "@types/yargs": "npm:@types/yargs@^17.0.33",
+    "chess.js": "npm:chess.js@^1.3.1",
+    "winston": "npm:winston@^3.17.0",
+    "yargs": "npm:yargs@^18.0.0"
+  }
+}
