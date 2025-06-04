@@ -135,12 +135,10 @@ fn compute_batched_scores_at(white_controls, black_controls, square, piece) {
   }
 
   let material_mg = common.piece_symbol_mg(piece.symbol)
-  let material_eg = common.piece_symbol_eg(piece.symbol)
+  //common.piece_symbol_eg(piece.symbol)
+  let material_eg = material_mg
 
-  let npm = case piece.symbol {
-    piece.Pawn | piece.King -> material_mg
-    _ -> 0
-  }
+  let npm = common.piece_symbol_npm(piece.symbol)
 
   let player = piece.player |> common.player
 
