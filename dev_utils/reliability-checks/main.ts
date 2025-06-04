@@ -20,7 +20,8 @@ type UCIEngine = { enginePath: string };
 
 type Engine =
   | { proto: "http"; engine: HTTPEngine }
-  | { proto: "uci"; engine: UCIEngine };
+  | { proto: "uci"; engine: UCIEngine }
+  | { proto: "random" }
 
 type Context = { fen: string };
 
@@ -43,6 +44,7 @@ const emptyStats: Stats = { failedMoves: [], timeouts: [] };
 async function runStatsN(f: () => Promise<Stats>, n: number) {
   let stats = emptyStats;
   for (let i = 0; i < n; i++) {
+    logger.debug(`Run ${i}/${n}`);
     const stat = await f();
     stats = mergeStats(stats, stat);
   }
@@ -94,7 +96,7 @@ async function askHttp(
   };
 
   while (stats.failedMoves.length < 3 && stats.timeouts.length < 10) {
-    logger.debug("Asking for move");
+    // logger.debug("Asking for move");
     const moveResult = await race(() =>
       fetch(
         url,
@@ -138,74 +140,103 @@ async function askHttp(
   return stats;
 }
 
-/**
- * Play random moves against an HTTP engine for a game.
- */
-async function playRandom({ url }: HTTPEngine) {
+async function makeEngineMove(chess: Chess, engine: Engine) {
+  switch (engine.proto) {
+    case "http":
+      return askHttp({ chess, url: engine.engine.url });
+    case "random": { 
+      const availableMoves = chess.moves();
+      const randomIndex = Math.min(
+        Math.floor(Math.random() * availableMoves.length),
+        availableMoves.length - 1,
+      );
+      chess.move(availableMoves[randomIndex]);
+      return emptyStats;
+    }
+    default:
+      throw new Error(`asking ${engine.proto} not implemented`);
+  }
+}
+
+async function play(engine1: Engine, engine2: Engine) {
   const chess = new Chess();
   let stats = emptyStats;
 
   while (true) {
-    // Ask for a move.
-    const stat = await askHttp({ chess, url });
-    stats = mergeStats(stats, stat);
-
+    stats = mergeStats(stats, await makeEngineMove(chess, engine1));
     if (chess.isCheckmate()) {
       break;
     }
 
-    const availableMoves = chess.moves();
-    const randomIndex = Math.min(
-      Math.floor(Math.random() * availableMoves.length),
-      availableMoves.length - 1,
-    );
-    chess.move(availableMoves[randomIndex]);
+    stats = mergeStats(stats, await makeEngineMove(chess, engine2));
     if (chess.isCheckmate()) {
       break;
     }
   }
-
   return stats;
 }
 
-/**
- * Play against the same engine
- */
-async function playSame({ url }: HTTPEngine) {
-  const chess = new Chess();
-  let stats = emptyStats;
-  while (true) {
-    // Ask for a move.
-    let stat = await askHttp({ chess, url });
-    stats = mergeStats(stats, stat);
-
-    if (chess.isCheckmate()) {
-      break;
-    }
-
-    // Ask for a move.
-    stat = await askHttp({ chess, url });
-    stats = mergeStats(stats, stat);
-
-    if (chess.isCheckmate()) {
-      break;
+function parseEngineSpec(spec: string): Result<Engine, string> {
+  const parseProto = (s) => {
+    if (s.startsWith("proto:http")) {
+      return {ok: true, value: "http"};
+    } else if (s.startsWith("proto:uci")) {
+      return {ok: true, value: "uci"};
+    } else if (s.startsWith("proto:random")) {
+      return {ok: true, value: "random"};
+    } else {
+      return {ok: false, err: "Expected http or uci"};
     }
   }
 
-  return stats;
+  const parseURL = (s) => {
+    if (s.startsWith("url:")) {
+      return {ok: true, value: s.slice("url:".length)};
+    } else {
+      return {ok: false, err: "Expected url"};
+    }
+  }
+
+  const parsePath = (s) => {
+    if (s.startsWith("path:")) {
+      return {ok: true, value: s.slice("path:".length)};
+    } else {
+      return {ok: false, err: "Expected url"};
+    }
+  }
+
+  const parts = spec.split(",");
+  if (parts.length !== 2) {
+    return {ok: false, err: "not enough parts"};
+  }
+  const proto = parseProto(parts[0]);
+  if (!proto.ok) return proto;
+
+  switch (proto.value) {
+    case "http": {
+      const url = parseURL(parts[1]);
+      return url.ok ? {ok: true, value: {proto: "http", engine: {url: url.value}}} : url;
+    }
+    case "uci": {
+      const path = parsePath(parts[1]);
+      return path.ok ? {ok: true, value: {proto: "uci", engine: {enginePath:path.value}}} : path;
+    }
+    case "random": {
+      return {ok: true, value: {proto: "random"}};
+    }
+    default:
+      return {ok: false, err: "Bad parse"};
+  }
 }
 
 async function main() {
   const opts = await yargs()
     .scriptName("reliability-test")
-    .option("url", {
+    .option("engine", {
       type: "string",
+      array: true,
       demandOption: true,
-      describe: "engine endpoint",
-    })
-    .option("method", {
-      choices: ["random", "same"],
-      default: "random",
+      describe: "engines",
     })
     .option("n", {
       type: "number",
@@ -213,16 +244,21 @@ async function main() {
     })
     .parse(hideBin(process.argv));
 
+  const engines = opts
+    .engine
+    .map(parseEngineSpec)
+    .map((engine) => {
+      if (!engine.ok) {
+        throw new Error(engine.err);
+      }
+      return engine.value;
+    });
+
   const run = () => {
-    logger.debug(`Running method ${opts.method}`);
-    switch (opts.method) {
-      case "random":
-        return playRandom({ url: opts.url });
-      case "same":
-        return playSame({ url: opts.url });
-      default:
-        throw new Error("absurd");
+    if (engines.length !== 2) {
+      throw new Error("needed 2 engines");
     }
+    return play(engines[0], engines[1]);
   };
 
   const stats = await runStatsN(run, opts.n);
