@@ -71,8 +71,7 @@ pub fn history_update(
 }
 
 /// To reduce the need of manual trimming when the transposition table gets too
-/// large, we reduce the key space by taking only a certain amount of lower
-/// bits. This current mask gives us a max size of 2^16, or 65536 entries.
+/// large, we reduce the key space by modding out by this key size.
 const key_size = 100_000
 
 fn transposition_key_reduce(key: Int) {
@@ -92,7 +91,6 @@ pub fn transposition_get(
         Ok(entry),
         SearchState(
           ..search_state,
-          transposition:,
           stats: SearchStats(
             ..search_state.stats,
             tt_hits: search_state.stats.tt_hits + 1,
@@ -177,11 +175,12 @@ pub type SearchStats {
     nodes_searched: Int,
     // When did we start the current search?
     init_time: timestamp.Timestamp,
+    // Transposition table size
+    tt_size: Int,
     // Transposition table hits
     tt_hits: Int,
     // Transposition table misses
     tt_misses: Int,
-    tt_size: Int,
     // How many regular beta cutoffs we did per depth
     beta_cutoffs: dict.Dict(Int, Int),
     // How many reverse futility pruning cutoffs we did per depth
@@ -351,13 +350,9 @@ fn per_depth_stats(name: String, per_depth: dict.Dict(Int, Int)) {
   }
 }
 
-pub fn stats_to_string(
-  search_state: SearchState,
-  now: timestamp.Timestamp,
-) -> String {
-  let stats = search_state.stats
-  let nps = stats_nodes_per_second(search_state, now)
-  let dt = stats_delta_time_ms(search_state, now)
+pub fn stats_to_string(stats: SearchStats, now: timestamp.Timestamp) -> String {
+  let nps = stats_nodes_per_second(stats, now)
+  let dt = stats_delta_time_ms(stats, now)
   ""
   <> "Search Stats:\n"
   <> "  Depth: "
@@ -409,12 +404,11 @@ pub fn stats_to_string(
 }
 
 pub fn stats_nodes_per_second(
-  search_state: SearchState,
+  stats: SearchStats,
   now: timestamp.Timestamp,
 ) -> Float {
-  let stats = search_state.stats
   let assert Ok(dt) =
-    stats_delta_time_ms(search_state, now)
+    stats_delta_time_ms(stats, now)
     |> int.to_float
     |> float.divide(1000.0)
 
@@ -430,17 +424,13 @@ pub fn stats_nodes_per_second(
   }
 }
 
-pub fn stats_delta_time_ms(
-  search_state: SearchState,
-  now: timestamp.Timestamp,
-) -> Int {
-  let duration = timestamp.difference(search_state.stats.init_time, now)
+pub fn stats_delta_time_ms(stats: SearchStats, now: timestamp.Timestamp) -> Int {
+  let duration = timestamp.difference(stats.init_time, now)
   let #(s, ns) = duration.to_seconds_and_nanoseconds(duration)
   { s * 1000 } + { ns / 1_000_000 }
 }
 
-pub fn stats_hashfull(search_state: SearchState) -> Int {
-  let stats = search_state.stats
+pub fn stats_hashfull(stats: SearchStats) -> Int {
   let size = stats.tt_size
   float.round({ int.to_float(size) *. 1000.0 } /. int.to_float(key_size))
 }

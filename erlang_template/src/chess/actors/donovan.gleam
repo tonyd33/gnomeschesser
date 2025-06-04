@@ -13,7 +13,9 @@
 import chess/game.{type Game}
 import chess/search
 import chess/search/evaluation.{type Evaluation, Evaluation}
-import chess/search/search_state.{type SearchState, SearchState}
+import chess/search/search_state.{
+  type SearchState, type SearchStats, SearchState,
+}
 import gleam/erlang/process.{type Subject}
 import gleam/option.{type Option}
 import gleam/time/timestamp
@@ -21,9 +23,8 @@ import util/dict_addons
 import util/interruptable_state as interruptable
 import util/state
 
-pub opaque type Donovan {
-  Donovan(search_state: SearchState)
-}
+type Donovan =
+  SearchState
 
 pub type Message {
   Clear
@@ -33,10 +34,10 @@ pub type Message {
     depth: Option(Int),
     // Callback to be executed *in Donovan's thread* when a checkpoint is
     // made (when an iteration of deepening is complete).
-    on_checkpoint: fn(SearchState, evaluation.Depth, Evaluation) -> Nil,
+    on_checkpoint: fn(SearchStats, evaluation.Depth, Evaluation) -> Nil,
     // Callback to be executed *in Donovan's thread* when the search has
     // terminated for whatever reason.
-    on_done: fn(SearchState, Game, Result(Evaluation, Nil)) -> Nil,
+    on_done: fn(SearchStats, Game, Result(Evaluation, Nil)) -> Nil,
   )
   Stop
   Die
@@ -56,7 +57,7 @@ pub fn start() {
 }
 
 fn new() {
-  Donovan(search_state: search_state.new(timestamp.system_time()))
+  search_state.new(timestamp.system_time())
 }
 
 fn loop(donovan: Donovan, recv_chan: Subject(Message)) -> Nil {
@@ -76,7 +77,7 @@ fn loop(donovan: Donovan, recv_chan: Subject(Message)) -> Nil {
         }
       }
 
-      let #(evaluation, #(_, new_state)) =
+      let #(evaluation, #(_, new_donovan)) =
         {
           let now = timestamp.system_time()
           use <- interruptable.discard(
@@ -91,11 +92,11 @@ fn loop(donovan: Donovan, recv_chan: Subject(Message)) -> Nil {
             on_checkpoint,
           )
         }
-        |> state.go(#(interrupt, donovan.search_state))
+        |> state.go(#(interrupt, donovan))
 
-      on_done(new_state, game, evaluation)
+      on_done(new_donovan.stats, game, evaluation)
 
-      Ok(Donovan(search_state: new_state))
+      Ok(new_donovan)
     }
     Stop -> Ok(donovan)
     Die -> Error(Nil)
