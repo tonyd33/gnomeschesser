@@ -425,7 +425,7 @@ fn do_negamax_alphabeta_failsoft(
       #(Evaluation, ExtendedInt),
     ) {
       use e2 <- interruptable.do({
-        use neg_evaluation <- interruptable.map(negamax_alphabeta_failsoft(
+        use neg_evaluation <- interruptable.do(negamax_alphabeta_failsoft(
           game.apply(game, move),
           depth,
           xint.negate(beta),
@@ -730,7 +730,7 @@ fn sorted_moves(
   let capture_promotion_moves =
     list.sort(capture_promotion_moves, compare_mvv_lva)
 
-  use compare_quiet_history <- interruptable.map({
+  use compare_quiet_history <- interruptable.do({
     use search_state: SearchState <- interruptable.select
     compare_quiet_history(search_state.history)
   })
@@ -741,7 +741,7 @@ fn sorted_moves(
   let sorted_moves =
     option.map(best_move, fn(best_move) { [best_move, ..non_best_move] })
     |> option.unwrap(non_best_move)
-  #(sorted_moves, nmoves)
+  interruptable.return(#(sorted_moves, nmoves))
 }
 
 fn compare_mvv(move1, move2) {

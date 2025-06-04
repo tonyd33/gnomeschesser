@@ -78,26 +78,22 @@ fn loop(donovan: Donovan, recv_chan: Subject(Message)) -> Nil {
         }
       }
 
-      let #(evaluation, #(_, new_donovan)) =
-        {
-          let now = option.unwrap(stats_start_time, timestamp.system_time())
-          use <- interruptable.discard(
-            interruptable.from_state(search_state.stats_zero(now)),
-          )
+      let now = option.unwrap(stats_start_time, timestamp.system_time())
+      let #(_, donovan) = search_state.stats_zero(now) |> state.go(donovan)
+      let #(evaluation, donovan) =
+        search.checkpointed_iterative_deepening(
+          game,
+          1,
+          search.SearchOpts(max_depth: depth),
+          history |> dict_addons.zip_dict_by(game.hash),
+          Error(Nil),
+          on_checkpoint,
+          interrupt,
+          donovan,
+        )
 
-          search.checkpointed_iterative_deepening(
-            game,
-            1,
-            search.SearchOpts(max_depth: depth),
-            history |> dict_addons.zip_dict_by(game.hash),
-            on_checkpoint,
-          )
-        }
-        |> state.go(#(interrupt, donovan))
-
-      on_done(new_donovan.stats, game, evaluation)
-
-      Ok(new_donovan)
+      on_done(donovan.stats, game, evaluation)
+      Ok(donovan)
     }
     Stop -> Ok(donovan)
     Die -> Error(Nil)
