@@ -173,7 +173,7 @@ pub fn search_with_widening_windows(
 /// Don't even bother inserting into or looking up from the transposition
 /// table unless we're past this depth!
 ///
-const tt_min_leaf_distance = 2
+const tt_min_leaf_distance = 1
 
 /// https://www.chessprogramming.org/Alpha-Beta#Negamax_Framework
 /// returns the score of the current game searched at depth

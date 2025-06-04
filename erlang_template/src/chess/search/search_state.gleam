@@ -71,9 +71,8 @@ pub fn history_update(
 }
 
 /// To reduce the need of manual trimming when the transposition table gets too
-/// large, we reduce the key space by taking only a certain amount of lower
-/// bits. This current mask gives us a max size of 2^16, or 65536 entries.
-const key_size = 75_000
+/// large, we reduce the key space by modding out by this key size.
+const key_size = 100_000
 
 fn transposition_key_reduce(key: Int) {
   key % key_size
