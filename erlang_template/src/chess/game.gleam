@@ -581,8 +581,8 @@ pub fn move_to_san(
 ) -> Result(SAN, Nil) {
   let us = game.active_color
   let them = player.opponent(us)
-  let from = move.get_from(move)
-  let to = move.get_to(move)
+  let from = move.from
+  let to = move.to
   let assert Ok(us_piece) = dict.get(game.board, from)
   let new_game = apply(game, move)
 
@@ -622,7 +622,7 @@ pub fn move_to_san(
           False -> ""
         }
         <> square.to_string(to)
-        <> case move.get_promotion(move) {
+        <> case move.promotion {
           Some(piece) -> "=" <> piece.symbol_to_string(piece)
           None -> ""
         },
@@ -637,9 +637,9 @@ pub fn move_to_san(
         // don't include ourselves
         valid_moves(game)
         |> list.filter(fn(other_move) {
-          move.get_to(other_move) == to
+          other_move.to == to
           && !move.equal(move, other_move)
-          && { dict.get(game.board, move.get_from(other_move)) == Ok(us_piece) }
+          && { dict.get(game.board, other_move.from) == Ok(us_piece) }
         })
 
       piece.symbol_to_string(us_piece.symbol)
@@ -650,11 +650,11 @@ pub fn move_to_san(
             other_ambiguous_moves,
             disambiguation.Unambiguous,
             fn(ambiguity, other_move) {
-              let other_from = move.get_from(other_move)
+              let other_from = other_move.from
               // Skip invalid moves here
               // check if it's the same type of piece
               use <- bool.guard(
-                move.get_to(other_move) != to
+                other_move.to != to
                   || move.equal(move, other_move)
                   || piece_at(game, other_from) != Ok(us_piece),
                 ambiguity,
@@ -733,10 +733,10 @@ fn board_insert(board, hash, square, piece) {
 /// Applies a move to a game.
 ///
 pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
-  let from = move.get_from(move)
-  let to = move.get_to(move)
-  let promotion = move.get_promotion(move)
-  let move_context = move.get_context(move)
+  let from = move.from
+  let to = move.to
+  let promotion = move.promotion
+  let assert Some(move_context) = move.context
   let Game(
     board:,
     castling_availability:,
@@ -771,14 +771,12 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
       None -> #(board, hash)
     }
     let #(board, hash) = case castle_rook_move {
-      Some(x) ->
-        board_remove(board, hash, move.get_from(x), piece.Piece(us, piece.Rook))
+      Some(x) -> board_remove(board, hash, x.from, piece.Piece(us, piece.Rook))
       None -> #(board, hash)
     }
     let #(board, hash) = board_insert(board, hash, to, new_piece)
     let #(board, hash) = case castle_rook_move {
-      Some(x) ->
-        board_insert(board, hash, move.get_to(x), piece.Piece(us, piece.Rook))
+      Some(x) -> board_insert(board, hash, x.to, piece.Piece(us, piece.Rook))
       None -> #(board, hash)
     }
     #(board, hash)

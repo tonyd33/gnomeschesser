@@ -449,13 +449,13 @@ fn do_negamax_alphabeta_failsoft(
       case xint.gte(e.score, beta) {
         True -> {
           let new_e = Evaluation(..e, node_type: evaluation.Cut)
-          let move_context = move.get_context(move)
+          let assert Some(move_context) = move.context
 
           use <- interruptable.discard(
             case move_context.capture |> option.is_none {
               True -> {
                 // non-capture moves update the history table
-                let to = move.get_to(move)
+                let to = move.to
                 let piece = move_context.piece
                 interruptable.from_state(search_state.history_update(
                   #(to, piece),
@@ -699,10 +699,9 @@ fn sorted_moves(
       )
 
       // non-quiet moves (captures and promotions get sorted next)
-      let move_context = move.get_context(move)
+      let assert Some(move_context) = move.context
       let is_quiet =
-        option.is_none(move_context.capture)
-        && option.is_none(move.get_promotion(move))
+        option.is_none(move_context.capture) && option.is_none(move.promotion)
       case is_quiet {
         True -> #(best, capture_promotions, [move, ..quiet], nmoves + 1)
         False -> #(best, [move, ..capture_promotions], quiet, nmoves + 1)
@@ -747,8 +746,13 @@ fn sorted_moves(
   #(sorted_moves, nmoves)
 }
 
-fn compare_mvv(move1, move2) {
-  case move.get_context(move1).capture, move.get_context(move2).capture {
+fn compare_mvv(
+  move1: move.Move(move.ValidInContext),
+  move2: move.Move(move.ValidInContext),
+) {
+  let assert Some(context1) = move1.context
+  let assert Some(context2) = move2.context
+  case context1.capture, context2.capture {
     Some(#(_, piece.Piece(_, a))), Some(#(_, piece.Piece(_, b))) ->
       piece.compare_symbol(b, a)
     Some(_), _ -> order.Lt
@@ -758,9 +762,14 @@ fn compare_mvv(move1, move2) {
 }
 
 fn compare_quiet_history(history) {
-  fn(move1, move2) {
-    let key1 = #(move.get_to(move1), move.get_context(move1).piece)
-    let key2 = #(move.get_to(move2), move.get_context(move2).piece)
+  fn(
+    move1: move.Move(move.ValidInContext),
+    move2: move.Move(move.ValidInContext),
+  ) {
+    let assert Some(context1) = move1.context
+    let assert Some(context2) = move2.context
+    let key1 = #(move1.to, context1.piece)
+    let key2 = #(move2.to, context2.piece)
     let history1 = dict.get(history, key1) |> result.unwrap(0)
     let history2 = dict.get(history, key2) |> result.unwrap(0)
     // bigger history should go first
@@ -768,15 +777,14 @@ fn compare_quiet_history(history) {
   }
 }
 
-fn compare_lva(move1, move2) {
-  let piece1 = move.get_context(move1).piece.symbol
-  let piece1 =
-    move.get_promotion(move1)
-    |> option.unwrap(piece1)
-  let piece2 = move.get_context(move2).piece.symbol
-  let piece2 =
-    move.get_promotion(move2)
-    |> option.unwrap(piece2)
+fn compare_lva(
+  move1: move.Move(move.ValidInContext),
+  move2: move.Move(move.ValidInContext),
+) {
+  let assert Some(context1) = move1.context
+  let piece1 = option.unwrap(move1.promotion, context1.piece.symbol)
+  let assert Some(context2) = move2.context
+  let piece2 = option.unwrap(move2.promotion, context2.piece.symbol)
 
   piece.compare_symbol(piece1, piece2)
 }

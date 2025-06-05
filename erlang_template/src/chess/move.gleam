@@ -62,28 +62,6 @@ pub fn new_valid(
   Move(from:, to:, promotion:, context:)
 }
 
-// TODO: remove these functions
-pub fn get_from(move: Move(a)) {
-  move.from
-}
-
-pub fn get_to(move: Move(a)) {
-  move.to
-}
-
-pub fn get_promotion(move: Move(a)) {
-  move.promotion
-}
-
-pub fn get_context(move: Move(ValidInContext)) {
-  let assert Some(context) = move.context
-  context
-}
-
-pub fn get_pseudo_context(move: Move(a)) {
-  move.context
-}
-
 pub fn is_quiet(move: Move(ValidInContext)) {
   let assert Some(context) = move.context
   option.is_none(context.capture)
@@ -101,7 +79,7 @@ pub fn is_promotion(move: Move(ValidInContext)) {
 pub fn to_lan(move: Move(a)) {
   square.to_string(move.from)
   <> square.to_string(move.to)
-  <> case get_promotion(move) {
+  <> case move.promotion {
     Some(symbol) -> piece.symbol_to_string(symbol) |> string.lowercase
     None -> ""
   }
