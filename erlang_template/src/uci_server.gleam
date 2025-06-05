@@ -23,7 +23,7 @@ const name = "gnomeschesser"
 const authors = "The Gnomes Team"
 
 pub fn main() {
-  let #(yapper_chan, yap_chan) = yapper.start(yapper.Info)
+  let #(yapper_chan, yap_chan) = yapper.start(yapper.Debug)
 
   let yap = process.send(yap_chan, _)
   let #(_, response_chan, info_chan) = start_blake_handler(yap)

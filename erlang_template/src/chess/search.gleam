@@ -279,8 +279,7 @@ fn do_negamax_alphabeta_failsoft(
     let score =
       evaluate.game(game)
       |> xint.multiply(evaluate.player(game.turn(game)) |> xint.from_int)
-    // TODO: Tweak margin
-    let margin = 50 * depth
+    let margin = 100 * depth
 
     case xint.gte(score, xint.add(beta, xint.from_int(margin))) {
       True -> {
@@ -288,7 +287,11 @@ fn do_negamax_alphabeta_failsoft(
           interruptable.from_state(search_state.stats_add_rfp_cutoffs(depth, 1)),
         )
         interruptable.return(
-          Ok(Evaluation(score:, best_move: None, node_type: evaluation.Cut)),
+          Ok(Evaluation(
+            score: xint.divide(xint.add(score, beta), xint.from_int(2)),
+            best_move: None,
+            node_type: evaluation.Cut,
+          )),
         )
       }
       False -> interruptable.return(Error(Nil))
@@ -491,11 +494,11 @@ fn do_negamax_alphabeta_failsoft(
       // The search on the child node caused a beta-cutoff while reducing the
       // depth. We have to retry the search at the proper depth.
       True, True -> {
-        // use <- interruptable.discard(
-        //   interruptable.from_state(
-        //     search_state.stats_increment_lmr_verifications(depth),
-        //   ),
-        // )
+        use <- interruptable.discard(
+          interruptable.from_state(
+            search_state.stats_increment_lmr_verifications(depth),
+          ),
+        )
         use #(best_evaluation, alpha) <- interruptable.do(go(
           best_evaluation,
           depth - 1,
@@ -506,11 +509,11 @@ fn do_negamax_alphabeta_failsoft(
       }
       // If it didn't even cause a beta-cutoff, then continue as usual.
       _, _ -> {
-        // use <- interruptable.discard(case depth_reduction > 0 {
-        //   True ->
-        //     interruptable.from_state(search_state.stats_increment_lmrs(depth))
-        //   False -> interruptable.return(Nil)
-        // })
+        use <- interruptable.discard(case depth_reduction > 0 {
+          True ->
+            interruptable.from_state(search_state.stats_increment_lmrs(depth))
+          False -> interruptable.return(Nil)
+        })
         finish(tentative_evaluation, tentative_alpha, beta)
       }
     }

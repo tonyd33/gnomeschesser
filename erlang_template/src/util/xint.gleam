@@ -98,6 +98,52 @@ pub fn safe_multiply(ea, eb) {
   }
 }
 
+pub fn divide(ea, eb) {
+  case ea, eb {
+    PosInf, Finite(b) if b > 0 -> PosInf
+    PosInf, Finite(b) if b < 0 -> NegInf
+    // if b == 0
+    PosInf, Finite(_) -> panic as "Indeterminate: ∞ / 0"
+    Finite(_), PosInf -> Finite(0)
+
+    NegInf, Finite(b) if b > 0 -> NegInf
+    NegInf, Finite(b) if b < 0 -> PosInf
+    // if b == 0
+    NegInf, Finite(_) -> panic as "Indeterminate: -∞ / 0"
+    Finite(_), NegInf -> Finite(0)
+
+    PosInf, PosInf -> panic as "Indeterminate: ∞ / ∞"
+    NegInf, NegInf -> panic as "Indeterminate: -∞ / -∞"
+    PosInf, NegInf -> panic as "Indeterminate: ∞ / -∞"
+    NegInf, PosInf -> panic as "Indeterminate: -∞ / ∞"
+
+    Finite(a), Finite(b) -> Finite(a / b)
+  }
+}
+
+pub fn safe_divide(ea, eb) {
+  case ea, eb {
+    PosInf, Finite(b) if b > 0 -> Ok(PosInf)
+    PosInf, Finite(b) if b < 0 -> Ok(NegInf)
+    // if b == 0
+    PosInf, Finite(_) -> Error(Nil)
+    Finite(_), PosInf -> Ok(Finite(0))
+
+    NegInf, Finite(b) if b > 0 -> Ok(NegInf)
+    NegInf, Finite(b) if b < 0 -> Ok(PosInf)
+    // if b == 0
+    NegInf, Finite(_) -> Error(Nil)
+    Finite(_), NegInf -> Ok(Finite(0))
+
+    PosInf, PosInf -> Error(Nil)
+    NegInf, NegInf -> Error(Nil)
+    PosInf, NegInf -> Error(Nil)
+    NegInf, PosInf -> Error(Nil)
+
+    Finite(a), Finite(b) -> Ok(Finite(a / b))
+  }
+}
+
 pub fn sign(ea) {
   case ea {
     NegInf -> -1
