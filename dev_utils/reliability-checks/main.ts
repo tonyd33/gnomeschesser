@@ -59,11 +59,11 @@ Movetime stddev: ${stddev(stats.movetime.map((x) => x.value))}
 `;
 }
 
-async function runStatsN(f: () => Promise<Stats>, n: number) {
+async function runStatsN(f: (i: number) => Promise<Stats>, n: number) {
   let stats = emptyStats;
   for (let i = 0; i < n; i++) {
     logger.debug(`Run ${i}/${n}`);
-    const stat = await f();
+    const stat = await f(i);
     stats = mergeStats(stats, stat);
   }
 
@@ -218,6 +218,9 @@ async function play(engine1: Engine, engine2: Engine) {
   return stats;
 }
 
+/**
+ * Parses an engine spec *and loads UCI engines*.
+ */
 async function parseEngineSpec(spec: string): Promise<Result<Engine, string>> {
   const parseProto = (s: string): Result<"http" | "uci" | "random", string> => {
     if (s.startsWith("proto:http")) {
@@ -279,6 +282,12 @@ async function parseEngineSpec(spec: string): Promise<Result<Engine, string>> {
   }
 }
 
+async function closeEngine(engine: Engine) {
+  if (engine.proto === "uci") {
+    await engine.engine.quit();
+  }
+}
+
 async function main() {
   const opts = await yargs()
     .scriptName("reliability-test")
@@ -290,7 +299,7 @@ async function main() {
     })
     .option("n", {
       type: "number",
-      default: 5,
+      default: 2,
     })
     .parse(hideBin(process.argv));
 
@@ -305,17 +314,21 @@ async function main() {
       })
     ));
 
-  const run = () => {
+  const run = (i: number) => {
     if (engines.length !== 2) {
       throw new Error("needed 2 engines");
     }
-    return play(engines[0], engines[1]);
+    const idx1 = i % 2 === 0 ? 0 : 1;
+    const idx2 = i % 2 === 0 ? 1 : 0;
+    return play(engines[idx1], engines[idx2]);
   };
 
   const stats = await runStatsN(run, opts.n);
 
-  console.log(stats);
+  console.log(JSON.stringify(stats, null, 2));
   console.log(formatStats(stats));
+
+  await Promise.all(engines.map(closeEngine))
 }
 
 await main();
