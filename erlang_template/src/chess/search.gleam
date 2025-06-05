@@ -347,9 +347,7 @@ fn do_negamax_alphabeta_failsoft(
     // Disable NMP during "endgame". This is not accurate, but doing a phase
     // calculation like we do in evaluation is expensive: it requires us to
     // do an entire iteration over the pieces.
-    // TODO: See if we can get a non-expensive endgame check and give more
-    // specific conditions so we can do more NMPs
-    case game.fullmove_number(game) < 28 {
+    case game.evaluation_data(game).npm |> evaluate.phase > 20 {
       True -> null_evaluation
       False -> Error(Nil)
     },

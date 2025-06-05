@@ -1,6 +1,11 @@
-import chess/evaluate/common.{type SidedScore, SidedScore}
+import chess/evaluate/common
+import chess/game
 import chess/piece
 import chess/player
+import chess/square
+import gleam/bool
+import gleam/dict
+import gleam/list
 
 /// Calculate a [mobility score](https://www.chessprogramming.org/Mobility).
 ///
@@ -10,46 +15,114 @@ import chess/player
 /// This is implemented in a similar fashion: for every move, it counts
 /// positively towards the mobility score and is weighted by the piece.
 ///
-pub fn score(nmoves, piece: piece.Piece, phase) -> Int {
-  common.player(piece.player)
-  * case phase {
-    common.MidGame -> mg_sf(nmoves, piece)
-    common.EndGame -> eg_sf(nmoves, piece)
+pub fn score(game: game.Game, phase: Int) {
+  // find attacks and pins to the king
+  let #(_, white_king_blockers) = {
+    let assert [white_king_square] =
+      game.find_piece(game, piece.Piece(player.White, piece.King))
+    game.attackers_and_blockers(game, white_king_square, player.Black)
   }
+  let #(_, black_king_blockers) = {
+    let assert [black_king_square] =
+      game.find_piece(game, piece.Piece(player.Black, piece.King))
+    game.attackers_and_blockers(game, black_king_square, player.White)
+  }
+  let board = game.board(game)
+  let #(midgame, endgame) = {
+    use acc, square, piece <- dict.fold(board, #(0, 0))
+
+    let move_count = case piece {
+      piece.Piece(_, piece.Pawn) -> 0
+      piece.Piece(_, piece.King) -> 0
+      piece.Piece(player.White, _) ->
+        moves_count(board, white_king_blockers, square, piece)
+      piece.Piece(player.Black, _) ->
+        moves_count(board, black_king_blockers, square, piece)
+    }
+    case phase {
+      x if x >= 100 -> {
+        #(acc.0 + midgame(move_count, piece), 0)
+      }
+      x if x <= 0 -> {
+        #(0, acc.1 + endgame(move_count, piece))
+      }
+      _ -> {
+        #(
+          acc.0 + midgame(move_count, piece),
+          acc.1 + endgame(move_count, piece),
+        )
+      }
+    }
+  }
+  common.taper(midgame, endgame, phase)
 }
 
-pub fn sided_score(nmoves, piece, phase) -> SidedScore {
-  let score = case phase {
-    common.MidGame -> mg(nmoves, piece)
-    common.EndGame -> eg(nmoves, piece)
-  }
-  case piece.player {
-    player.White -> SidedScore(white: score, black: 0)
-    player.Black -> SidedScore(white: 0, black: score)
-  }
-}
+/// We use this to count the number of moves a piece can make from a square
+///
+/// There's a lot of logic similar to move generation logic in here, but it's
+/// not quite move generation: for example, rooks and bishops get to "xray"
+/// through themselves and through queens, and we don't check if this piece
+/// can actually even move, given that the king may be in check. However, if
+/// the piece is pinned to the king, the piece does indeed lose squares it
+/// controls, now only being able to control squares along the pin direction.
+///
+/// *IMPORTANT*: The piece at `square` should match the `piece` on the board!
+/// The reason it's still required is purely for optimization reasons: we use
+/// this function when looping over the board, in which we already have the
+/// square and piece and don't need to make another lookup on the square to
+/// get the piece.
+pub fn moves_count(
+  board: game.Board,
+  king_blockers: dict.Dict(square.Square, square.Square),
+  from: square.Square,
+  piece: piece.Piece,
+) -> Int {
+  let go_rays = fn(rays) {
+    // If we are pinned down, check if the target square is along the line by:
+    // If from is a king blocker:
+    //   Keep when:
+    //     (to == pinner) or
+    //     (from_offset == square.ray_to_offset(from: pinner, to: to).0)
+    // Else:
+    //   Always keep
+    let unpins = case dict.get(king_blockers, from) {
+      Ok(pinner) -> fn(to) {
+        to == pinner
+        || {
+          let from_offset: Int = square.ray_to_offset(from: pinner, to: from).0
+          from_offset == square.ray_to_offset(from: pinner, to: to).0
+        }
+      }
+      _ -> fn(_) { True }
+    }
+    use acc, ray <- list.fold(rays, 0)
+    use acc, to <- list.fold_until(ray, acc)
+    use <- bool.guard(!unpins(to), list.Stop(0))
 
-fn mg(nmoves, piece: piece.Piece) -> Int {
+    case dict.get(board, to), piece.symbol {
+      Error(Nil), _ -> list.Continue(acc + 1)
+      // If we're a queen and we hit anything, always stop
+      Ok(_), piece.Queen -> list.Stop(acc + 1)
+      // If we're not a queen and we hit something, xray through it if it's
+      // the same piece or its a queen
+      Ok(hit_piece), _ if hit_piece == piece || hit_piece.symbol == piece.Queen ->
+        list.Continue(acc + 1)
+      // Otherwise, stop at the hit piece
+      Ok(_), _ -> list.Stop(acc + 1)
+    }
+  }
+
   case piece.symbol {
-    piece.Pawn | piece.King -> 0
-    piece.Knight -> 0
-    piece.Bishop -> 125 * nmoves
-    piece.Rook -> 60 * nmoves
-    piece.Queen -> 25 * nmoves
+    piece.King -> 0
+    piece.Rook -> from |> square.rook_rays |> go_rays
+    piece.Bishop -> from |> square.bishop_rays |> go_rays
+    piece.Queen -> from |> square.queen_rays |> go_rays
+    piece.Knight -> list.length(square.knight_moves(from))
+    piece.Pawn -> 0
   }
 }
 
-fn eg(nmoves, piece: piece.Piece) -> Int {
-  case piece.symbol {
-    piece.Pawn | piece.King -> 0
-    piece.Knight -> 8 * nmoves
-    piece.Bishop -> 125 * nmoves
-    piece.Rook -> 60 * nmoves
-    piece.Queen -> 45 * nmoves
-  }
-}
-
-fn mg_sf(nmoves, piece: piece.Piece) -> Int {
+pub fn midgame(nmoves, piece: piece.Piece) -> Int {
   case piece.symbol {
     piece.Pawn | piece.King -> 0
     piece.Knight ->
@@ -137,7 +210,7 @@ fn mg_sf(nmoves, piece: piece.Piece) -> Int {
   }
 }
 
-fn eg_sf(nmoves, piece: piece.Piece) -> Int {
+pub fn endgame(nmoves, piece: piece.Piece) -> Int {
   case piece.symbol {
     piece.Pawn | piece.King -> 0
     piece.Knight ->

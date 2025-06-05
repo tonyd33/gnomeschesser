@@ -6,10 +6,6 @@ pub type Stage {
   EndGame
 }
 
-pub type SidedScore {
-  SidedScore(white: Int, black: Int)
-}
-
 pub fn piece_symbol_npm(symbol: piece.PieceSymbol) -> Int {
   // stockfish midgame values
   case symbol {
@@ -85,10 +81,8 @@ pub fn player(player: player.Player) -> Int {
   }
 }
 
-pub fn add_sided_score(s1: SidedScore, s2: SidedScore) {
-  SidedScore(white: s1.white + s2.white, black: s1.black + s2.black)
-}
-
-pub fn flatten_sided_score(s: SidedScore) -> Int {
-  { s.white * player(player.White) } + { s.black * player(player.Black) }
+/// Make a smooth transition between mg and eg scores by phase.
+///
+pub fn taper(mg: Int, eg: Int, phase: Int) {
+  { { mg * phase } + { eg * { 100 - phase } } } / 100
 }
