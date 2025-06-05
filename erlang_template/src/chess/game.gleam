@@ -924,57 +924,68 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
   }
 
   let evaluation_data = {
-    let psqt_diff = fn(psqt_func) {
-      // the "to" psqt
-      case move.promotion {
-        Some(promotion) -> psqt_func(piece.Piece(us, promotion), to)
-        None -> psqt_func(piece, to)
-      }
-      // the "from" psqt
-      - psqt_func(piece, from)
-      // remove the captured piece's psqt if it exists
-      - case move_context.capture {
-        Some(#(at, captured_piece)) -> psqt_func(captured_piece, at)
-        None -> 0
-      }
-      // if it's a castle, also update the rook's psqt
-      + case castle_rook_move {
+    [
+      //  "to" 
+      EvaluationData(
+        npm: evaluate_common.piece_symbol_npm(new_piece.symbol),
+        material_mg: evaluate_common.piece_symbol_mg(new_piece.symbol)
+          * evaluate_common.player(new_piece.player),
+        material_eg: evaluate_common.piece_symbol_eg(new_piece.symbol)
+          * evaluate_common.player(new_piece.player),
+        psqt_mg: psqt.midgame(new_piece, to),
+        psqt_eg: psqt.endgame(new_piece, to),
+      ),
+      // "from"   
+      EvaluationData(
+        npm: -evaluate_common.piece_symbol_npm(piece.symbol),
+        material_mg: -evaluate_common.piece_symbol_mg(piece.symbol)
+          * evaluate_common.player(piece.player),
+        material_eg: -evaluate_common.piece_symbol_eg(piece.symbol)
+          * evaluate_common.player(piece.player),
+        psqt_mg: -psqt.midgame(piece, from),
+        psqt_eg: -psqt.endgame(piece, from),
+      ),
+      // capture
+      case move_context.capture {
+        Some(#(at, captured_piece)) ->
+          EvaluationData(
+            npm: -evaluate_common.piece_symbol_npm(captured_piece.symbol),
+            material_mg: -evaluate_common.piece_symbol_mg(captured_piece.symbol)
+              * evaluate_common.player(captured_piece.player),
+            material_eg: -evaluate_common.piece_symbol_eg(captured_piece.symbol)
+              * evaluate_common.player(captured_piece.player),
+            psqt_mg: -psqt.midgame(captured_piece, at),
+            psqt_eg: -psqt.endgame(captured_piece, at),
+          )
+        None -> EvaluationData(0, 0, 0, 0, 0)
+      },
+      // rook move if castling
+      case castle_rook_move {
         Some(move.Move(from:, to:, context: Some(context), promotion: _)) ->
-          psqt_func(context.piece, to) - psqt_func(context.piece, from)
-        _ -> 0
-      }
-    }
+          EvaluationData(
+            npm: 0,
+            material_mg: 0,
+            material_eg: 0,
+            psqt_mg: psqt.midgame(context.piece, to)
+              - psqt.midgame(context.piece, from),
+            psqt_eg: psqt.endgame(context.piece, to)
+              - psqt.endgame(context.piece, from),
+          )
 
-    let #(npm, material_mg, material_eg) = case move_context.capture {
-      Some(#(_at, piece)) -> {
-        let player = evaluate_common.player(piece.player)
-
-        #(
-          {
-            evaluation_data.npm - evaluate_common.piece_symbol_npm(piece.symbol)
-          },
-          {
-            evaluation_data.material_mg
-            - evaluate_common.piece_symbol_mg(piece.symbol)
-            * player
-          },
-          {
-            evaluation_data.material_eg
-            - evaluate_common.piece_symbol_eg(piece.symbol)
-            * player
-          },
-        )
-      }
-      None -> #(
-        evaluation_data.npm,
-        evaluation_data.material_mg,
-        evaluation_data.material_eg,
+        _ -> EvaluationData(0, 0, 0, 0, 0)
+      },
+    ]
+    |> list.fold(evaluation_data, fn(acc, diff) {
+      EvaluationData(
+        npm: acc.npm + diff.npm,
+        material_mg: acc.material_mg + diff.material_mg,
+        material_eg: acc.material_eg + diff.material_eg,
+        psqt_mg: acc.psqt_mg + diff.psqt_mg,
+        psqt_eg: acc.psqt_eg + diff.psqt_eg,
       )
-    }
-    let psqt_mg = evaluation_data.psqt_mg + psqt_diff(psqt.midgame)
-    let psqt_eg = evaluation_data.psqt_eg + psqt_diff(psqt.endgame)
-    EvaluationData(npm:, material_mg:, material_eg:, psqt_mg:, psqt_eg:)
+    })
   }
+
   Game(
     board:,
     active_color: them,

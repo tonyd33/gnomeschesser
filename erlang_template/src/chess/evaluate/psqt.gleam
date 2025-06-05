@@ -2,16 +2,23 @@ import chess/evaluate/common
 import chess/piece
 import chess/player
 import chess/square
+import gleam/int
 
-pub fn raw_score(
+// always positive
+pub fn score_absolute_value(
   piece: piece.Piece,
   square: square.Square,
   phase: common.Stage,
 ) -> Int {
   case phase {
-    common.MidGame -> midgame(piece, square)
     common.EndGame -> endgame(piece, square)
+    common.MidGame -> midgame(piece, square)
   }
+  // common.taper(
+  //   midgame(piece, square) |> int.to_float,
+  //   endgame(piece, square) |> int.to_float,
+  //   phase,
+  // )
 }
 
 pub fn endgame(piece: piece.Piece, square: square.Square) {
@@ -29,7 +36,7 @@ pub fn endgame(piece: piece.Piece, square: square.Square) {
     piece.Queen -> queen_eg
     piece.King -> king_eg
   }
-  index_psqt_table(table, rank, file)
+  index_psqt_table(table, rank, file) * common.player(piece.player)
 }
 
 pub fn midgame(piece: piece.Piece, square: square.Square) {
@@ -47,7 +54,7 @@ pub fn midgame(piece: piece.Piece, square: square.Square) {
     piece.Queen -> queen_mg
     piece.King -> king_mg
   }
-  index_psqt_table(table, rank, file)
+  index_psqt_table(table, rank, file) * common.player(piece.player)
 }
 
 fn index_psqt_table(

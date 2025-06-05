@@ -17,6 +17,16 @@ pub fn piece_symbol_npm(symbol: piece.PieceSymbol) -> Int {
   }
 }
 
+// stockfish midgame values
+// case symbol {
+//   piece.Pawn -> 124
+//   piece.Knight -> 781
+//   piece.Bishop -> 825
+//   piece.Rook -> 1276
+//   piece.Queen -> 2538
+//   piece.King -> 0
+// }
+
 // stockfish endgame values
 // case symbol {
 //   piece.Pawn -> 206

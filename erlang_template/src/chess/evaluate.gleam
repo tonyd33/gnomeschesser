@@ -28,75 +28,29 @@ pub fn game(game: game.Game) -> Score {
   let phase = phase(npm)
   // only the mobility iterates through the pieces right now, so we can do this
   let mobility = mobility.score(game, phase)
+  let material =
+    common.taper(int.to_float(material_mg), int.to_float(material_eg), phase)
+  let psq = common.taper(int.to_float(psqt_mg), int.to_float(psqt_eg), phase)
 
-  let score = case phase {
-    // fully endgame
-    phase if phase <=. 0.0 -> {
-      let material =
-        common.taper(
-          int.to_float(material_mg),
-          int.to_float(material_eg),
-          phase,
-        )
-      let psq =
-        common.taper(int.to_float(psqt_mg), int.to_float(psqt_eg), phase)
+  let king_pawn_shield =
+    midgame.king_pawn_shield(game, player.White)
+    + midgame.king_pawn_shield(game, player.Black)
+    |> int.to_float
 
-      {
-        { material *. material_weight }
-        +. { psq *. psqt_weight }
-        +. { mobility *. mobility_weight }
-      }
-      /. { material_weight +. psqt_weight +. mobility_weight }
+  // combine scores with weight
+  let score =
+    {
+      { material *. material_weight }
+      +. { psq *. psqt_weight }
+      +. { mobility *. mobility_weight }
+      +. { king_pawn_shield *. king_pawn_shield_weight }
     }
-
-    // fully midgame
-    phase if phase >=. 1.0 -> {
-      let material = int.to_float(material_mg)
-      let psq = int.to_float(psqt_mg)
-      let king_pawn_shield =
-        midgame.king_pawn_shield(game, player.White)
-        + midgame.king_pawn_shield(game, player.Black)
-        |> int.to_float
-      {
-        { material *. material_weight }
-        +. { psq *. psqt_weight }
-        +. { mobility *. mobility_weight }
-        +. { king_pawn_shield *. king_pawn_shield_weight }
-      }
-      /. {
-        material_weight
-        +. psqt_weight
-        +. mobility_weight
-        +. king_pawn_shield_weight
-      }
+    /. {
+      material_weight
+      +. psqt_weight
+      +. mobility_weight
+      +. king_pawn_shield_weight
     }
-    // in between
-    phase -> {
-      let material = int.to_float(material_mg)
-      let psq = int.to_float(psqt_mg)
-
-      let king_pawn_shield =
-        midgame.king_pawn_shield(game, player.White)
-        + midgame.king_pawn_shield(game, player.Black)
-        |> int.to_float
-      let king_pawn_shield_weight =
-        common.taper(king_pawn_shield_weight, 0.0, phase)
-
-      {
-        { material *. material_weight }
-        +. { psq *. psqt_weight }
-        +. { mobility *. mobility_weight }
-        +. { king_pawn_shield *. king_pawn_shield_weight }
-      }
-      /. {
-        material_weight
-        +. psqt_weight
-        +. mobility_weight
-        +. king_pawn_shield_weight
-      }
-    }
-  }
-
   score
   |> float.truncate
   |> xint.from_int
@@ -109,7 +63,7 @@ pub fn game(game: game.Game) -> Score {
 ///   linearly.
 ///
 /// 
-pub fn phase(npm_score: Int) -> Float {
+pub fn phase(npm: Int) -> Float {
   // We'll calculate a measure, clamp them between two bounds, and then treat
   // it as the interpolated value between midgame and endgame after scaling.
   //
@@ -117,7 +71,7 @@ pub fn phase(npm_score: Int) -> Float {
   //       v                                                          v
   //       |=========== * ============================================|
   //       ^            ^                                             ^
-  //       0         measure                                         100
+  //       0         measure                                         1
   //
   // We'll use a simple measure: non-pawn material value (npm). Pawns often get
   // traded back and forth in the midgame, and it's usually only approaching
@@ -127,13 +81,12 @@ pub fn phase(npm_score: Int) -> Float {
   // result. (note they scale from 0-128)
   // See: https://hxim.github.io/Stockfish-Evaluation-Guide/
 
-  let npm = int.clamp(npm_score, endgame_limit, midgame_limit)
-  let limit_range = 15_258.0 -. 3915.0
-  int.to_float(npm - endgame_limit) /. limit_range
+  { { int.to_float(npm) -. endgame_limit } /. range_limit }
+  |> float.clamp(0.0, 1.0)
 }
 
-const midgame_limit = 15_258
+const range_limit = 11_343.0
 
-const endgame_limit = 3915
+const endgame_limit = 3915.0
 
 pub const player = common.player

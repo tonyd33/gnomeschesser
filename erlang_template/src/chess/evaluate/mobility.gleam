@@ -40,17 +40,18 @@ pub fn score(game: game.Game, phase: Float) {
       piece.Piece(player.Black, _) ->
         moves_count(board, black_king_blockers, square, piece)
     }
+    let player = common.player(piece.player)
     case phase {
       x if x >=. 1.0 -> {
-        #(acc.0 + midgame(move_count, piece), 0)
+        #(acc.0 + midgame(move_count, piece) * player, 0)
       }
       x if x <=. 0.0 -> {
-        #(0, acc.1 + endgame(move_count, piece))
+        #(0, acc.1 + endgame(move_count, piece) * player)
       }
       _ -> {
         #(
-          acc.0 + midgame(move_count, piece),
-          acc.1 + endgame(move_count, piece),
+          acc.0 + midgame(move_count, piece) * player,
+          acc.1 + endgame(move_count, piece) * player,
         )
       }
     }
