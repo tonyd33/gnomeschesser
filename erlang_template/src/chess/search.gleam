@@ -344,12 +344,9 @@ fn do_negamax_alphabeta_failsoft(
   //   endgame, reduce depth by some amount (NMR)
   // - Otherwise, continue as usual
   use <- result.lazy_unwrap(result.map(
-    // Disable NMP during "endgame". This is not accurate, but doing a phase
-    // calculation like we do in evaluation is expensive: it requires us to
-    // do an entire iteration over the pieces.
-    // TODO: See if we can get a non-expensive endgame check and give more
-    // specific conditions so we can do more NMPs
+    // Disable NMP during "endgame". 
     case game.fullmove_number(game) < 28 {
+      // case evaluate.phase(game.evaluation_data(game).npm) >. 0.0 {
       True -> null_evaluation
       False -> Error(Nil)
     },
@@ -451,13 +448,13 @@ fn do_negamax_alphabeta_failsoft(
       case xint.gte(e.score, beta) {
         True -> {
           let new_e = Evaluation(..e, node_type: evaluation.Cut)
-          let move_context = move.get_context(move)
+          let assert Some(move_context) = move.context
 
           use <- interruptable.discard(
             case move_context.capture |> option.is_none {
               True -> {
                 // non-capture moves update the history table
-                let to = move.get_to(move)
+                let to = move.to
                 let piece = move_context.piece
                 interruptable.from_state(search_state.history_update(
                   #(to, piece),
@@ -701,24 +698,23 @@ fn sorted_moves(
       )
 
       // non-quiet moves (captures and promotions get sorted next)
-      let move_context = move.get_context(move)
+      let assert Some(move_context) = move.context
       let is_quiet =
-        option.is_none(move_context.capture)
-        && option.is_none(move.get_promotion(move))
+        option.is_none(move_context.capture) && option.is_none(move.promotion)
       case is_quiet {
         True -> #(best, capture_promotions, [move, ..quiet], nmoves + 1)
         False -> #(best, [move, ..capture_promotions], quiet, nmoves + 1)
       }
     })
-  // TODO: Ideally, use real phase calculations
   let phase = case game.fullmove_number(game) > 25 {
     True -> common.EndGame
     False -> common.MidGame
   }
+  //let phase = evaluate.phase(game.evaluation_data(game).npm)
   let compare_psqt = compare_psqt(phase)
   let compare_psqt_delta = compare_psqt_delta(phase)
 
-  // Compare a move by the PSQ score they land on.
+  // Compare a move by the PSQ score thesy land on.
 
   // We use MVV-LVA for sorting capture_promotion moves:
   // We sort most valuable victim, most valuable first, falling back to
@@ -749,10 +745,15 @@ fn sorted_moves(
   #(sorted_moves, nmoves)
 }
 
-fn compare_mvv(move1, move2) {
-  case move.get_context(move1).capture, move.get_context(move2).capture {
+fn compare_mvv(
+  move1: move.Move(move.ValidInContext),
+  move2: move.Move(move.ValidInContext),
+) {
+  let assert Some(context1) = move1.context
+  let assert Some(context2) = move2.context
+  case context1.capture, context2.capture {
     Some(#(_, piece.Piece(_, a))), Some(#(_, piece.Piece(_, b))) ->
-      int.compare(evaluate.piece_symbol(b), evaluate.piece_symbol(a))
+      piece.compare_symbol(b, a)
     Some(_), _ -> order.Lt
     _, Some(_) -> order.Gt
     _, _ -> order.Eq
@@ -760,9 +761,14 @@ fn compare_mvv(move1, move2) {
 }
 
 fn compare_quiet_history(history) {
-  fn(move1, move2) {
-    let key1 = #(move.get_to(move1), move.get_context(move1).piece)
-    let key2 = #(move.get_to(move2), move.get_context(move2).piece)
+  fn(
+    move1: move.Move(move.ValidInContext),
+    move2: move.Move(move.ValidInContext),
+  ) {
+    let assert Some(context1) = move1.context
+    let assert Some(context2) = move2.context
+    let key1 = #(move1.to, context1.piece)
+    let key2 = #(move2.to, context2.piece)
     let history1 = dict.get(history, key1) |> result.unwrap(0)
     let history2 = dict.get(history, key2) |> result.unwrap(0)
     // bigger history should go first
@@ -770,27 +776,30 @@ fn compare_quiet_history(history) {
   }
 }
 
-fn compare_lva(move1, move2) {
-  let piece1 = move.get_context(move1).piece.symbol
-  let piece1 =
-    move.get_promotion(move1)
-    |> option.unwrap(piece1)
-  let piece2 = move.get_context(move2).piece.symbol
-  let piece2 =
-    move.get_promotion(move2)
-    |> option.unwrap(piece2)
-  int.compare(evaluate.piece_symbol(piece1), evaluate.piece_symbol(piece2))
+fn compare_lva(
+  move1: move.Move(move.ValidInContext),
+  move2: move.Move(move.ValidInContext),
+) {
+  let assert Some(context1) = move1.context
+  let piece1 = option.unwrap(move1.promotion, context1.piece.symbol)
+  let assert Some(context2) = move2.context
+  let piece2 = option.unwrap(move2.promotion, context2.piece.symbol)
+
+  piece.compare_symbol(piece1, piece2)
 }
 
 /// Compare a move by the PSQ score of the square the piece lands on, highest
 /// first.
 ///
 fn compare_psqt(phase) {
-  fn(move1, move2) {
-    let score1 =
-      psqt.raw_score(move.get_context(move1).piece, move.get_to(move1), phase)
-    let score2 =
-      psqt.raw_score(move.get_context(move2).piece, move.get_to(move2), phase)
+  fn(
+    move1: move.Move(move.ValidInContext),
+    move2: move.Move(move.ValidInContext),
+  ) {
+    let assert Some(context1) = move1.context
+    let assert Some(context2) = move2.context
+    let score1 = psqt.score_absolute_value(context1.piece, move1.to, phase)
+    let score2 = psqt.score_absolute_value(context2.piece, move2.to, phase)
 
     int.compare(score2, score1)
   }
@@ -800,17 +809,20 @@ fn compare_psqt(phase) {
 /// where they land to, with the highest delta first.
 ///
 fn compare_psqt_delta(phase) {
-  fn(move1, move2) {
-    let score_to1 =
-      psqt.raw_score(move.get_context(move1).piece, move.get_to(move1), phase)
+  fn(
+    move1: move.Move(move.ValidInContext),
+    move2: move.Move(move.ValidInContext),
+  ) {
+    let assert Some(context1) = move1.context
+    let assert Some(context2) = move2.context
+    let score_to1 = psqt.score_absolute_value(context1.piece, move1.to, phase)
     let score_from1 =
-      psqt.raw_score(move.get_context(move1).piece, move.get_from(move1), phase)
+      psqt.score_absolute_value(context1.piece, move1.from, phase)
     let delta1 = score_to1 - score_from1
 
-    let score_to2 =
-      psqt.raw_score(move.get_context(move2).piece, move.get_to(move2), phase)
+    let score_to2 = psqt.score_absolute_value(context2.piece, move2.to, phase)
     let score_from2 =
-      psqt.raw_score(move.get_context(move2).piece, move.get_from(move2), phase)
+      psqt.score_absolute_value(context2.piece, move2.from, phase)
     let delta2 = score_to2 - score_from2
 
     int.compare(delta2, delta1)

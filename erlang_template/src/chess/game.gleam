@@ -1,3 +1,5 @@
+import chess/evaluate/common as evaluate_common
+import chess/evaluate/psqt
 import chess/game/castle.{type Castle, KingSide, QueenSide}
 import chess/move
 import chess/move/disambiguation
@@ -17,16 +19,40 @@ import util/direction
 
 pub const start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
+pub type Board =
+  Dict(square.Square, piece.Piece)
+
 pub opaque type Game {
   Game(
-    board: Dict(square.Square, piece.Piece),
+    board: Board,
     active_color: player.Player,
     castling_availability: castle.CastlingAvailability,
     en_passant_target_square: Option(#(player.Player, square.Square)),
     halfmove_clock: Int,
     fullmove_number: Int,
     hash: Int,
+    evaluation_data: EvaluationData,
   )
+}
+
+// some data that we can calculate incrementally
+pub type EvaluationData {
+  EvaluationData(
+    // non-pawn material score for calculating phase
+    npm: Int,
+    // midgame material score
+    material_mg: Int,
+    // endgame material score
+    material_eg: Int,
+    // midgame psqt score
+    psqt_mg: Int,
+    // endgame psqt score
+    psqt_eg: Int,
+  )
+}
+
+pub fn evaluation_data(game: Game) {
+  game.evaluation_data
 }
 
 pub fn load_fen(fen: String) -> Result(Game, Nil) {
@@ -154,7 +180,25 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
       castling_availability,
       en_passant_target_square,
     )
-
+  let evaluation_data = {
+    pieces
+    |> list.fold(EvaluationData(0, 0, 0, 0, 0), fn(acc, piece) {
+      let #(square, piece) = piece
+      let player = evaluate_common.player(piece.player)
+      let npm = evaluate_common.piece_symbol_npm(piece.symbol)
+      let material_mg = evaluate_common.piece_symbol_mg(piece.symbol) * player
+      let material_eg = evaluate_common.piece_symbol_eg(piece.symbol) * player
+      let psqt_mg = psqt.midgame(piece, square)
+      let psqt_eg = psqt.endgame(piece, square)
+      EvaluationData(
+        npm: acc.npm + npm,
+        material_mg: acc.material_mg + material_mg,
+        material_eg: acc.material_eg + material_eg,
+        psqt_mg: acc.psqt_mg + psqt_mg,
+        psqt_eg: acc.psqt_eg + psqt_eg,
+      )
+    })
+  }
   Game(
     board:,
     active_color:,
@@ -163,6 +207,7 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
     halfmove_clock:,
     fullmove_number:,
     hash:,
+    evaluation_data:,
   )
   |> Ok
 }
@@ -214,10 +259,19 @@ pub fn fullmove_number(game: Game) -> Int {
   game.fullmove_number
 }
 
+/// Makes a null move
 pub fn reverse_turn(game: Game) -> Game {
   let them = player.opponent(game.active_color)
-  let hash = int.bitwise_exclusive_or(game.hash, hashes.780)
-  Game(..game, active_color: them, hash:)
+
+  let hash =
+    game.hash
+    // Turn hash
+    |> int.bitwise_exclusive_or(hashes.780)
+    // En passant hash
+    |> int.bitwise_exclusive_or(ep_hash(game.en_passant_target_square))
+    |> int.bitwise_exclusive_or(ep_hash(None))
+
+  Game(..game, en_passant_target_square: None, active_color: them, hash:)
 }
 
 pub fn set_turn(game: Game, player: player.Player) -> Game {
@@ -527,8 +581,8 @@ pub fn move_to_san(
 ) -> Result(SAN, Nil) {
   let us = game.active_color
   let them = player.opponent(us)
-  let from = move.get_from(move)
-  let to = move.get_to(move)
+  let from = move.from
+  let to = move.to
   let assert Ok(us_piece) = dict.get(game.board, from)
   let new_game = apply(game, move)
 
@@ -568,7 +622,7 @@ pub fn move_to_san(
           False -> ""
         }
         <> square.to_string(to)
-        <> case move.get_promotion(move) {
+        <> case move.promotion {
           Some(piece) -> "=" <> piece.symbol_to_string(piece)
           None -> ""
         },
@@ -583,9 +637,9 @@ pub fn move_to_san(
         // don't include ourselves
         valid_moves(game)
         |> list.filter(fn(other_move) {
-          move.get_to(other_move) == to
+          other_move.to == to
           && !move.equal(move, other_move)
-          && { dict.get(game.board, move.get_from(other_move)) == Ok(us_piece) }
+          && { dict.get(game.board, other_move.from) == Ok(us_piece) }
         })
 
       piece.symbol_to_string(us_piece.symbol)
@@ -596,11 +650,11 @@ pub fn move_to_san(
             other_ambiguous_moves,
             disambiguation.Unambiguous,
             fn(ambiguity, other_move) {
-              let other_from = move.get_from(other_move)
+              let other_from = other_move.from
               // Skip invalid moves here
               // check if it's the same type of piece
               use <- bool.guard(
-                move.get_to(other_move) != to
+                other_move.to != to
                   || move.equal(move, other_move)
                   || piece_at(game, other_from) != Ok(us_piece),
                 ambiguity,
@@ -679,10 +733,10 @@ fn board_insert(board, hash, square, piece) {
 /// Applies a move to a game.
 ///
 pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
-  let from = move.get_from(move)
-  let to = move.get_to(move)
-  let promotion = move.get_promotion(move)
-  let move_context = move.get_context(move)
+  let from = move.from
+  let to = move.to
+  let promotion = move.promotion
+  let assert Some(move_context) = move.context
   let Game(
     board:,
     castling_availability:,
@@ -691,23 +745,24 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     fullmove_number:,
     halfmove_clock:,
     hash:,
+    evaluation_data:,
   ) = game
   let prev_castling_availability = castling_availability
   let them = player.opponent(us)
   let piece = move_context.piece
 
+  // update the piece if it's a promotion
+  let new_piece =
+    promotion
+    |> option.map(piece.Piece(us, _))
+    |> option.unwrap(move_context.piece)
+  // Retrieve the move a rook would have if castling
+  let castle_rook_move =
+    move_context.castling
+    |> option.map(move.rook_castle(us, _))
+
   // Updates to the board.
   let #(board, hash) = {
-    // update the piece if it's a promotion
-    let new_piece =
-      promotion
-      |> option.map(piece.Piece(us, _))
-      |> option.unwrap(move_context.piece)
-    // Retrieve the move a rook would have if castling
-    let castle_rook_move =
-      move_context.castling
-      |> option.map(move.rook_castle(us, _))
-
     // Over the course of hundreds of thousands of nodes, manually doing this
     // rather than folding over a list is marginally but measurably faster.
     let #(board, hash) = board_remove(board, hash, from, move_context.piece)
@@ -716,14 +771,12 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
       None -> #(board, hash)
     }
     let #(board, hash) = case castle_rook_move {
-      Some(x) ->
-        board_remove(board, hash, move.get_from(x), piece.Piece(us, piece.Rook))
+      Some(x) -> board_remove(board, hash, x.from, piece.Piece(us, piece.Rook))
       None -> #(board, hash)
     }
     let #(board, hash) = board_insert(board, hash, to, new_piece)
     let #(board, hash) = case castle_rook_move {
-      Some(x) ->
-        board_insert(board, hash, move.get_to(x), piece.Piece(us, piece.Rook))
+      Some(x) -> board_insert(board, hash, x.to, piece.Piece(us, piece.Rook))
       None -> #(board, hash)
     }
     #(board, hash)
@@ -870,6 +923,69 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     _, _ -> hash
   }
 
+  let evaluation_data = {
+    [
+      //  "to" 
+      EvaluationData(
+        npm: evaluate_common.piece_symbol_npm(new_piece.symbol),
+        material_mg: evaluate_common.piece_symbol_mg(new_piece.symbol)
+          * evaluate_common.player(new_piece.player),
+        material_eg: evaluate_common.piece_symbol_eg(new_piece.symbol)
+          * evaluate_common.player(new_piece.player),
+        psqt_mg: psqt.midgame(new_piece, to),
+        psqt_eg: psqt.endgame(new_piece, to),
+      ),
+      // "from"   
+      EvaluationData(
+        npm: -evaluate_common.piece_symbol_npm(piece.symbol),
+        material_mg: -evaluate_common.piece_symbol_mg(piece.symbol)
+          * evaluate_common.player(piece.player),
+        material_eg: -evaluate_common.piece_symbol_eg(piece.symbol)
+          * evaluate_common.player(piece.player),
+        psqt_mg: -psqt.midgame(piece, from),
+        psqt_eg: -psqt.endgame(piece, from),
+      ),
+      // capture
+      case move_context.capture {
+        Some(#(at, captured_piece)) ->
+          EvaluationData(
+            npm: -evaluate_common.piece_symbol_npm(captured_piece.symbol),
+            material_mg: -evaluate_common.piece_symbol_mg(captured_piece.symbol)
+              * evaluate_common.player(captured_piece.player),
+            material_eg: -evaluate_common.piece_symbol_eg(captured_piece.symbol)
+              * evaluate_common.player(captured_piece.player),
+            psqt_mg: -psqt.midgame(captured_piece, at),
+            psqt_eg: -psqt.endgame(captured_piece, at),
+          )
+        None -> EvaluationData(0, 0, 0, 0, 0)
+      },
+      // rook move if castling
+      case castle_rook_move {
+        Some(move.Move(from:, to:, context: Some(context), promotion: _)) ->
+          EvaluationData(
+            npm: 0,
+            material_mg: 0,
+            material_eg: 0,
+            psqt_mg: psqt.midgame(context.piece, to)
+              - psqt.midgame(context.piece, from),
+            psqt_eg: psqt.endgame(context.piece, to)
+              - psqt.endgame(context.piece, from),
+          )
+
+        _ -> EvaluationData(0, 0, 0, 0, 0)
+      },
+    ]
+    |> list.fold(evaluation_data, fn(acc, diff) {
+      EvaluationData(
+        npm: acc.npm + diff.npm,
+        material_mg: acc.material_mg + diff.material_mg,
+        material_eg: acc.material_eg + diff.material_eg,
+        psqt_mg: acc.psqt_mg + diff.psqt_mg,
+        psqt_eg: acc.psqt_eg + diff.psqt_eg,
+      )
+    })
+  }
+
   Game(
     board:,
     active_color: them,
@@ -878,6 +994,7 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     fullmove_number:,
     halfmove_clock:,
     hash:,
+    evaluation_data:,
   )
 }
 
@@ -1398,88 +1515,6 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
   }
 
   list.flatten([king_moves, regular_moves, en_passant_move, castling_moves])
-}
-
-/// Read this function with a signature of:
-/// ```gleam
-/// fn(Game, Square, Piece) -> Int
-/// ```
-/// The translation can be done by uncurrying the function.
-/// (Bah, only in impure languages is such a distinction second-class!)
-///
-/// When read as such, this function can be interpreted as returns how
-/// many squares the `piece` at `square` "controls".
-///
-/// *IMPORTANT*: The piece at `square` should match the `piece` on the board!
-/// The reason it's still required is purely for optimization reasons: we use
-/// this function when looping over the board, in which we already have the
-/// square and piece and don't need to make another lookup on the square to
-/// get the piece.
-///
-/// There's a lot of logic similar to move generation logic in here, but it's
-/// not quite move generation: for example, rooks and bishops get to "xray"
-/// through themselves and through queens, and we don't check if this piece
-/// can actually even move, given that the king may be in check. However, if
-/// the piece is pinned to the king, the piece does indeed lose squares it
-/// controls, now only being able to control squares along the pin direction.
-///
-pub fn controls(game: Game) -> fn(square.Square, piece.Piece) -> Int {
-  let us = game.active_color
-  let them = player.opponent(us)
-
-  let king_piece = piece.Piece(us, piece.King)
-  let assert [king_position] = find_piece(game, king_piece)
-
-  // find attacks and pins to the king
-  let #(_, king_blockers) = attackers_and_blockers(game, king_position, them)
-
-  fn(from, piece: piece.Piece) -> Int {
-    // If we are pinned down, check if the target square is along the line by:
-    // If from is a king blocker:
-    //   Keep when:
-    //     (to == pinner) or
-    //     (from_offset == square.ray_to_offset(from: pinner, to: to).0)
-    // Else:
-    //   Always keep
-    let unpins = case dict.get(king_blockers, from) {
-      Ok(pinner) -> fn(to) {
-        to == pinner
-        || {
-          let from_offset: Int = square.ray_to_offset(from: pinner, to: from).0
-          from_offset == square.ray_to_offset(from: pinner, to: to).0
-        }
-      }
-      _ -> fn(_) { True }
-    }
-
-    let go_rays = fn(rays) {
-      use acc, ray <- list.fold(rays, 0)
-      use acc, to <- list.fold_until(ray, acc)
-      use <- bool.guard(!unpins(to), list.Stop(0))
-
-      case dict.get(game.board, to), piece.symbol {
-        Error(Nil), _ -> list.Continue(acc + 1)
-        // If we're a queen and we hit anything, always stop
-        Ok(_), piece.Queen -> list.Stop(acc + 1)
-        // If we're not a queen and we hit something, xray through it if it's
-        // the same piece or its a queen
-        Ok(hit_piece), _
-          if hit_piece == piece || hit_piece.symbol == piece.Queen
-        -> list.Continue(acc + 1)
-        // Otherwise, stop at the hit piece
-        Ok(_), _ -> list.Stop(acc + 1)
-      }
-    }
-
-    case piece.symbol {
-      piece.King -> 0
-      piece.Rook -> from |> square.rook_rays |> go_rays
-      piece.Bishop -> from |> square.bishop_rays |> go_rays
-      piece.Queen -> from |> square.queen_rays |> go_rays
-      piece.Knight -> list.length(square.knight_moves(from))
-      piece.Pawn -> 0
-    }
-  }
 }
 
 // Zobrist below

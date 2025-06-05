@@ -1,7 +1,9 @@
+import chess/evaluate
 import chess/evaluate/midgame
 import chess/game
 import chess/player
 import gleeunit/should
+import util/xint
 
 pub fn king_pawn_shield_test() {
   // Pawns are all close to king after he castled
@@ -76,4 +78,21 @@ pub fn king_pawn_shield_test() {
     < midgame.king_pawn_shield(game2, player.Black)
   }
   |> should.equal(True)
+}
+
+pub fn evaluate_regression_test() {
+  let assert Ok(game1) = game.load_fen(game.start_fen)
+  let assert Ok(game2) =
+    game.load_fen(
+      "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+    )
+  let assert Ok(game3) =
+    game.load_fen("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1")
+  let assert Ok(game4) =
+    game.load_fen("8/8/8/7p/8/2b2kPp/3p1P2/4N1K1 b - - 1 63")
+
+  evaluate.game(game1) |> should.equal(xint.from_int(0))
+  evaluate.game(game2) |> should.equal(xint.from_int(29))
+  evaluate.game(game3) |> should.equal(xint.from_int(-2))
+  evaluate.game(game4) |> should.equal(xint.from_int(-117))
 }

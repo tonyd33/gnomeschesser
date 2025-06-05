@@ -122,13 +122,13 @@ mkdir -p "$results_dir"
 "$run_fastchess" \
     -event "$fastchess_event_name" \
     -engine \
-      cmd="$run_defender" \
-      args="$defender_args" \
-      name=defender \
-    -engine \
       cmd="$run_challenger" \
       args="$challenger_args" \
       name=challenger \
+    -engine \
+      cmd="$run_defender" \
+      args="$defender_args" \
+      name=defender \
     -each st="$st" \
     -rounds "$rounds" -games "$games" -concurrency "$concurrency" -maxmoves 100 \
     -pgnout file="$results_dir/regression.pgn" \

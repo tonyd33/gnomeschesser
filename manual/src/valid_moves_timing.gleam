@@ -23,10 +23,10 @@ pub fn main() {
         game.valid_moves(x)
         Nil
       }),
-      #("game.xrays", fn(x) {
-        game.xrays(x)
-        Nil
-      }),
+      // #("game.xrays", fn(x) {
+    //   game.xrays(x)
+    //   Nil
+    // }),
     ]),
     [
       bencher.Warmup(2),

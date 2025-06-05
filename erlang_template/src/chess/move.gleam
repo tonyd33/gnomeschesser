@@ -13,7 +13,7 @@ pub type ValidInContext
 /// PseudoMoves don't consider checks, only occupancy
 pub type Pseudo
 
-pub opaque type Move(context) {
+pub type Move(context) {
   Move(
     // The minimum amount of information to disambiguate between moves
     // The source of truth is from, to, promotion
@@ -62,27 +62,6 @@ pub fn new_valid(
   Move(from:, to:, promotion:, context:)
 }
 
-pub fn get_from(move: Move(a)) {
-  move.from
-}
-
-pub fn get_to(move: Move(a)) {
-  move.to
-}
-
-pub fn get_promotion(move: Move(a)) {
-  move.promotion
-}
-
-pub fn get_context(move: Move(ValidInContext)) {
-  let assert Some(context) = move.context
-  context
-}
-
-pub fn get_pseudo_context(move: Move(a)) {
-  move.context
-}
-
 pub fn is_quiet(move: Move(ValidInContext)) {
   let assert Some(context) = move.context
   option.is_none(context.capture)
@@ -100,7 +79,7 @@ pub fn is_promotion(move: Move(ValidInContext)) {
 pub fn to_lan(move: Move(a)) {
   square.to_string(move.from)
   <> square.to_string(move.to)
-  <> case get_promotion(move) {
+  <> case move.promotion {
     Some(symbol) -> piece.symbol_to_string(symbol) |> string.lowercase
     None -> ""
   }
@@ -188,7 +167,10 @@ pub fn equal(move_1: Move(a), move_2: Move(b)) {
   && move_1.promotion == move_2.promotion
 }
 
-pub fn rook_castle(player: player.Player, castle: castle.Castle) -> Move(Pseudo) {
+pub fn rook_castle(
+  player: player.Player,
+  castle: castle.Castle,
+) -> Move(ValidInContext) {
   let rank = square.player_rank(player)
   let from_file = castle.rook_from_file(castle)
   let to_file = case castle {
@@ -197,10 +179,19 @@ pub fn rook_castle(player: player.Player, castle: castle.Castle) -> Move(Pseudo)
   }
   let assert Ok(from) = square.from_rank_file(rank, from_file)
   let assert Ok(to) = square.from_rank_file(rank, to_file)
-  new_pseudo(from:, to:, promotion: option.None)
+  let context =
+    Some(Context(
+      capture: None,
+      piece: piece.Piece(player, piece.Rook),
+      castling: None,
+    ))
+  new_valid(from:, to:, promotion: option.None, context:)
 }
 
-pub fn king_castle(player: player.Player, castle: castle.Castle) -> Move(Pseudo) {
+pub fn king_castle(
+  player: player.Player,
+  castle: castle.Castle,
+) -> Move(ValidInContext) {
   let rank = square.player_rank(player)
 
   let to_file = case castle {
@@ -210,5 +201,12 @@ pub fn king_castle(player: player.Player, castle: castle.Castle) -> Move(Pseudo)
 
   let assert Ok(from) = square.from_rank_file(rank, square.king_file)
   let assert Ok(to) = square.from_rank_file(rank, to_file)
-  new_pseudo(from:, to:, promotion: option.None)
+
+  let context =
+    Some(Context(
+      capture: None,
+      piece: piece.Piece(player, piece.King),
+      castling: Some(castle),
+    ))
+  new_valid(from:, to:, promotion: option.None, context:)
 }
