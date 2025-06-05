@@ -1,4 +1,6 @@
 import chess/evaluate
+import chess/evaluate/common
+import chess/evaluate/psqt
 import chess/game
 import chess/move
 import chess/piece
@@ -734,7 +736,30 @@ fn sorted_moves(
     use search_state: SearchState <- interruptable.select
     compare_quiet_history(search_state.history)
   })
-  let quiet_moves = list.sort(quiet_moves, compare_quiet_history)
+
+  let player_mult = common.player(game.turn(game))
+
+  let compare_quiet_psqt = fn(move1, move2) {
+    let score1 =
+      psqt.score(
+        move.get_context(move1).piece,
+        move.get_to(move1),
+        common.MidGame,
+      )
+      * player_mult
+    let score2 =
+      psqt.score(
+        move.get_context(move2).piece,
+        move.get_to(move2),
+        common.MidGame,
+      )
+      * player_mult
+
+    int.compare(score2, score1)
+  }
+  let compare_quiet_moves =
+    order_addons.or(compare_quiet_history, compare_quiet_psqt)
+  let quiet_moves = list.sort(quiet_moves, compare_quiet_moves)
 
   let non_best_move = list.append(capture_promotion_moves, quiet_moves)
 
