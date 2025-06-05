@@ -21,7 +21,7 @@ type UCIEngine = { enginePath: string };
 type Engine =
   | { proto: "http"; engine: HTTPEngine }
   | { proto: "uci"; engine: UCIEngine }
-  | { proto: "random" }
+  | { proto: "random" };
 
 type Context = { fen: string };
 
@@ -75,7 +75,7 @@ async function race<A>(
   ]);
 }
 
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function askHttp(
   { chess, url }: { chess: Chess; url: string },
@@ -144,7 +144,7 @@ async function makeEngineMove(chess: Chess, engine: Engine) {
   switch (engine.proto) {
     case "http":
       return askHttp({ chess, url: engine.engine.url });
-    case "random": { 
+    case "random": {
       const availableMoves = chess.moves();
       const randomIndex = Math.min(
         Math.floor(Math.random() * availableMoves.length),
@@ -164,50 +164,52 @@ async function play(engine1: Engine, engine2: Engine) {
 
   while (true) {
     stats = mergeStats(stats, await makeEngineMove(chess, engine1));
-    if (chess.isCheckmate()) {
+    if (chess.isGameOver()) {
       break;
     }
+    console.log(chess.ascii());
 
     stats = mergeStats(stats, await makeEngineMove(chess, engine2));
-    if (chess.isCheckmate()) {
+    if (chess.isGameOver()) {
       break;
     }
+    console.log(chess.ascii());
   }
   return stats;
 }
 
 function parseEngineSpec(spec: string): Result<Engine, string> {
-  const parseProto = (s) => {
+  const parseProto = (s: string): Result<"http" | "uci" | "random", string> => {
     if (s.startsWith("proto:http")) {
-      return {ok: true, value: "http"};
+      return { ok: true, value: "http" };
     } else if (s.startsWith("proto:uci")) {
-      return {ok: true, value: "uci"};
+      return { ok: true, value: "uci" };
     } else if (s.startsWith("proto:random")) {
-      return {ok: true, value: "random"};
+      return { ok: true, value: "random" };
     } else {
-      return {ok: false, err: "Expected http or uci"};
+      return { ok: false, err: "Expected http or uci" };
     }
-  }
+  };
 
-  const parseURL = (s) => {
+  const parseURL = (s: string): Result<string, string> => {
     if (s.startsWith("url:")) {
-      return {ok: true, value: s.slice("url:".length)};
+      return { ok: true, value: s.slice("url:".length) };
     } else {
-      return {ok: false, err: "Expected url"};
+      return { ok: false, err: "Expected url" };
     }
-  }
+  };
 
-  const parsePath = (s) => {
+  const parsePath = (s: string): Result<string, string> => {
     if (s.startsWith("path:")) {
-      return {ok: true, value: s.slice("path:".length)};
+      return { ok: true, value: s.slice("path:".length) };
     } else {
-      return {ok: false, err: "Expected url"};
+      return { ok: false, err: "Expected url" };
     }
-  }
+  };
 
   const parts = spec.split(",");
   if (parts.length !== 2) {
-    return {ok: false, err: "not enough parts"};
+    return { ok: false, err: "not enough parts" };
   }
   const proto = parseProto(parts[0]);
   if (!proto.ok) return proto;
@@ -215,17 +217,24 @@ function parseEngineSpec(spec: string): Result<Engine, string> {
   switch (proto.value) {
     case "http": {
       const url = parseURL(parts[1]);
-      return url.ok ? {ok: true, value: {proto: "http", engine: {url: url.value}}} : url;
+      return url.ok
+        ? { ok: true, value: { proto: "http", engine: { url: url.value } } }
+        : url;
     }
     case "uci": {
       const path = parsePath(parts[1]);
-      return path.ok ? {ok: true, value: {proto: "uci", engine: {enginePath:path.value}}} : path;
+      return path.ok
+        ? {
+          ok: true,
+          value: { proto: "uci", engine: { enginePath: path.value } },
+        }
+        : path;
     }
     case "random": {
-      return {ok: true, value: {proto: "random"}};
+      return { ok: true, value: { proto: "random" } };
     }
     default:
-      return {ok: false, err: "Bad parse"};
+      return { ok: false, err: "Bad parse" };
   }
 }
 

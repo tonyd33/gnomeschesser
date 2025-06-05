@@ -127,7 +127,7 @@ fn handle_uci(s: UCIState, cmd) {
           // We expect about a constant time overhead for information transfer
           // and whatever other overhead to do the search. Account for that in
           // the deadline.
-          let budget = 150
+          let budget = 110
           timestamp.add(
             start,
             duration.milliseconds(int.max(movetime - budget, 0)),
