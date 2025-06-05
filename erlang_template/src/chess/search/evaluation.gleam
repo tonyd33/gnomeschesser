@@ -11,7 +11,6 @@ pub type Evaluation {
     score: evaluate.Score,
     node_type: NodeType,
     best_move: option.Option(move.Move(move.ValidInContext)),
-    best_line: List(move.Move(move.ValidInContext)),
   )
 }
 

@@ -85,12 +85,7 @@ pub fn checkpointed_iterative_deepening(
           |> list.shuffle()
         // get a random move if we are in checkmate
         let random_move = valid_moves |> list.first |> option.from_result
-        Evaluation(
-          ..best_evaluation,
-          best_move: random_move,
-          best_line: [random_move]
-            |> option.values,
-        )
+        Evaluation(..best_evaluation, best_move: random_move)
       }
     }
   })
@@ -206,14 +201,11 @@ fn negamax_alphabeta_failsoft(
       // Insufficient material:
       // If there isn't enough material to mate, consider this position a draw.
       || game.is_insufficient_material(game),
-    interruptable.return(
-      Evaluation(
-        score: xint.from_int(0),
-        node_type: evaluation.PV,
-        best_move: None,
-        best_line: [],
-      ),
-    ),
+    interruptable.return(Evaluation(
+      score: xint.from_int(0),
+      node_type: evaluation.PV,
+      best_move: None,
+    )),
   )
 
   // return early if we find an entry in the transposition table
@@ -230,13 +222,13 @@ fn negamax_alphabeta_failsoft(
       use <- bool.guard(cached_depth < depth, Error(Nil))
       // If we find a cached entry that is deeper than our current search
       case evaluation {
-        Evaluation(_, evaluation.PV, _, _) -> Ok(evaluation)
-        Evaluation(score, evaluation.Cut, _, _) ->
+        Evaluation(node_type: evaluation.PV, ..) -> Ok(evaluation)
+        Evaluation(score:, node_type: evaluation.Cut, ..) ->
           case xint.gte(score, beta) {
             True -> Ok(evaluation)
             False -> Error(Nil)
           }
-        Evaluation(score, evaluation.All, _, _) ->
+        Evaluation(score:, node_type: evaluation.All, ..) ->
           case xint.lte(score, alpha) {
             True -> Ok(evaluation)
             False -> Error(Nil)
@@ -274,7 +266,7 @@ fn do_negamax_alphabeta_failsoft(
 ) -> InterruptableState(SearchState, Evaluation) {
   use <- bool.lazy_guard(depth <= 0, fn() {
     use score <- interruptable.map(quiesce(game, alpha, beta))
-    Evaluation(score:, node_type: evaluation.PV, best_move: None, best_line: [])
+    Evaluation(score:, node_type: evaluation.PV, best_move: None)
   })
   let is_check = game.is_check(game, game.turn(game))
 
@@ -294,12 +286,7 @@ fn do_negamax_alphabeta_failsoft(
           interruptable.from_state(search_state.stats_add_rfp_cutoffs(depth, 1)),
         )
         interruptable.return(
-          Ok(Evaluation(
-            score:,
-            best_move: None,
-            best_line: [],
-            node_type: evaluation.Cut,
-          )),
+          Ok(Evaluation(score:, best_move: None, node_type: evaluation.Cut)),
         )
       }
       False -> interruptable.return(Error(Nil))
@@ -373,7 +360,7 @@ fn do_negamax_alphabeta_failsoft(
   // We may need to evaluate now that we reduced depth. Do another check.
   use <- bool.lazy_guard(depth <= 0, fn() {
     use score <- interruptable.map(quiesce(game, alpha, beta))
-    Evaluation(score:, node_type: evaluation.PV, best_move: None, best_line: [])
+    Evaluation(score:, node_type: evaluation.PV, best_move: None)
   })
 
   use #(moves, nmoves) <- interruptable.do(sorted_moves(
@@ -390,7 +377,7 @@ fn do_negamax_alphabeta_failsoft(
       True -> xint.NegInf
       False -> xint.Finite(0)
     }
-    Evaluation(score:, node_type: evaluation.PV, best_move: None, best_line: [])
+    Evaluation(score:, node_type: evaluation.PV, best_move: None)
     |> interruptable.return
   })
 
@@ -399,7 +386,7 @@ fn do_negamax_alphabeta_failsoft(
   {
     use #(best_evaluation, alpha, move_number), move <- interruptable.list_fold_until_s(
       moves,
-      #(Evaluation(xint.NegInf, evaluation.PV, None, []), alpha, 0),
+      #(Evaluation(xint.NegInf, evaluation.PV, None), alpha, 0),
     )
 
     let lmr_depth_reduction = {
@@ -445,11 +432,7 @@ fn do_negamax_alphabeta_failsoft(
           xint.negate(alpha),
           game_history.insert(game_history, game),
         ))
-        Evaluation(
-          ..evaluation.negate(neg_evaluation),
-          best_line: [move, ..neg_evaluation.best_line],
-          best_move: Some(move),
-        )
+        Evaluation(..evaluation.negate(neg_evaluation), best_move: Some(move))
       })
 
       interruptable.return(#(
