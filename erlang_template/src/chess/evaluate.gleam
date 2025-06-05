@@ -102,7 +102,7 @@ pub fn game(game: game.Game) -> Score {
   |> xint.from_int
 }
 
-/// Returns a value 0-100 such that:
+/// Returns a value 0-1 such that:
 /// - A value of 0.0 means we're completely in the endgame
 /// - A value of 1.0 means we're completely in the midgame (or before it)
 /// - A value in between signifies the weight endgame should be given, scaling

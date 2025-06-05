@@ -259,10 +259,19 @@ pub fn fullmove_number(game: Game) -> Int {
   game.fullmove_number
 }
 
+/// Makes a null move
 pub fn reverse_turn(game: Game) -> Game {
   let them = player.opponent(game.active_color)
-  let hash = int.bitwise_exclusive_or(game.hash, hashes.780)
-  Game(..game, active_color: them, hash:)
+
+  let hash =
+    game.hash
+    // Turn hash
+    |> int.bitwise_exclusive_or(hashes.780)
+    // En passant hash
+    |> int.bitwise_exclusive_or(ep_hash(game.en_passant_target_square))
+    |> int.bitwise_exclusive_or(ep_hash(None))
+
+  Game(..game, en_passant_target_square: None, active_color: them, hash:)
 }
 
 pub fn set_turn(game: Game, player: player.Player) -> Game {
