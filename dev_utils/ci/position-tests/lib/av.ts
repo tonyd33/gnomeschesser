@@ -21,6 +21,13 @@ const tests: TestCase[] = [
     bms: ["c1g5"],
     id: "AV.03",
   },
+  {
+    // Escape a mate
+    // https://lichess.org/training/VL81U
+    fen: "4rn1k/1r2q1bp/3pB1p1/p2Pp1P1/Np2PP1R/1Pp1Q3/P1P5/1K5R b - - 0 28",
+    bms: ["f8e6"],
+    id: "AV.04",
+  },
 ];
 
 const suite: TestSuite = {
