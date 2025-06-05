@@ -245,7 +245,6 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
               score: xint.from_int(0),
               best_move: Some(move),
               node_type: PV,
-              best_line: [],
             ),
           )
         {
@@ -321,7 +320,6 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
             Evaluation(
               score: xint.from_int(0),
               best_move: random_move,
-              best_line: option.values([random_move]),
               node_type: PV,
             )
           }
@@ -441,11 +439,7 @@ fn aggregate_search_info(
 
   let score = case best_evaluation.score {
     xint.Finite(score) -> Centipawns(score)
-    _ ->
-      Mate(
-        xint.sign(best_evaluation.score)
-        * list.length(best_evaluation.best_line),
-      )
+    _ -> Mate(xint.sign(best_evaluation.score))
   }
 
   [
@@ -455,7 +449,12 @@ fn aggregate_search_info(
     Time(dt),
     NodesPerSecond(nps),
     HashFull(hashfull),
-    PrincipalVariation(list.map(best_evaluation.best_line, move.to_lan)),
+    PrincipalVariation(
+      best_evaluation.best_move
+      |> option.map(list.wrap)
+      |> option.unwrap([])
+      |> list.map(move.to_lan),
+    ),
   ]
 }
 
