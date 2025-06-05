@@ -457,7 +457,7 @@ fn do_negamax_alphabeta_failsoft(
         // #(1.35, 2.75)
         False, True -> #(0.4, 3.1)
         // Reduce quiet moves that aren't improving even more
-        False, False -> #(0.5, 2.9)
+        False, False -> #(0.45, 3.0)
       }
       let assert Ok(ln_depth) = maths.natural_logarithm(int.to_float(depth))
       let assert Ok(ln_move_number) =
