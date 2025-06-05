@@ -272,29 +272,29 @@ fn do_negamax_alphabeta_failsoft(
   })
   let is_check = game.is_check(game, game.turn(game))
 
-  use rfp_evaluation <- interruptable.do({
-    let should_do_rfp = depth > 1 && !is_check
-    use <- bool.guard(!should_do_rfp, interruptable.return(Error(Nil)))
-
-    let score =
-      evaluate.game(game)
-      |> xint.multiply(evaluate.player(game.turn(game)) |> xint.from_int)
-    // TODO: Tweak margin
-    let margin = 50 * depth
-
-    case xint.gte(score, xint.add(beta, xint.from_int(margin))) {
-      True -> {
-        use <- interruptable.discard(
-          interruptable.from_state(search_state.stats_add_rfp_cutoffs(depth, 1)),
-        )
-        interruptable.return(
-          Ok(Evaluation(score:, best_move: None, node_type: evaluation.Cut)),
-        )
-      }
-      False -> interruptable.return(Error(Nil))
-    }
-  })
-  use <- result.lazy_unwrap(result.map(rfp_evaluation, interruptable.return))
+  // use rfp_evaluation <- interruptable.do({
+  //   let should_do_rfp = depth > 1 && !is_check
+  //   use <- bool.guard(!should_do_rfp, interruptable.return(Error(Nil)))
+  //
+  //   let score =
+  //     evaluate.game(game)
+  //     |> xint.multiply(evaluate.player(game.turn(game)) |> xint.from_int)
+  //   // TODO: Tweak margin
+  //   let margin = 50 * depth
+  //
+  //   case xint.gte(score, xint.add(beta, xint.from_int(margin))) {
+  //     True -> {
+  //       use <- interruptable.discard(
+  //         interruptable.from_state(search_state.stats_add_rfp_cutoffs(depth, 1)),
+  //       )
+  //       interruptable.return(
+  //         Ok(Evaluation(score:, best_move: None, node_type: evaluation.Cut)),
+  //       )
+  //     }
+  //     False -> interruptable.return(Error(Nil))
+  //   }
+  // })
+  // use <- result.lazy_unwrap(result.map(rfp_evaluation, interruptable.return))
 
   // Null move pruning/null move reduction: if a null move was made (i.e. we
   // pass the turn) yet we caused a beta cutoff, we can be pretty sure that
