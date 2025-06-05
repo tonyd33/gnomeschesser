@@ -30,6 +30,17 @@ pub fn score(
   * common.player(piece.player)
 }
 
+pub fn raw_score(
+  piece: piece.Piece,
+  square: square.Square,
+  phase: common.Stage,
+) -> Int {
+  case phase {
+    common.MidGame -> get_psq_score_midgame(piece, square)
+    common.EndGame -> get_psq_score_endgame(piece, square)
+  }
+}
+
 fn get_psq_score_endgame(piece: piece.Piece, square: square.Square) {
   let file = square.file(square)
   let rank = case piece.player {

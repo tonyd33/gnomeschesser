@@ -1,4 +1,6 @@
 import chess/evaluate
+import chess/evaluate/common
+import chess/evaluate/psqt
 import chess/game
 import chess/move
 import chess/piece
@@ -541,22 +543,9 @@ fn quiesce(
 
   let alpha = xint.max(alpha, score)
 
-  // Captures should come first
-  let compare_capture = fn(move1, move2) {
-    case move.is_capture(move1), move.is_capture(move2) {
-      True, True -> order.Eq
-      True, False -> order.Lt
-      False, True -> order.Gt
-      False, False -> order.Eq
-    }
-  }
+  let compare_mvv_lva = order_addons.or(compare_mvv, compare_lva)
 
-  let compare_capture_mvv_lva =
-    compare_capture
-    |> order_addons.or(compare_mvv)
-    |> order_addons.or(compare_lva)
-
-  let moves = list.sort(game.valid_moves(game), compare_capture_mvv_lva)
+  let moves = list.sort(game.valid_moves(game), compare_mvv_lva)
   {
     use #(best_score, alpha), move <- interruptable.list_fold_until_s(moves, #(
       score,
@@ -721,12 +710,24 @@ fn sorted_moves(
         False -> #(best, [move, ..capture_promotions], quiet, nmoves + 1)
       }
     })
+  // TODO: Ideally, use real phase calculations
+  let phase = case game.fullmove_number(game) > 25 {
+    True -> common.EndGame
+    False -> common.MidGame
+  }
+  let compare_psqt = compare_psqt(phase)
+  let compare_psqt_delta = compare_psqt_delta(phase)
+
+  // Compare a move by the PSQ score they land on.
 
   // We use MVV-LVA for sorting capture_promotion moves:
   // We sort most valuable victim, most valuable first, falling back to
   // sorting by least valuable attacker, least valuable first.
   // For promotions, we count it as the promoted piece
-  let compare_mvv_lva = order_addons.or(compare_mvv, compare_lva)
+  let compare_mvv_lva =
+    order_addons.or(compare_mvv, compare_lva)
+    |> order_addons.or(compare_psqt)
+    |> order_addons.or(compare_psqt_delta)
   let capture_promotion_moves =
     list.sort(capture_promotion_moves, compare_mvv_lva)
 
@@ -734,7 +735,11 @@ fn sorted_moves(
     use search_state: SearchState <- interruptable.select
     compare_quiet_history(search_state.history)
   })
-  let quiet_moves = list.sort(quiet_moves, compare_quiet_history)
+
+  let compare_quiet_moves =
+    order_addons.or(compare_quiet_history, compare_psqt)
+    |> order_addons.or(compare_psqt_delta)
+  let quiet_moves = list.sort(quiet_moves, compare_quiet_moves)
 
   let non_best_move = list.append(capture_promotion_moves, quiet_moves)
 
@@ -775,4 +780,39 @@ fn compare_lva(move1, move2) {
     move.get_promotion(move2)
     |> option.unwrap(piece2)
   int.compare(evaluate.piece_symbol(piece1), evaluate.piece_symbol(piece2))
+}
+
+/// Compare a move by the PSQ score of the square the piece lands on, highest
+/// first.
+///
+fn compare_psqt(phase) {
+  fn(move1, move2) {
+    let score1 =
+      psqt.raw_score(move.get_context(move1).piece, move.get_to(move1), phase)
+    let score2 =
+      psqt.raw_score(move.get_context(move2).piece, move.get_to(move2), phase)
+
+    int.compare(score2, score1)
+  }
+}
+
+/// Compare a move by the different in PSQ scores from where they were and
+/// where they land to, with the highest delta first.
+///
+fn compare_psqt_delta(phase) {
+  fn(move1, move2) {
+    let score_to1 =
+      psqt.raw_score(move.get_context(move1).piece, move.get_to(move1), phase)
+    let score_from1 =
+      psqt.raw_score(move.get_context(move1).piece, move.get_from(move1), phase)
+    let delta1 = score_to1 - score_from1
+
+    let score_to2 =
+      psqt.raw_score(move.get_context(move2).piece, move.get_to(move2), phase)
+    let score_from2 =
+      psqt.raw_score(move.get_context(move2).piece, move.get_from(move2), phase)
+    let delta2 = score_to2 - score_from2
+
+    int.compare(delta2, delta1)
+  }
 }
