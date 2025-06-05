@@ -26,34 +26,76 @@ pub fn game(game: game.Game) -> Score {
   let game.EvaluationData(npm:, material_mg:, material_eg:, psqt_mg:, psqt_eg:) =
     game.evaluation_data(game)
   let phase = phase(npm)
-  let material =
-    common.taper(int.to_float(material_mg), int.to_float(material_eg), phase)
-  let psq = common.taper(int.to_float(psqt_mg), int.to_float(psqt_eg), phase)
   // only the mobility iterates through the pieces right now, so we can do this
   let mobility = mobility.score(game, phase)
 
-  let king_safety_score =
-    {
-      midgame.king_pawn_shield(game, player.White)
-      + midgame.king_pawn_shield(game, player.Black)
-    }
-    |> int.to_float
+  let score = case phase {
+    // fully endgame
+    phase if phase <=. 0.0 -> {
+      let material =
+        common.taper(
+          int.to_float(material_mg),
+          int.to_float(material_eg),
+          phase,
+        )
+      let psq =
+        common.taper(int.to_float(psqt_mg), int.to_float(psqt_eg), phase)
 
-  // combine scores with weight
+      {
+        { material *. material_weight }
+        +. { psq *. psqt_weight }
+        +. { mobility *. mobility_weight }
+      }
+      /. { material_weight +. psqt_weight +. mobility_weight }
+    }
 
-  let score =
-    {
-      { material *. material_weight }
-      +. { psq *. psqt_weight }
-      +. { mobility *. mobility_weight }
-      +. { king_safety_score *. king_pawn_shield_weight }
+    // fully midgame
+    phase if phase >=. 1.0 -> {
+      let material = int.to_float(material_mg)
+      let psq = int.to_float(psqt_mg)
+      let king_pawn_shield =
+        midgame.king_pawn_shield(game, player.White)
+        + midgame.king_pawn_shield(game, player.Black)
+        |> int.to_float
+      {
+        { material *. material_weight }
+        +. { psq *. psqt_weight }
+        +. { mobility *. mobility_weight }
+        +. { king_pawn_shield *. king_pawn_shield_weight }
+      }
+      /. {
+        material_weight
+        +. psqt_weight
+        +. mobility_weight
+        +. king_pawn_shield_weight
+      }
     }
-    /. {
-      material_weight
-      +. psqt_weight
-      +. mobility_weight
-      +. king_pawn_shield_weight
+    // in between
+    phase -> {
+      let material = int.to_float(material_mg)
+      let psq = int.to_float(psqt_mg)
+
+      let king_pawn_shield =
+        midgame.king_pawn_shield(game, player.White)
+        + midgame.king_pawn_shield(game, player.Black)
+        |> int.to_float
+      let king_pawn_shield_weight =
+        common.taper(king_pawn_shield_weight, 0.0, phase)
+
+      {
+        { material *. material_weight }
+        +. { psq *. psqt_weight }
+        +. { mobility *. mobility_weight }
+        +. { king_pawn_shield *. king_pawn_shield_weight }
+      }
+      /. {
+        material_weight
+        +. psqt_weight
+        +. mobility_weight
+        +. king_pawn_shield_weight
+      }
     }
+  }
 
   score
   |> float.truncate
