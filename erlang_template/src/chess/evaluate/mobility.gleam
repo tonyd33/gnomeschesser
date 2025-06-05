@@ -5,6 +5,7 @@ import chess/player
 import chess/square
 import gleam/bool
 import gleam/dict
+import gleam/int
 import gleam/list
 
 /// Calculate a [mobility score](https://www.chessprogramming.org/Mobility).
@@ -15,7 +16,7 @@ import gleam/list
 /// This is implemented in a similar fashion: for every move, it counts
 /// positively towards the mobility score and is weighted by the piece.
 ///
-pub fn score(game: game.Game, phase: Int) {
+pub fn score(game: game.Game, phase: Float) {
   // find attacks and pins to the king
   let #(_, white_king_blockers) = {
     let assert [white_king_square] =
@@ -40,10 +41,10 @@ pub fn score(game: game.Game, phase: Int) {
         moves_count(board, black_king_blockers, square, piece)
     }
     case phase {
-      x if x >= 100 -> {
+      x if x >=. 1.0 -> {
         #(acc.0 + midgame(move_count, piece), 0)
       }
-      x if x <= 0 -> {
+      x if x <=. 0.0 -> {
         #(0, acc.1 + endgame(move_count, piece))
       }
       _ -> {
@@ -54,7 +55,7 @@ pub fn score(game: game.Game, phase: Int) {
       }
     }
   }
-  common.taper(midgame, endgame, phase)
+  common.taper(midgame |> int.to_float, endgame |> int.to_float, phase)
 }
 
 /// We use this to count the number of moves a piece can make from a square

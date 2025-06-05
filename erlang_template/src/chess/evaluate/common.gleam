@@ -82,7 +82,7 @@ pub fn player(player: player.Player) -> Int {
 }
 
 /// Make a smooth transition between mg and eg scores by phase.
-///
-pub fn taper(mg: Int, eg: Int, phase: Int) {
-  { { mg * phase } + { eg * { 100 - phase } } } / 100
+/// assumes phase is between 0 and 1
+pub fn taper(mg: Float, eg: Float, phase: Float) {
+  mg *. phase +. eg *. { 1.0 -. phase }
 }
