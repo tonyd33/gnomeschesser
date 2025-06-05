@@ -245,9 +245,9 @@ fn negamax_alphabeta_failsoft(
   })
 
   // Manage stats and transposition table before returning evaluation.
-  use <- interruptable.discard(
-    interruptable.from_state(search_state.stats_increment_nodes_searched()),
-  )
+  // use <- interruptable.discard(
+  //   interruptable.from_state(search_state.stats_increment_nodes_searched()),
+  // )
   use <- interruptable.discard(
     interruptable.from_state(case depth >= tt_min_leaf_distance {
       True -> search_state.transposition_insert(game_hash, #(depth, evaluation))
@@ -284,9 +284,9 @@ fn do_negamax_alphabeta_failsoft(
 
     case xint.gte(score, xint.add(beta, xint.from_int(margin))) {
       True -> {
-        use <- interruptable.discard(
-          interruptable.from_state(search_state.stats_add_rfp_cutoffs(depth, 1)),
-        )
+        // use <- interruptable.discard(
+        //   interruptable.from_state(search_state.stats_add_rfp_cutoffs(depth, 1)),
+        // )
         interruptable.return(
           Ok(Evaluation(score:, best_move: None, node_type: evaluation.Cut)),
         )
@@ -325,9 +325,9 @@ fn do_negamax_alphabeta_failsoft(
 
     case xint.gte(evaluation.score, beta) {
       True -> {
-        use <- interruptable.discard(
-          interruptable.from_state(search_state.stats_add_nmp_cutoffs(depth, 1)),
-        )
+        // use <- interruptable.discard(
+        //   interruptable.from_state(search_state.stats_add_nmp_cutoffs(depth, 1)),
+        // )
         interruptable.return(Ok(
           Evaluation(..evaluation, node_type: evaluation.Cut),
         ))
@@ -463,12 +463,12 @@ fn do_negamax_alphabeta_failsoft(
               False -> interruptable.return(Nil)
             },
           )
-          use <- interruptable.discard(
-            interruptable.from_state(search_state.stats_add_beta_cutoffs(
-              depth,
-              nmoves - move_number + 1,
-            )),
-          )
+          // use <- interruptable.discard(
+          //   interruptable.from_state(search_state.stats_add_beta_cutoffs(
+          //     depth,
+          //     nmoves - move_number + 1,
+          //   )),
+          // )
           #(new_e, alpha, move_number + 1) |> list.Stop |> interruptable.return
         }
         False ->
@@ -663,11 +663,11 @@ fn get_pv_move(game: game.Game, depth: evaluation.Depth, alpha, beta, history) {
         SearchOpts(max_depth: Some(iid_depth)),
         history,
       ))
-      use <- interruptable.discard(
-        interruptable.from_state(search_state.stats_increment_iid_triggers(
-          depth,
-        )),
-      )
+      // use <- interruptable.discard(
+      //   interruptable.from_state(search_state.stats_increment_iid_triggers(
+      //     depth,
+      //   )),
+      // )
       interruptable.return(eval.best_move)
     }
     // Cache miss but we're close to the leaves. Too bad.
