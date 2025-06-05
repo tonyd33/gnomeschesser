@@ -128,13 +128,9 @@ pub fn search_with_widening_windows(
   attempts: Int,
   game_history: game_history.GameHistory,
 ) -> InterruptableState(SearchState, Evaluation) {
-  use best_evaluation <- interruptable.do(negamax_alphabeta_failsoft(
-    game,
-    depth,
-    alpha,
-    beta,
-    game_history,
-  ))
+  use best_evaluation <- interruptable.do(
+    negamax_alphabeta_failsoft(game, depth, alpha, beta, game_history, []),
+  )
   case best_evaluation.score, best_evaluation.node_type {
     // if it's +/- Inf means it's already hit the highest bound
     // It's a forced checkmate in every branch
@@ -187,6 +183,7 @@ fn negamax_alphabeta_failsoft(
   alpha: ExtendedInt,
   beta: ExtendedInt,
   game_history: game_history.GameHistory,
+  score_history: List(Option(ExtendedInt)),
 ) -> InterruptableState(SearchState, Evaluation) {
   use <- interruptable.interruptable
 
@@ -242,7 +239,14 @@ fn negamax_alphabeta_failsoft(
 
   // Otherwise, actually do negamax
   use evaluation <- interruptable.do({
-    do_negamax_alphabeta_failsoft(game, depth, alpha, beta, game_history)
+    do_negamax_alphabeta_failsoft(
+      game,
+      depth,
+      alpha,
+      beta,
+      game_history,
+      score_history,
+    )
   })
 
   // Manage stats and transposition table before returning evaluation.
@@ -265,6 +269,7 @@ fn do_negamax_alphabeta_failsoft(
   alpha: ExtendedInt,
   beta: ExtendedInt,
   game_history: game_history.GameHistory,
+  score_history: List(Option(ExtendedInt)),
 ) -> InterruptableState(SearchState, Evaluation) {
   use <- bool.lazy_guard(depth <= 0, fn() {
     use score <- interruptable.map(quiesce(game, alpha, beta))
@@ -272,23 +277,54 @@ fn do_negamax_alphabeta_failsoft(
   })
   let is_check = game.is_check(game, game.turn(game))
 
+  let static_evaluation =
+    evaluate.game(game)
+    |> xint.multiply(evaluate.player(game.turn(game)) |> xint.from_int)
+
+  let safe_score = case is_check {
+    True -> None
+    False -> Some(static_evaluation)
+  }
+
+  let improving = {
+    // Not improving if we're in check
+    use <- bool.guard(is_check, False)
+
+    case score_history {
+      [_, Some(score_2_ply_ago), ..] ->
+        xint.gt(static_evaluation, score_2_ply_ago)
+      [_, _, _, Some(score_4_ply_ago), ..] ->
+        xint.gt(static_evaluation, score_4_ply_ago)
+      _ -> False
+    }
+  }
+
   use rfp_evaluation <- interruptable.do({
     let should_do_rfp = depth > 1 && !is_check
     use <- bool.guard(!should_do_rfp, interruptable.return(Error(Nil)))
 
-    let score =
-      evaluate.game(game)
-      |> xint.multiply(evaluate.player(game.turn(game)) |> xint.from_int)
     // TODO: Tweak margin
-    let margin = 50 * depth
+    let margin =
+      50
+      * {
+        depth
+        - case improving {
+          True -> 1
+          False -> 0
+        }
+      }
 
-    case xint.gte(score, xint.add(beta, xint.from_int(margin))) {
+    case xint.gte(static_evaluation, xint.add(beta, xint.from_int(margin))) {
       True -> {
         use <- interruptable.discard(
           interruptable.from_state(search_state.stats_add_rfp_cutoffs(depth, 1)),
         )
         interruptable.return(
-          Ok(Evaluation(score:, best_move: None, node_type: evaluation.Cut)),
+          Ok(Evaluation(
+            score: static_evaluation,
+            best_move: None,
+            node_type: evaluation.Cut,
+          )),
         )
       }
       False -> interruptable.return(Error(Nil))
@@ -319,11 +355,17 @@ fn do_negamax_alphabeta_failsoft(
         xint.negate(beta),
         xint.negate(xint.subtract(beta, xint.from_int(1))),
         game_history.insert(game_history, game),
+        [safe_score, ..score_history],
       )
       |> interruptable.map(evaluation.negate),
     )
 
-    case xint.gte(evaluation.score, beta) {
+    let margin = case improving {
+      True -> 50
+      False -> 0
+    }
+
+    case xint.gte(evaluation.score, xint.add(beta, xint.from_int(margin))) {
       True -> {
         use <- interruptable.discard(
           interruptable.from_state(search_state.stats_add_nmp_cutoffs(depth, 1)),
@@ -402,15 +444,20 @@ fn do_negamax_alphabeta_failsoft(
       // Base formula from Weiss
       // c + (ln(depth) * ln(move_number))/d
       // https://www.chessprogramming.org/Late_Move_Reductions#Reduction_Depth
-      let #(c, d) = case move.is_capture(move) || move.is_promotion(move) {
+      let #(c, d) = case
+        move.is_capture(move) || move.is_promotion(move),
+        improving
+      {
         // Reduce captures/promotions less
         // Original Weiss values were:
         // #(0.2, 3.35)
-        True -> #(0.1, 6.7)
+        True, _ -> #(0.1, 6.7)
         // Reduce quiet moves more
         // Original Weiss values were:
         // #(1.35, 2.75)
-        False -> #(0.4, 3.1)
+        False, True -> #(0.4, 3.1)
+        // Reduce quiet moves that aren't improving even more
+        False, False -> #(0.5, 2.9)
       }
       let assert Ok(ln_depth) = maths.natural_logarithm(int.to_float(depth))
       let assert Ok(ln_move_number) =
@@ -427,13 +474,16 @@ fn do_negamax_alphabeta_failsoft(
       #(Evaluation, ExtendedInt),
     ) {
       use e2 <- interruptable.do({
-        use neg_evaluation <- interruptable.map(negamax_alphabeta_failsoft(
-          game.apply(game, move),
-          depth,
-          xint.negate(beta),
-          xint.negate(alpha),
-          game_history.insert(game_history, game),
-        ))
+        use neg_evaluation <- interruptable.map(
+          negamax_alphabeta_failsoft(
+            game.apply(game, move),
+            depth,
+            xint.negate(beta),
+            xint.negate(alpha),
+            game_history.insert(game_history, game),
+            [safe_score, ..score_history],
+          ),
+        )
         Evaluation(..evaluation.negate(neg_evaluation), best_move: Some(move))
       })
 
@@ -586,13 +636,16 @@ pub fn iteratively_deepen(
   opts: SearchOpts,
   game_history: game_history.GameHistory,
 ) {
-  use evaluation <- interruptable.do(negamax_alphabeta_failsoft(
-    game,
-    current_depth,
-    alpha,
-    beta,
-    game_history,
-  ))
+  use evaluation <- interruptable.do(
+    negamax_alphabeta_failsoft(
+      game,
+      current_depth,
+      alpha,
+      beta,
+      game_history,
+      [],
+    ),
+  )
   case opts.max_depth {
     Some(max_depth) if current_depth >= max_depth ->
       interruptable.return(evaluation)
