@@ -1,34 +1,7 @@
-import chess/evaluate/common.{type SidedScore, SidedScore}
+import chess/evaluate/common
 import chess/piece
 import chess/player
 import chess/square
-
-pub fn sided_score(
-  piece: piece.Piece,
-  square: square.Square,
-  phase: common.Stage,
-) -> SidedScore {
-  let score = case phase {
-    common.MidGame -> get_psq_score_midgame(piece, square)
-    common.EndGame -> get_psq_score_endgame(piece, square)
-  }
-  case piece.player {
-    player.White -> SidedScore(white: score, black: 0)
-    player.Black -> SidedScore(white: 0, black: score)
-  }
-}
-
-pub fn score(
-  piece: piece.Piece,
-  square: square.Square,
-  phase: common.Stage,
-) -> Int {
-  case phase {
-    common.MidGame -> get_psq_score_midgame(piece, square)
-    common.EndGame -> get_psq_score_endgame(piece, square)
-  }
-  * common.player(piece.player)
-}
 
 pub fn raw_score(
   piece: piece.Piece,
@@ -36,12 +9,12 @@ pub fn raw_score(
   phase: common.Stage,
 ) -> Int {
   case phase {
-    common.MidGame -> get_psq_score_midgame(piece, square)
-    common.EndGame -> get_psq_score_endgame(piece, square)
+    common.MidGame -> midgame(piece, square)
+    common.EndGame -> endgame(piece, square)
   }
 }
 
-fn get_psq_score_endgame(piece: piece.Piece, square: square.Square) {
+pub fn endgame(piece: piece.Piece, square: square.Square) {
   let file = square.file(square)
   let rank = case piece.player {
     player.White -> square.rank(square)
@@ -59,7 +32,7 @@ fn get_psq_score_endgame(piece: piece.Piece, square: square.Square) {
   index_psqt_table(table, rank, file)
 }
 
-fn get_psq_score_midgame(piece: piece.Piece, square: square.Square) {
+pub fn midgame(piece: piece.Piece, square: square.Square) {
   let file = square.file(square)
   let rank = case piece.player {
     player.White -> square.rank(square)

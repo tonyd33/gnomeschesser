@@ -13,7 +13,7 @@ pub type ValidInContext
 /// PseudoMoves don't consider checks, only occupancy
 pub type Pseudo
 
-pub opaque type Move(context) {
+pub type Move(context) {
   Move(
     // The minimum amount of information to disambiguate between moves
     // The source of truth is from, to, promotion
@@ -62,6 +62,7 @@ pub fn new_valid(
   Move(from:, to:, promotion:, context:)
 }
 
+// TODO: remove these functions
 pub fn get_from(move: Move(a)) {
   move.from
 }

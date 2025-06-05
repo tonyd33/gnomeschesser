@@ -1,3 +1,5 @@
+import chess/evaluate/common as evaluate_common
+import chess/evaluate/psqt
 import chess/game/castle.{type Castle, KingSide, QueenSide}
 import chess/move
 import chess/move/disambiguation
@@ -26,7 +28,28 @@ pub opaque type Game {
     halfmove_clock: Int,
     fullmove_number: Int,
     hash: Int,
+    evaluation_data: EvaluationData,
   )
+}
+
+// some data that we can calculate incrementally
+pub type EvaluationData {
+  EvaluationData(
+    // non-pawn material score for calculating phase
+    npm: Int,
+    // midgame material score
+    material_mg: Int,
+    // endgame material score
+    material_eg: Int,
+    // midgame psqt score
+    psqt_mg: Int,
+    // endgame psqt score
+    psqt_eg: Int,
+  )
+}
+
+pub fn evaluation_data(game: Game) {
+  game.evaluation_data
 }
 
 pub fn load_fen(fen: String) -> Result(Game, Nil) {
@@ -154,7 +177,25 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
       castling_availability,
       en_passant_target_square,
     )
-
+  let evaluation_data = {
+    pieces
+    |> list.fold(EvaluationData(0, 0, 0, 0, 0), fn(acc, piece) {
+      let #(square, piece) = piece
+      let player = evaluate_common.player(piece.player)
+      let npm = evaluate_common.piece_symbol_npm(piece.symbol)
+      let material_mg = evaluate_common.piece_symbol_mg(piece.symbol) * player
+      let material_eg = evaluate_common.piece_symbol_eg(piece.symbol) * player
+      let psqt_mg = psqt.midgame(piece, square)
+      let psqt_eg = psqt.endgame(piece, square)
+      EvaluationData(
+        npm: acc.npm + npm,
+        material_mg: acc.material_mg + material_mg,
+        material_eg: acc.material_eg + material_eg,
+        psqt_mg: acc.psqt_mg + psqt_mg,
+        psqt_eg: acc.psqt_eg + psqt_eg,
+      )
+    })
+  }
   Game(
     board:,
     active_color:,
@@ -163,6 +204,7 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
     halfmove_clock:,
     fullmove_number:,
     hash:,
+    evaluation_data:,
   )
   |> Ok
 }
@@ -691,23 +733,24 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     fullmove_number:,
     halfmove_clock:,
     hash:,
+    evaluation_data:,
   ) = game
   let prev_castling_availability = castling_availability
   let them = player.opponent(us)
   let piece = move_context.piece
 
+  // update the piece if it's a promotion
+  let new_piece =
+    promotion
+    |> option.map(piece.Piece(us, _))
+    |> option.unwrap(move_context.piece)
+  // Retrieve the move a rook would have if castling
+  let castle_rook_move =
+    move_context.castling
+    |> option.map(move.rook_castle(us, _))
+
   // Updates to the board.
   let #(board, hash) = {
-    // update the piece if it's a promotion
-    let new_piece =
-      promotion
-      |> option.map(piece.Piece(us, _))
-      |> option.unwrap(move_context.piece)
-    // Retrieve the move a rook would have if castling
-    let castle_rook_move =
-      move_context.castling
-      |> option.map(move.rook_castle(us, _))
-
     // Over the course of hundreds of thousands of nodes, manually doing this
     // rather than folding over a list is marginally but measurably faster.
     let #(board, hash) = board_remove(board, hash, from, move_context.piece)
@@ -870,6 +913,58 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     _, _ -> hash
   }
 
+  let evaluation_data = {
+    let psqt_diff = fn(psqt_func) {
+      // the "to" psqt
+      case move.promotion {
+        Some(promotion) -> psqt_func(piece.Piece(us, promotion), to)
+        None -> psqt_func(piece, to)
+      }
+      // the "from" psqt
+      - psqt_func(piece, from)
+      // remove the captured piece's psqt if it exists
+      - case move_context.capture {
+        Some(#(at, captured_piece)) -> psqt_func(captured_piece, at)
+        None -> 0
+      }
+      // if it's a castle, also update the rook's psqt
+      + case castle_rook_move {
+        Some(move.Move(from:, to:, context: Some(context), promotion: _)) ->
+          psqt_func(context.piece, to) - psqt_func(context.piece, from)
+        _ -> 0
+      }
+    }
+
+    let #(npm, material_mg, material_eg) = case move_context.capture {
+      Some(#(_at, piece)) -> {
+        let player = evaluate_common.player(piece.player)
+
+        #(
+          {
+            evaluation_data.npm - evaluate_common.piece_symbol_npm(piece.symbol)
+          },
+          {
+            evaluation_data.material_mg
+            - evaluate_common.piece_symbol_mg(piece.symbol)
+            * player
+          },
+          {
+            evaluation_data.material_eg
+            - evaluate_common.piece_symbol_eg(piece.symbol)
+            * player
+          },
+        )
+      }
+      None -> #(
+        evaluation_data.npm,
+        evaluation_data.material_mg,
+        evaluation_data.material_eg,
+      )
+    }
+    let psqt_mg = evaluation_data.psqt_mg + psqt_diff(psqt.midgame)
+    let psqt_eg = evaluation_data.psqt_eg + psqt_diff(psqt.endgame)
+    EvaluationData(npm:, material_mg:, material_eg:, psqt_mg:, psqt_eg:)
+  }
   Game(
     board:,
     active_color: them,
@@ -878,6 +973,7 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     fullmove_number:,
     halfmove_clock:,
     hash:,
+    evaluation_data:,
   )
 }
 

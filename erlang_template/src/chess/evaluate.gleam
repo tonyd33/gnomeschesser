@@ -17,18 +17,12 @@ pub type Score =
 /// < 0 means black is winning
 ///
 pub fn game(game: game.Game) -> Score {
-  let BatchedScores(
-    npm,
-    material_mg:,
-    material_eg:,
-    psq_mg:,
-    psq_eg:,
-    mobility_mg:,
-    mobility_eg:,
-  ) = compute_batched_scores(game)
+  let BatchedScores(mobility_mg:, mobility_eg:) = compute_batched_scores(game)
+  let game.EvaluationData(npm:, material_mg:, material_eg:, psqt_mg:, psqt_eg:) =
+    game.evaluation_data(game)
   let phase = phase(npm)
   let material = taper(material_mg, material_eg, phase)
-  let psq = taper(psq_mg, psq_eg, phase)
+  let psq = taper(psqt_mg, psqt_eg, phase)
   let mobility = taper(mobility_mg, mobility_eg, phase)
 
   let king_safety_score =
@@ -74,10 +68,7 @@ pub fn phase(npm_score: Int) -> Int {
   let midgame_limit = 15_258
   let endgame_limit = 3915
 
-  let npm =
-    npm_score
-    |> int.max(endgame_limit)
-    |> int.min(midgame_limit)
+  let npm = int.clamp(npm_score, endgame_limit, midgame_limit)
   { { npm - endgame_limit } * 100 } / { midgame_limit - endgame_limit }
 }
 
@@ -93,34 +84,13 @@ pub const player = common.player
 /// in a single iteration for efficiency.
 ///
 pub type BatchedScores {
-  BatchedScores(
-    npm: Int,
-    material_mg: Int,
-    material_eg: Int,
-    psq_mg: Int,
-    psq_eg: Int,
-    mobility_mg: Int,
-    mobility_eg: Int,
-  )
+  BatchedScores(mobility_mg: Int, mobility_eg: Int)
 }
 
-const empty_batched_scores = BatchedScores(
-  npm: 0,
-  material_mg: 0,
-  material_eg: 0,
-  psq_mg: 0,
-  psq_eg: 0,
-  mobility_mg: 0,
-  mobility_eg: 0,
-)
+const empty_batched_scores = BatchedScores(mobility_mg: 0, mobility_eg: 0)
 
 fn add_batched_scores(s1: BatchedScores, s2: BatchedScores) {
   BatchedScores(
-    npm: s1.npm + s2.npm,
-    material_mg: s1.material_mg + s2.material_mg,
-    material_eg: s1.material_eg + s2.material_eg,
-    psq_mg: s1.psq_mg + s2.psq_mg,
-    psq_eg: s1.psq_eg + s2.psq_eg,
     mobility_mg: s1.mobility_mg + s2.mobility_mg,
     mobility_eg: s1.mobility_eg + s2.mobility_eg,
   )
@@ -134,20 +104,7 @@ fn compute_batched_scores_at(white_controls, black_controls, square, piece) {
     piece.Piece(player.Black, _) -> black_controls(square, piece)
   }
 
-  let material_mg = common.piece_symbol_mg(piece.symbol)
-  //common.piece_symbol_eg(piece.symbol)
-  let material_eg = material_mg
-
-  let npm = common.piece_symbol_npm(piece.symbol)
-
-  let player = piece.player |> common.player
-
   BatchedScores(
-    npm:,
-    material_mg: material_mg * player,
-    material_eg: material_eg * player,
-    psq_mg: psqt.score(piece, square, common.MidGame),
-    psq_eg: psqt.score(piece, square, common.EndGame),
     mobility_mg: mobility.score(nmoves, piece, common.MidGame),
     mobility_eg: mobility.score(nmoves, piece, common.EndGame),
   )

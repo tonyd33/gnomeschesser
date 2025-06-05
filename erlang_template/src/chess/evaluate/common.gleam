@@ -11,6 +11,7 @@ pub type SidedScore {
 }
 
 pub fn piece_symbol_npm(symbol: piece.PieceSymbol) -> Int {
+  // stockfish midgame values
   case symbol {
     piece.King | piece.Pawn -> 0
     piece.Knight -> 781
@@ -20,6 +21,7 @@ pub fn piece_symbol_npm(symbol: piece.PieceSymbol) -> Int {
   }
 }
 
+// stockfish endgame values
 // case symbol {
 //   piece.Pawn -> 206
 //   piece.Knight -> 854
@@ -28,6 +30,30 @@ pub fn piece_symbol_npm(symbol: piece.PieceSymbol) -> Int {
 //   piece.Queen -> 2682
 //   piece.King -> 0
 // }
+
+pub fn piece_mg(piece: piece.Piece) -> Int {
+  case piece.symbol {
+    piece.Pawn -> 100
+    piece.Knight -> 300
+    piece.Bishop -> 300
+    piece.Rook -> 500
+    piece.Queen -> 900
+    piece.King -> 0
+  }
+  * player(piece.player)
+}
+
+pub fn piece_eg(piece: piece.Piece) -> Int {
+  case piece.symbol {
+    piece.Pawn -> 100
+    piece.Knight -> 300
+    piece.Bishop -> 300
+    piece.Rook -> 500
+    piece.Queen -> 900
+    piece.King -> 0
+  }
+  * player(piece.player)
+}
 
 pub fn piece_symbol_mg(symbol: piece.PieceSymbol) -> Int {
   case symbol {
