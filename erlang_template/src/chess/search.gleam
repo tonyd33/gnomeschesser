@@ -451,22 +451,22 @@ fn do_negamax_alphabeta_failsoft(
       case xint.gte(e.score, beta) {
         True -> {
           let new_e = Evaluation(..e, node_type: evaluation.Cut)
-          let move_context = move.get_context(move)
+          // let move_context = move.get_context(move)
 
-          use <- interruptable.discard(
-            case move_context.capture |> option.is_none {
-              True -> {
-                // non-capture moves update the history table
-                let to = move.get_to(move)
-                let piece = move_context.piece
-                interruptable.from_state(search_state.history_update(
-                  #(to, piece),
-                  depth * depth,
-                ))
-              }
-              False -> interruptable.return(Nil)
-            },
-          )
+          // use <- interruptable.discard(
+          //   case move_context.capture |> option.is_none {
+          //     True -> {
+          //       // non-capture moves update the history table
+          //       let to = move.get_to(move)
+          //       let piece = move_context.piece
+          //       interruptable.from_state(search_state.history_update(
+          //         #(to, piece),
+          //         depth * depth,
+          //       ))
+          //     }
+          //     False -> interruptable.return(Nil)
+          //   },
+          // )
           use <- interruptable.discard(
             interruptable.from_state(search_state.stats_add_beta_cutoffs(
               depth,
@@ -678,7 +678,7 @@ fn sorted_moves(
   SearchState,
   #(List(move.Move(move.ValidInContext)), Int),
 ) {
-  use best_move <- interruptable.do(get_pv_move(
+  use best_move <- interruptable.map(get_pv_move(
     game,
     depth,
     alpha,
@@ -731,14 +731,13 @@ fn sorted_moves(
   let capture_promotion_moves =
     list.sort(capture_promotion_moves, compare_mvv_lva)
 
-  use compare_quiet_history <- interruptable.map({
-    use search_state: SearchState <- interruptable.select
-    compare_quiet_history(search_state.history)
-  })
+  // use compare_quiet_history <- interruptable.map({
+  //   use search_state: SearchState <- interruptable.select
+  //   compare_quiet_history(search_state.history)
+  // })
 
   let compare_quiet_moves =
-    order_addons.or(compare_quiet_history, compare_psqt)
-    |> order_addons.or(compare_psqt_delta)
+    order_addons.or(compare_psqt, compare_psqt_delta)
   let quiet_moves = list.sort(quiet_moves, compare_quiet_moves)
 
   let non_best_move = list.append(capture_promotion_moves, quiet_moves)

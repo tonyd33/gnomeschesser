@@ -1,13 +1,10 @@
-import chess/piece
 import chess/search/evaluation.{type Evaluation, Evaluation}
 import chess/search/transposition
-import chess/square
 import gleam/dict
 import gleam/float
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import gleam/result
 import gleam/string
 import gleam/time/duration
 import gleam/time/timestamp
@@ -17,7 +14,6 @@ import util/state.{type State, State}
 pub type SearchState {
   SearchState(
     transposition: iv.Array(Option(transposition.Entry)),
-    history: dict.Dict(#(square.Square, piece.Piece), Int),
     stats: SearchStats,
   )
 }
@@ -25,7 +21,6 @@ pub type SearchState {
 pub fn new(now: timestamp.Timestamp) {
   SearchState(
     transposition: iv.repeat(None, key_size + 1),
-    history: dict.new(),
     stats: SearchStats(
       iteration_depth: 0,
       total_nodes_searched: 0,
@@ -42,32 +37,6 @@ pub fn new(now: timestamp.Timestamp) {
       lmr_verifications: dict.new(),
     ),
   )
-}
-
-const max_history: Int = 50
-
-/// https://www.chessprogramming.org/History_Heuristic
-pub fn history_get(
-  key: #(square.Square, piece.Piece),
-) -> State(SearchState, Int) {
-  use search_state: SearchState <- state.select()
-  dict.get(search_state.history, key) |> result.unwrap(0)
-}
-
-/// https://www.chessprogramming.org/History_Heuristic
-pub fn history_update(
-  key: #(square.Square, piece.Piece),
-  bonus: Int,
-) -> State(SearchState, Nil) {
-  let clamped_bonus = int.clamp(bonus, -max_history, max_history)
-  use search_state: SearchState <- state.modify
-  let history_score = search_state.history |> dict.get(key) |> result.unwrap(0)
-  let history_score =
-    history_score
-    + clamped_bonus
-    - { history_score * int.absolute_value(clamped_bonus) / max_history }
-  let history = search_state.history |> dict.insert(key, history_score)
-  SearchState(..search_state, history:)
 }
 
 /// To reduce the need of manual trimming when the transposition table gets too
@@ -153,7 +122,6 @@ pub fn transposition_insert(
   case is_new_entry {
     True ->
       SearchState(
-        ..search_state,
         transposition:,
         stats: SearchStats(
           ..search_state.stats,
