@@ -3,6 +3,7 @@ import process from "node:process";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import winston from "winston";
+import { Engine as UCIEngine } from "node-uci";
 
 const logger = winston.createLogger({
   level: "debug",
@@ -16,8 +17,6 @@ type Result<T, E> =
 
 type HTTPEngine = { url: string };
 
-type UCIEngine = { enginePath: string };
-
 type Engine =
   | { proto: "http"; engine: HTTPEngine }
   | { proto: "uci"; engine: UCIEngine }
@@ -30,16 +29,35 @@ type Contextualized<A> = { context: Context; value: A };
 type Stats = {
   failedMoves: Contextualized<string>[];
   timeouts: Contextualized<number>[];
+  movetime: Contextualized<number>[];
 };
+
+function avg(xs: number[]) {
+  return xs.reduce((acc, x) => acc + x, 0) / xs.length;
+}
+
+function stddev(xs: number[]) {
+  const u = avg(xs);
+  return Math.sqrt(xs.reduce((acc, x) => acc + (x - u) ** 2) / xs.length);
+}
 
 function mergeStats(s1: Stats, s2: Stats): Stats {
   return {
     failedMoves: [...s1.failedMoves, ...s2.failedMoves],
     timeouts: [...s1.timeouts, ...s2.timeouts],
+    movetime: [...s1.movetime, ...s2.movetime],
   };
 }
 
-const emptyStats: Stats = { failedMoves: [], timeouts: [] };
+const emptyStats: Stats = { failedMoves: [], timeouts: [], movetime: [] };
+
+function formatStats(stats: Stats): string {
+  return `Failed moves: ${stats.failedMoves.length}
+Timeouts: ${stats.timeouts.length}
+Movetime avg: ${avg(stats.movetime.map((x) => x.value))}
+Movetime stddev: ${stddev(stats.movetime.map((x) => x.value))}
+`;
+}
 
 async function runStatsN(f: () => Promise<Stats>, n: number) {
   let stats = emptyStats;
@@ -95,8 +113,10 @@ async function askHttp(
     }
   };
 
+  const contextualizeGame = contextualize({ fen: chess.fen() });
   while (stats.failedMoves.length < 3 && stats.timeouts.length < 10) {
     // logger.debug("Asking for move");
+    const start = Date.now();
     const moveResult = await race(() =>
       fetch(
         url,
@@ -110,10 +130,11 @@ async function askHttp(
         },
       )
         .then((x) => x.text()), 5000);
+    const end = Date.now();
     if (!moveResult.ok) {
       if (moveResult.err == "timeout") {
-        const timeouts = [contextualize({ fen: chess.fen() })(1)];
-        stats = mergeStats(stats, { timeouts, failedMoves: [] });
+        const timeouts = [contextualizeGame(1)];
+        stats = mergeStats(stats, { timeouts, failedMoves: [], movetime: [] });
         logger.warn(`Got a timeout. Retrying...`);
         sleep(5000);
         continue;
@@ -126,8 +147,8 @@ async function askHttp(
     const makeMoveResult = makeMove(move);
     if (!makeMoveResult.ok) {
       if (makeMoveResult.err.match(/^Invalid move/)) {
-        const failedMoves = [contextualize({ fen: chess.fen() })(move)];
-        stats = mergeStats(stats, { timeouts: [], failedMoves });
+        const failedMoves = [contextualizeGame(move)];
+        stats = mergeStats(stats, { timeouts: [], failedMoves, movetime: [] });
         logger.warn(`Failed to make a move. Retrying...`);
         continue;
       } else {
@@ -135,8 +156,13 @@ async function askHttp(
       }
     }
 
+    stats = mergeStats(stats, {
+      ...emptyStats,
+      movetime: [contextualizeGame(start - end)],
+    });
     break;
   }
+
   return stats;
 }
 
@@ -153,8 +179,22 @@ async function makeEngineMove(chess: Chess, engine: Engine) {
       chess.move(availableMoves[randomIndex]);
       return emptyStats;
     }
+    case "uci": {
+      await engine.engine.isready();
+      await engine.engine.position(chess.fen());
+      const result = await race(
+        (): Promise<{ bestmove: string }> =>
+          engine.engine.go({ movetime: 5000 }),
+        10000,
+      );
+      if (!result.ok) {
+        throw new Error(result.err);
+      }
+      chess.move(result.value.bestmove);
+      return emptyStats;
+    }
     default:
-      throw new Error(`asking ${engine.proto} not implemented`);
+      throw new Error("absurd");
   }
 }
 
@@ -167,18 +207,18 @@ async function play(engine1: Engine, engine2: Engine) {
     if (chess.isGameOver()) {
       break;
     }
-    console.log(chess.ascii());
+    // console.log(chess.ascii());
 
     stats = mergeStats(stats, await makeEngineMove(chess, engine2));
     if (chess.isGameOver()) {
       break;
     }
-    console.log(chess.ascii());
+    // console.log(chess.ascii());
   }
   return stats;
 }
 
-function parseEngineSpec(spec: string): Result<Engine, string> {
+async function parseEngineSpec(spec: string): Promise<Result<Engine, string>> {
   const parseProto = (s: string): Result<"http" | "uci" | "random", string> => {
     if (s.startsWith("proto:http")) {
       return { ok: true, value: "http" };
@@ -223,12 +263,13 @@ function parseEngineSpec(spec: string): Result<Engine, string> {
     }
     case "uci": {
       const path = parsePath(parts[1]);
-      return path.ok
-        ? {
-          ok: true,
-          value: { proto: "uci", engine: { enginePath: path.value } },
-        }
-        : path;
+      if (!path.ok) return path;
+      const uciEngine = new UCIEngine(path.value);
+      await uciEngine.init();
+      return {
+        ok: true,
+        value: { proto: "uci", engine: uciEngine },
+      };
     }
     case "random": {
       return { ok: true, value: { proto: "random" } };
@@ -253,15 +294,16 @@ async function main() {
     })
     .parse(hideBin(process.argv));
 
-  const engines = opts
+  const engines = await Promise.all(opts
     .engine
-    .map(parseEngineSpec)
-    .map((engine) => {
-      if (!engine.ok) {
-        throw new Error(engine.err);
-      }
-      return engine.value;
-    });
+    .map((x) =>
+      parseEngineSpec(x).then((e) => {
+        if (!e.ok) {
+          throw new Error("bad engine");
+        }
+        return e.value;
+      })
+    ));
 
   const run = () => {
     if (engines.length !== 2) {
@@ -273,6 +315,7 @@ async function main() {
   const stats = await runStatsN(run, opts.n);
 
   console.log(stats);
+  console.log(formatStats(stats));
 }
 
 await main();
