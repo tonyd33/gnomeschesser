@@ -82,8 +82,8 @@ fn move_decoder() -> decode.Decoder(MoveRequest) {
 
 fn handle_move(request: Request, robot: Robot) -> Response {
   let Robot(blake_chan:, ..) = robot
-  let now = timestamp.system_time()
-  let deadline = timestamp.add(now, duration.milliseconds(4900))
+  let start = timestamp.system_time()
+  let deadline = timestamp.add(start, duration.milliseconds(4900))
   use body <- wisp.require_string_body(request)
   case json.parse(body, move_decoder()) {
     Error(_) -> wisp.bad_request()
@@ -96,7 +96,12 @@ fn handle_move(request: Request, robot: Robot) -> Response {
       let blake_res =
         process.try_call(
           blake_chan,
-          blake.Go(deadline: Some(deadline), depth: None, reply_to: _),
+          blake.Go(
+            deadline: Some(deadline),
+            depth: None,
+            stats_start_time: Some(start),
+            reply_to: _,
+          ),
           4950,
         )
 
