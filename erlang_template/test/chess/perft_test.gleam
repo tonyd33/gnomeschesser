@@ -2,6 +2,10 @@ import chess/game
 import chess/util/perft
 import gleeunit/should
 
+pub type Timeout {
+  Timeout(Float, fn() -> Nil)
+}
+
 pub fn perft_starting_position_test() {
   let assert Ok(game) = game.load_fen(game.start_fen)
   perft.perft(game, 0) |> should.equal(1)
@@ -140,7 +144,8 @@ pub fn perft_extras_16_test() {
   perft.perft(game, 4) |> should.equal(1_720_476)
 }
 
-pub fn perft_extras_17_test() {
+pub fn perft_extras_17_test_() {
+  use <- Timeout(7.0)
   let assert Ok(game) = game.load_fen("2K2r2/4P3/8/8/8/8/8/3k4 w - - 0 1")
   perft.perft(game, 6) |> should.equal(3_821_001)
 }
