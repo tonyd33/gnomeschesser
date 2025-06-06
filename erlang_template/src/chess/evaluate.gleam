@@ -32,10 +32,21 @@ pub fn game(game: game.Game) -> Score {
     common.taper(int.to_float(material_mg), int.to_float(material_eg), phase)
   let psq = common.taper(int.to_float(psqt_mg), int.to_float(psqt_eg), phase)
 
-  let king_pawn_shield =
-    midgame.king_pawn_shield(game, player.White)
-    + midgame.king_pawn_shield(game, player.Black)
-    |> int.to_float
+  let #(king_pawn_shield, king_pawn_shield_weight) = case phase {
+    // fully endgame
+    phase if phase <=. 0.0 -> {
+      #(0.0, 0.0)
+    }
+    phase -> {
+      let king_pawn_shield =
+        midgame.king_pawn_shield(game, player.White)
+        + midgame.king_pawn_shield(game, player.Black)
+        |> int.to_float
+      let king_pawn_shield_weight =
+        common.taper(king_pawn_shield_weight, 0.0, phase)
+      #(king_pawn_shield, king_pawn_shield_weight)
+    }
+  }
 
   // combine scores with weight
   let score =
