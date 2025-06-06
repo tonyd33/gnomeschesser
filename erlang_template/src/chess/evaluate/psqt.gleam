@@ -8,17 +8,13 @@ import gleam/int
 pub fn score_absolute_value(
   piece: piece.Piece,
   square: square.Square,
-  phase: common.Stage,
-) -> Int {
-  case phase {
-    common.EndGame -> endgame(piece, square)
-    common.MidGame -> midgame(piece, square)
-  }
-  // common.taper(
-  //   midgame(piece, square) |> int.to_float,
-  //   endgame(piece, square) |> int.to_float,
-  //   phase,
-  // )
+  phase: Float,
+) -> Float {
+  common.taper(
+    midgame(piece, square) |> int.to_float,
+    endgame(piece, square) |> int.to_float,
+    phase,
+  )
 }
 
 pub fn endgame(piece: piece.Piece, square: square.Square) {
