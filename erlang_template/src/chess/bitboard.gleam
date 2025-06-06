@@ -28,42 +28,42 @@ pub type GameBitboard {
 }
 
 /// TODO: we should consider pre-calculating these and caching them
-pub fn get_bitboard_all(game_bitboard: GameBitboard) -> BitBoard {
-  game_bitboard.white_pawns
-  |> int.bitwise_or(game_bitboard.white_rooks)
-  |> int.bitwise_or(game_bitboard.white_knights)
-  |> int.bitwise_or(game_bitboard.white_bishops)
-  |> int.bitwise_or(game_bitboard.white_queens)
-  |> int.bitwise_or(game_bitboard.white_king)
-  |> int.bitwise_or(game_bitboard.black_pawns)
-  |> int.bitwise_or(game_bitboard.black_rooks)
-  |> int.bitwise_or(game_bitboard.black_knights)
-  |> int.bitwise_or(game_bitboard.black_bishops)
-  |> int.bitwise_or(game_bitboard.black_queens)
-  |> int.bitwise_or(game_bitboard.black_king)
-}
+// pub fn get_bitboard_all(game_bitboard: GameBitboard) -> BitBoard {
+//   game_bitboard.white_pawns
+//   |> int.bitwise_or(game_bitboard.white_rooks)
+//   |> int.bitwise_or(game_bitboard.white_knights)
+//   |> int.bitwise_or(game_bitboard.white_bishops)
+//   |> int.bitwise_or(game_bitboard.white_queens)
+//   |> int.bitwise_or(game_bitboard.white_king)
+//   |> int.bitwise_or(game_bitboard.black_pawns)
+//   |> int.bitwise_or(game_bitboard.black_rooks)
+//   |> int.bitwise_or(game_bitboard.black_knights)
+//   |> int.bitwise_or(game_bitboard.black_bishops)
+//   |> int.bitwise_or(game_bitboard.black_queens)
+//   |> int.bitwise_or(game_bitboard.black_king)
+// }
 
-pub fn get_bitboard_player(
-  game_bitboard: GameBitboard,
-  player: player.Player,
-) -> BitBoard {
-  case player {
-    player.White ->
-      game_bitboard.white_pawns
-      |> int.bitwise_or(game_bitboard.white_rooks)
-      |> int.bitwise_or(game_bitboard.white_knights)
-      |> int.bitwise_or(game_bitboard.white_bishops)
-      |> int.bitwise_or(game_bitboard.white_queens)
-      |> int.bitwise_or(game_bitboard.white_king)
-    player.Black ->
-      game_bitboard.black_pawns
-      |> int.bitwise_or(game_bitboard.black_rooks)
-      |> int.bitwise_or(game_bitboard.black_knights)
-      |> int.bitwise_or(game_bitboard.black_bishops)
-      |> int.bitwise_or(game_bitboard.black_queens)
-      |> int.bitwise_or(game_bitboard.black_king)
-  }
-}
+// pub fn get_bitboard_player(
+//   game_bitboard: GameBitboard,
+//   player: player.Player,
+// ) -> BitBoard {
+//   case player {
+//     player.White ->
+//       game_bitboard.white_pawns
+//       |> int.bitwise_or(game_bitboard.white_rooks)
+//       |> int.bitwise_or(game_bitboard.white_knights)
+//       |> int.bitwise_or(game_bitboard.white_bishops)
+//       |> int.bitwise_or(game_bitboard.white_queens)
+//       |> int.bitwise_or(game_bitboard.white_king)
+//     player.Black ->
+//       game_bitboard.black_pawns
+//       |> int.bitwise_or(game_bitboard.black_rooks)
+//       |> int.bitwise_or(game_bitboard.black_knights)
+//       |> int.bitwise_or(game_bitboard.black_bishops)
+//       |> int.bitwise_or(game_bitboard.black_queens)
+//       |> int.bitwise_or(game_bitboard.black_king)
+//   }
+// }
 
 pub fn set_bitboard_piece(
   game_bitboard: GameBitboard,
@@ -102,85 +102,218 @@ pub fn get_bitboard_piece(
 /// Move the pieces on the bitboard a certain direction
 /// from the perspective of white
 ///
-pub fn move(
-  bitboard: BitBoard,
-  direction: direction.Direction,
-  amount: Int,
-) -> BitBoard {
-  let assert True = amount >= 0
-  use <- bool.guard(amount == 0, bitboard)
-  use <- bool.guard(amount > 8, 0x00)
+// pub fn move(
+//   bitboard: BitBoard,
+//   direction: direction.Direction,
+//   amount: Int,
+// ) -> BitBoard {
+//   let assert True = amount >= 0
+//   use <- bool.guard(amount == 0, bitboard)
+//   use <- bool.guard(amount > 8, 0x00)
 
-  // We use a mask for the leftward/rightward shifting
-  // As well as truncating any extra digits
-  let mask = {
-    let right_mask = fn(x) {
-      case x {
-        1 ->
-          0b11111110_11111110_11111110_11111110_11111110_11111110_11111110_11111110
-        2 ->
-          0b11111100_11111100_11111100_11111100_11111100_11111100_11111100_11111100
-        3 ->
-          0b11111000_11111000_11111000_11111000_11111000_11111000_11111000_11111000
-        4 ->
-          0b11110000_11110000_11110000_11110000_11110000_11110000_11110000_11110000
-        5 ->
-          0b11100000_11100000_11100000_11100000_11100000_11100000_11100000_11100000
-        6 ->
-          0b11000000_11000000_11000000_11000000_11000000_11000000_11000000_11000000
-        7 ->
-          0b10000000_10000000_10000000_10000000_10000000_10000000_10000000_10000000
-        _ -> panic
-      }
-    }
-    case direction {
-      direction.Left -> right_mask(8 - amount) |> int.bitwise_not
-      direction.Right -> right_mask(amount)
-      _ -> 0xFFFF_FFFF_FFFF_FFFF
-    }
-  }
-  case direction {
-    direction.Up -> int.bitwise_shift_left(bitboard, 8 * amount)
-    direction.Down -> int.bitwise_shift_right(bitboard, 8 * amount)
-    direction.Left ->
-      // We shift right, since the board starts at the bottom left then to the right
-      // So shift_right means it moves towards the least significant digit
-      int.bitwise_shift_right(bitboard, amount)
-    direction.Right ->
-      // We shift right, since the board starts at the bottom left then to the right
-      // So shift_left means it moves away the least significant digit
-      int.bitwise_shift_left(bitboard, amount)
-  }
-  // Some guaranteed (and hopefully cheap) truncation
-  |> int.bitwise_and(mask)
-}
+//   // We use a mask for the leftward/rightward shifting
+//   // As well as truncating any extra digits
+//   let mask = {
+//     let right_mask = fn(x) {
+//       case x {
+//         1 ->
+//           0b11111110_11111110_11111110_11111110_11111110_11111110_11111110_11111110
+//         2 ->
+//           0b11111100_11111100_11111100_11111100_11111100_11111100_11111100_11111100
+//         3 ->
+//           0b11111000_11111000_11111000_11111000_11111000_11111000_11111000_11111000
+//         4 ->
+//           0b11110000_11110000_11110000_11110000_11110000_11110000_11110000_11110000
+//         5 ->
+//           0b11100000_11100000_11100000_11100000_11100000_11100000_11100000_11100000
+//         6 ->
+//           0b11000000_11000000_11000000_11000000_11000000_11000000_11000000_11000000
+//         7 ->
+//           0b10000000_10000000_10000000_10000000_10000000_10000000_10000000_10000000
+//         _ -> panic
+//       }
+//     }
+//     case direction {
+//       direction.Left -> right_mask(8 - amount) |> int.bitwise_not
+//       direction.Right -> right_mask(amount)
+//       _ -> 0xFFFF_FFFF_FFFF_FFFF
+//     }
+//   }
+//   case direction {
+//     direction.Up -> int.bitwise_shift_left(bitboard, 8 * amount)
+//     direction.Down -> int.bitwise_shift_right(bitboard, 8 * amount)
+//     direction.Left ->
+//       // We shift right, since the board starts at the bottom left then to the right
+//       // So shift_right means it moves towards the least significant digit
+//       int.bitwise_shift_right(bitboard, amount)
+//     direction.Right ->
+//       // We shift right, since the board starts at the bottom left then to the right
+//       // So shift_left means it moves away the least significant digit
+//       int.bitwise_shift_left(bitboard, amount)
+//   }
+//   // Some guaranteed (and hopefully cheap) truncation
+//   |> int.bitwise_and(mask)
+// }
 
 /// This function kinda sucks, see if there's an arithmetic way of crunching to ox88
-pub fn to_squares(bitboard: BitBoard) -> List(square.Square) {
-  // This tries every bit, not sure if there's a better and cheaper way
-  [
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
-    22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-    41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59,
-    60, 61, 62, 63,
-  ]
-  |> list.filter_map(fn(bit_digit) {
-    use <- bool.guard(
-      0 == int.bitwise_and(bitboard, int.bitwise_shift_left(0b1, bit_digit)),
-      Error(Nil),
-    )
-    let rank = bit_digit / 8
-    let file = bit_digit % 8
-    square.from_rank_file(rank, file)
-  })
-}
+// pub fn to_squares(bitboard: BitBoard) -> List(square.Square) {
+//   // This tries every bit, not sure if there's a better and cheaper way
+//   [
+//     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+//     22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+//     41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59,
+//     60, 61, 62, 63,
+//   ]
+//   |> list.filter_map(fn(bit_digit) {
+//     use <- bool.guard(
+//       0 == int.bitwise_and(bitboard, int.bitwise_shift_left(0b1, bit_digit)),
+//       Error(Nil),
+//     )
+//     let rank = bit_digit / 8
+//     let file = bit_digit % 8
+//     square.from_rank_file(rank, file)
+//   })
+// }
 
 pub fn from_square(square: square.Square) -> BitBoard {
-  let rank = square.rank(square)
-  let file = square.file(square)
+  case square {
+    0x00 ->
+      0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_00000001
+    0x01 ->
+      0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_00000010
+    0x02 ->
+      0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_00000100
+    0x03 ->
+      0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_00001000
+    0x04 ->
+      0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_00010000
+    0x05 ->
+      0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_00100000
+    0x06 ->
+      0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_01000000
+    0x07 ->
+      0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_10000000
 
-  let bit = int.bitwise_shift_left(1, rank * 8 + file)
-  bit
+    0x10 ->
+      0b00000000_00000000_00000000_00000000_00000000_00000000_00000001_00000000
+    0x11 ->
+      0b00000000_00000000_00000000_00000000_00000000_00000000_00000010_00000000
+    0x12 ->
+      0b00000000_00000000_00000000_00000000_00000000_00000000_00000100_00000000
+    0x13 ->
+      0b00000000_00000000_00000000_00000000_00000000_00000000_00001000_00000000
+    0x14 ->
+      0b00000000_00000000_00000000_00000000_00000000_00000000_00010000_00000000
+    0x15 ->
+      0b00000000_00000000_00000000_00000000_00000000_00000000_00100000_00000000
+    0x16 ->
+      0b00000000_00000000_00000000_00000000_00000000_00000000_01000000_00000000
+    0x17 ->
+      0b00000000_00000000_00000000_00000000_00000000_00000000_10000000_00000000
+
+    0x20 ->
+      0b00000000_00000000_00000000_00000000_00000000_00000001_00000000_00000000
+    0x21 ->
+      0b00000000_00000000_00000000_00000000_00000000_00000010_00000000_00000000
+    0x22 ->
+      0b00000000_00000000_00000000_00000000_00000000_00000100_00000000_00000000
+    0x23 ->
+      0b00000000_00000000_00000000_00000000_00000000_00001000_00000000_00000000
+    0x24 ->
+      0b00000000_00000000_00000000_00000000_00000000_00010000_00000000_00000000
+    0x25 ->
+      0b00000000_00000000_00000000_00000000_00000000_00100000_00000000_00000000
+    0x26 ->
+      0b00000000_00000000_00000000_00000000_00000000_01000000_00000000_00000000
+    0x27 ->
+      0b00000000_00000000_00000000_00000000_00000000_10000000_00000000_00000000
+
+    0x30 ->
+      0b00000000_00000000_00000000_00000000_00000001_00000000_00000000_00000000
+    0x31 ->
+      0b00000000_00000000_00000000_00000000_00000010_00000000_00000000_00000000
+    0x32 ->
+      0b00000000_00000000_00000000_00000000_00000100_00000000_00000000_00000000
+    0x33 ->
+      0b00000000_00000000_00000000_00000000_00001000_00000000_00000000_00000000
+    0x34 ->
+      0b00000000_00000000_00000000_00000000_00010000_00000000_00000000_00000000
+    0x35 ->
+      0b00000000_00000000_00000000_00000000_00100000_00000000_00000000_00000000
+    0x36 ->
+      0b00000000_00000000_00000000_00000000_01000000_00000000_00000000_00000000
+    0x37 ->
+      0b00000000_00000000_00000000_00000000_10000000_00000000_00000000_00000000
+
+    0x40 ->
+      0b00000000_00000000_00000000_00000001_00000000_00000000_00000000_00000000
+    0x41 ->
+      0b00000000_00000000_00000000_00000010_00000000_00000000_00000000_00000000
+    0x42 ->
+      0b00000000_00000000_00000000_00000100_00000000_00000000_00000000_00000000
+    0x43 ->
+      0b00000000_00000000_00000000_00001000_00000000_00000000_00000000_00000000
+    0x44 ->
+      0b00000000_00000000_00000000_00010000_00000000_00000000_00000000_00000000
+    0x45 ->
+      0b00000000_00000000_00000000_00100000_00000000_00000000_00000000_00000000
+    0x46 ->
+      0b00000000_00000000_00000000_01000000_00000000_00000000_00000000_00000000
+    0x47 ->
+      0b00000000_00000000_00000000_10000000_00000000_00000000_00000000_00000000
+
+    0x50 ->
+      0b00000000_00000000_00000001_00000000_00000000_00000000_00000000_00000000
+    0x51 ->
+      0b00000000_00000000_00000010_00000000_00000000_00000000_00000000_00000000
+    0x52 ->
+      0b00000000_00000000_00000100_00000000_00000000_00000000_00000000_00000000
+    0x53 ->
+      0b00000000_00000000_00001000_00000000_00000000_00000000_00000000_00000000
+    0x54 ->
+      0b00000000_00000000_00010000_00000000_00000000_00000000_00000000_00000000
+    0x55 ->
+      0b00000000_00000000_00100000_00000000_00000000_00000000_00000000_00000000
+    0x56 ->
+      0b00000000_00000000_01000000_00000000_00000000_00000000_00000000_00000000
+    0x57 ->
+      0b00000000_00000000_10000000_00000000_00000000_00000000_00000000_00000000
+
+    0x60 ->
+      0b00000000_00000001_00000000_00000000_00000000_00000000_00000000_00000000
+    0x61 ->
+      0b00000000_00000010_00000000_00000000_00000000_00000000_00000000_00000000
+    0x62 ->
+      0b00000000_00000100_00000000_00000000_00000000_00000000_00000000_00000000
+    0x63 ->
+      0b00000000_00001000_00000000_00000000_00000000_00000000_00000000_00000000
+    0x64 ->
+      0b00000000_00010000_00000000_00000000_00000000_00000000_00000000_00000000
+    0x65 ->
+      0b00000000_00100000_00000000_00000000_00000000_00000000_00000000_00000000
+    0x66 ->
+      0b00000000_01000000_00000000_00000000_00000000_00000000_00000000_00000000
+    0x67 ->
+      0b00000000_10000000_00000000_00000000_00000000_00000000_00000000_00000000
+
+    0x70 ->
+      0b00000001_00000000_00000000_00000000_00000000_00000000_00000000_00000000
+    0x71 ->
+      0b00000010_00000000_00000000_00000000_00000000_00000000_00000000_00000000
+    0x72 ->
+      0b00000100_00000000_00000000_00000000_00000000_00000000_00000000_00000000
+    0x73 ->
+      0b00001000_00000000_00000000_00000000_00000000_00000000_00000000_00000000
+    0x74 ->
+      0b00010000_00000000_00000000_00000000_00000000_00000000_00000000_00000000
+    0x75 ->
+      0b00100000_00000000_00000000_00000000_00000000_00000000_00000000_00000000
+    0x76 ->
+      0b01000000_00000000_00000000_00000000_00000000_00000000_00000000_00000000
+    0x77 ->
+      0b10000000_00000000_00000000_00000000_00000000_00000000_00000000_00000000
+    _ -> panic
+  }
 }
 
 pub fn from_pieces(pieces: List(#(square.Square, piece.Piece))) -> GameBitboard {

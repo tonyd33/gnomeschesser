@@ -9,6 +9,7 @@ import chess/player
 import chess/square
 import gleam/bool
 import gleam/dict.{type Dict}
+import gleam/function
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -17,6 +18,7 @@ import gleam/pair
 import gleam/result
 import gleam/set
 import gleam/string
+import glearray
 import util/direction
 
 pub const start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"

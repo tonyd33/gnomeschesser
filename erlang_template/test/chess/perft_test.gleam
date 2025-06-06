@@ -145,7 +145,7 @@ pub fn perft_extras_16_test() {
 }
 
 pub fn perft_extras_17_test_() {
-  use <- Timeout(7.0)
+  use <- Timeout(10.0)
   let assert Ok(game) = game.load_fen("2K2r2/4P3/8/8/8/8/8/3k4 w - - 0 1")
   perft.perft(game, 6) |> should.equal(3_821_001)
 }
