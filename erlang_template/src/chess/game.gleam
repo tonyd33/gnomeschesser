@@ -11,6 +11,7 @@ import gleam/dict.{type Dict}
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/otp/actor
 import gleam/pair
 import gleam/result
 import gleam/set
@@ -32,6 +33,10 @@ pub opaque type Game {
     fullmove_number: Int,
     hash: Int,
     //extra data we update incrementally
+    // used for insufficient material
+    bishop_count: Int,
+    knight_count: Int,
+    // some cached data that we use often
     white_king_position: square.Square,
     black_king_position: square.Square,
     evaluation_data: EvaluationData,
@@ -207,6 +212,12 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
     pieces |> list.find(fn(x) { x.1 == piece.Piece(player.White, piece.King) })
   let assert Ok(#(black_king_position, _)) =
     pieces |> list.find(fn(x) { x.1 == piece.Piece(player.Black, piece.King) })
+
+  let bishop_count =
+    pieces |> list.count(fn(x) { { x.1 }.symbol == piece.Bishop })
+  let knight_count =
+    pieces |> list.count(fn(x) { { x.1 }.symbol == piece.Knight })
+
   Game(
     board:,
     active_color:,
@@ -216,6 +227,8 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
     fullmove_number:,
     hash:,
     evaluation_data:,
+    bishop_count:,
+    knight_count:,
     white_king_position:,
     black_king_position:,
   )
@@ -472,45 +485,38 @@ pub fn is_checkmate(game: Game) -> Bool {
 /// https://github.com/jhlywa/chess.js/blob/dc1f397bc0195dda45e12f0ddf3322550cbee078/src/chess.ts#L1123
 ///
 pub fn is_insufficient_material(game: Game) -> Bool {
-  let num_pieces = dict.size(game.board)
-  let #(per_piece_count, bishops_all_light, bishops_all_dark) = {
-    use #(per_piece_count, bishops_all_light, bishops_all_dark), square, piece <- dict.fold(
-      game.board,
-      #(dict.new(), True, True),
-    )
-    let per_piece_count = {
-      use count <- dict.upsert(per_piece_count, piece.symbol)
-      count |> option.map(int.add(_, 1)) |> option.unwrap(1)
+  case dict.size(game.board) {
+    0 | 1 -> panic
+    // k vs. k
+    2 -> True
+    // k vs. kn .... or .... k vs. kb
+    3 if game.bishop_count == 1 || game.knight_count == 1 -> True
+    // kb vs. kb where any number of bishops are all on the same color
+    // kbb vs k and kbb vs k also causes insufficient material if its all the same colored square
+    num_pieces if num_pieces == game.bishop_count + 2 -> {
+      // we'll do a more expensive check here, because this condition is probably so rare (bishop only endgame)
+      let bishop_squares =
+        dict.fold(game.board, [], fn(acc, square, piece) {
+          case piece.symbol {
+            piece.Bishop -> [square, ..acc]
+            _ -> acc
+          }
+        })
+      let assert Ok(x) =
+        list.map(bishop_squares, fn(x) {
+          int.bitwise_exclusive_or(square.rank(x) % 2, square.file(x) % 2)
+          |> Some
+        })
+        |> list.reduce(fn(a, b) {
+          case a, b {
+            Some(a), Some(b) if a == b -> Some(a)
+            _, _ -> None
+          }
+        })
+      option.is_some(x)
     }
-    let #(bishops_all_light, bishops_all_dark) = case piece.symbol {
-      piece.Bishop -> {
-        let is_light = square.is_light(square)
-        #(bishops_all_light && is_light, bishops_all_dark && !is_light)
-      }
-      _ -> #(bishops_all_light, bishops_all_dark)
-    }
-
-    #(per_piece_count, bishops_all_light, bishops_all_dark)
+    _ -> False
   }
-
-  // k vs. k
-  use <- bool.guard(num_pieces == 2, True)
-  let num_bishops = dict.get(per_piece_count, piece.Bishop) |> result.unwrap(0)
-  let num_knights = dict.get(per_piece_count, piece.Knight) |> result.unwrap(0)
-
-  // k vs. kn .... or .... k vs. kb
-  use <- bool.guard(
-    num_pieces == 3 && { num_bishops == 1 || num_knights == 1 },
-    True,
-  )
-
-  // kb vs. kb where any number of bishops are all on the same color
-  use <- bool.guard(
-    num_pieces == num_bishops + 2 && { bishops_all_light || bishops_all_dark },
-    True,
-  )
-
-  False
 }
 
 pub fn is_stalemate(game: Game) -> Bool {
@@ -753,6 +759,8 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     halfmove_clock:,
     hash:,
     evaluation_data:,
+    bishop_count:,
+    knight_count:,
     white_king_position:,
     black_king_position:,
   ) = game
@@ -1001,6 +1009,22 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     _ -> #(white_king_position, black_king_position)
   }
 
+  let #(bishop_count, knight_count) = case move_context.capture {
+    Some(#(_, piece.Piece(_, piece.Knight))) -> #(
+      bishop_count,
+      knight_count - 1,
+    )
+    Some(#(_, piece.Piece(_, piece.Bishop))) -> #(
+      bishop_count - 1,
+      knight_count,
+    )
+    _ -> #(bishop_count, knight_count)
+  }
+  let #(bishop_count, knight_count) = case move.promotion {
+    Some(piece.Knight) -> #(bishop_count, knight_count + 1)
+    Some(piece.Bishop) -> #(bishop_count + 1, knight_count)
+    _ -> #(bishop_count, knight_count)
+  }
   Game(
     board:,
     active_color: them,
@@ -1010,6 +1034,8 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     halfmove_clock:,
     hash:,
     evaluation_data:,
+    bishop_count:,
+    knight_count:,
     white_king_position:,
     black_king_position:,
   )
