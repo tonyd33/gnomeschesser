@@ -8,7 +8,7 @@ import gleam/int
 import util/xint.{type ExtendedInt}
 
 pub type Score =
-  ExtendedInt
+  Int
 
 const material_weight = 85.0
 
@@ -53,7 +53,6 @@ pub fn game(game: game.Game) -> Score {
     }
   score
   |> float.truncate
-  |> xint.from_int
 }
 
 /// Returns a value 0-1 such that:

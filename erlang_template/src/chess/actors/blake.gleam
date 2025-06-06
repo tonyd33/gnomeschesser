@@ -7,6 +7,7 @@ import chess/actors/yapper
 import chess/game.{type Game}
 import chess/move
 import chess/player
+import chess/search
 import chess/search/evaluation.{type Evaluation, Evaluation, PV}
 import chess/search/search_state.{
   type SearchState, type SearchStats, SearchState,
@@ -286,11 +287,7 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
         let response =
           Response(
             blake.game,
-            Evaluation(
-              score: xint.from_int(0),
-              best_move: Some(move),
-              node_type: PV,
-            ),
+            Evaluation(score: 0, best_move: Some(move), node_type: PV),
           )
         {
           use <- once
@@ -364,11 +361,7 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
               |> list.shuffle
               |> list.first
               |> option.from_result
-            Evaluation(
-              score: xint.from_int(0),
-              best_move: random_move,
-              node_type: PV,
-            )
+            Evaluation(score: 0, best_move: random_move, node_type: PV)
           }
           Ok(evaluation) -> evaluation
         }
@@ -479,9 +472,13 @@ fn aggregate_search_info(
   let nodes_searched = stats.nodes_searched |> int.max(1)
   let hashfull = search_state.stats_hashfull(stats)
 
-  let score = case best_evaluation.score {
-    xint.Finite(score) -> Centipawns(score)
-    _ -> Mate(xint.sign(best_evaluation.score))
+  let score = case
+    best_evaluation.score == search.neg_inf
+    || best_evaluation.score == search.pos_inf
+  {
+    True ->
+      Mate(best_evaluation.score / int.absolute_value(best_evaluation.score))
+    False -> Centipawns(best_evaluation.score)
   }
 
   [

@@ -8,7 +8,7 @@ pub type Depth =
 
 pub type Evaluation {
   Evaluation(
-    score: evaluate.Score,
+    score: Int,
     node_type: NodeType,
     best_move: option.Option(move.Move(move.ValidInContext)),
   )
@@ -30,6 +30,6 @@ pub fn negate(evaluation: Evaluation) -> Evaluation {
     All -> Cut
     PV -> PV
   }
-  let score = xint.negate(evaluation.score)
+  let score = -evaluation.score
   Evaluation(..evaluation, score:, node_type:)
 }

@@ -35,6 +35,10 @@ pub type SearchOpts {
 
 pub const default_search_opts = SearchOpts(max_depth: None)
 
+pub const pos_inf = 999_999
+
+pub const neg_inf = -999_999
+
 pub fn checkpointed_iterative_deepening(
   game: game.Game,
   current_depth: evaluation.Depth,
@@ -56,12 +60,12 @@ pub fn checkpointed_iterative_deepening(
     // perform the search at each depth, the negamax function will handle sorting and caching
     use best_evaluation <- interruptable.map(case cached_evaluation {
       Ok(entry) -> {
-        let offset = 10 |> xint.from_int
+        let offset = 10
         search_with_widening_windows(
           game,
           current_depth,
-          entry.eval.score |> xint.subtract(offset),
-          entry.eval.score |> xint.add(offset),
+          entry.eval.score - offset,
+          entry.eval.score + offset,
           0,
           game_history,
         )
@@ -70,8 +74,8 @@ pub fn checkpointed_iterative_deepening(
         search_with_widening_windows(
           game,
           current_depth,
-          xint.NegInf,
-          xint.PosInf,
+          neg_inf,
+          pos_inf,
           0,
           game_history,
         )
@@ -104,7 +108,8 @@ pub fn checkpointed_iterative_deepening(
     False ->
       case best_evaluation.score {
         // terminate the search if we detect we're in mate
-        xint.PosInf | xint.NegInf -> interruptable.return(best_evaluation)
+        x if x == pos_inf || x == neg_inf ->
+          interruptable.return(best_evaluation)
         _ ->
           checkpointed_iterative_deepening(
             game,
@@ -123,8 +128,8 @@ pub fn checkpointed_iterative_deepening(
 pub fn search_with_widening_windows(
   game: game.Game,
   depth: evaluation.Depth,
-  alpha: ExtendedInt,
-  beta: ExtendedInt,
+  alpha: Int,
+  beta: Int,
   attempts: Int,
   game_history: game_history.GameHistory,
 ) -> InterruptableState(SearchState, Evaluation) {
@@ -136,11 +141,12 @@ pub fn search_with_widening_windows(
     game_history,
   ))
   case best_evaluation.score, best_evaluation.node_type {
+    x, _ if x == pos_inf || x == neg_inf ->
+      interruptable.return(best_evaluation)
     // if it's +/- Inf means it's already hit the highest bound
     // It's a forced checkmate in every branch
     // no point in searching more
-    _, evaluation.PV | xint.PosInf, _ | xint.NegInf, _ ->
-      interruptable.return(best_evaluation)
+    _, evaluation.PV -> interruptable.return(best_evaluation)
     // Otherwise we call the search again with wider windows
     // The narrower the window is, the more branches are pruned
     // but if our score is not inside the window, then we're forced to re-search
@@ -148,7 +154,7 @@ pub fn search_with_widening_windows(
       search_with_widening_windows(
         game,
         depth,
-        score |> xint.subtract(10 + attempts * 100 |> xint.from_int),
+        score - { 10 + attempts * 100 },
         beta,
         attempts + 1,
         game_history,
@@ -159,7 +165,7 @@ pub fn search_with_widening_windows(
         game,
         depth,
         alpha,
-        score |> xint.add(10 + attempts * 100 |> xint.from_int),
+        score - { 10 + attempts * 100 },
         attempts + 1,
         game_history,
       )
@@ -184,8 +190,8 @@ const tt_min_leaf_distance = 1
 fn negamax_alphabeta_failsoft(
   game: game.Game,
   depth: evaluation.Depth,
-  alpha: ExtendedInt,
-  beta: ExtendedInt,
+  alpha: Int,
+  beta: Int,
   game_history: game_history.GameHistory,
 ) -> InterruptableState(SearchState, Evaluation) {
   use <- interruptable.interruptable
@@ -204,7 +210,7 @@ fn negamax_alphabeta_failsoft(
       // If there isn't enough material to mate, consider this position a draw.
       || game.is_insufficient_material(game),
     interruptable.return(Evaluation(
-      score: xint.from_int(0),
+      score: 0,
       node_type: evaluation.PV,
       best_move: None,
     )),
@@ -226,12 +232,12 @@ fn negamax_alphabeta_failsoft(
       case evaluation {
         Evaluation(node_type: evaluation.PV, ..) -> Ok(evaluation)
         Evaluation(score:, node_type: evaluation.Cut, ..) ->
-          case xint.gte(score, beta) {
+          case score >= beta {
             True -> Ok(evaluation)
             False -> Error(Nil)
           }
         Evaluation(score:, node_type: evaluation.All, ..) ->
-          case xint.lte(score, alpha) {
+          case score <= alpha {
             True -> Ok(evaluation)
             False -> Error(Nil)
           }
@@ -262,8 +268,8 @@ fn negamax_alphabeta_failsoft(
 fn do_negamax_alphabeta_failsoft(
   game: game.Game,
   depth: evaluation.Depth,
-  alpha: ExtendedInt,
-  beta: ExtendedInt,
+  alpha: Int,
+  beta: Int,
   game_history: game_history.GameHistory,
 ) -> InterruptableState(SearchState, Evaluation) {
   use <- bool.lazy_guard(depth <= 0, fn() {
@@ -276,13 +282,11 @@ fn do_negamax_alphabeta_failsoft(
     let should_do_rfp = depth > 1 && !is_check
     use <- bool.guard(!should_do_rfp, interruptable.return(Error(Nil)))
 
-    let score =
-      evaluate.game(game)
-      |> xint.multiply(evaluate.player(game.turn(game)) |> xint.from_int)
+    let score = evaluate.game(game) * evaluate.player(game.turn(game))
     // TODO: Tweak margin
     let margin = 50 * depth
 
-    case xint.gte(score, xint.add(beta, xint.from_int(margin))) {
+    case score >= { beta + margin } {
       True -> {
         use <- interruptable.discard(
           interruptable.from_state(search_state.stats_add_rfp_cutoffs(depth, 1)),
@@ -316,14 +320,14 @@ fn do_negamax_alphabeta_failsoft(
       negamax_alphabeta_failsoft(
         game.reverse_turn(game),
         depth - 1 - r,
-        xint.negate(beta),
-        xint.negate(xint.subtract(beta, xint.from_int(1))),
+        -beta,
+        -beta + 1,
         game_history.insert(game_history, game),
       )
       |> interruptable.map(evaluation.negate),
     )
 
-    case xint.gte(evaluation.score, beta) {
+    case evaluation.score >= beta {
       True -> {
         use <- interruptable.discard(
           interruptable.from_state(search_state.stats_add_nmp_cutoffs(depth, 1)),
@@ -372,8 +376,8 @@ fn do_negamax_alphabeta_failsoft(
   use <- bool.lazy_guard(nmoves == 0, fn() {
     // if checkmate/stalemate
     let score = case is_check {
-      True -> xint.NegInf
-      False -> xint.Finite(0)
+      True -> neg_inf
+      False -> 0
     }
     Evaluation(score:, node_type: evaluation.PV, best_move: None)
     |> interruptable.return
@@ -384,7 +388,7 @@ fn do_negamax_alphabeta_failsoft(
   {
     use #(best_evaluation, alpha, move_number), move <- interruptable.list_fold_until_s(
       moves,
-      #(Evaluation(xint.NegInf, evaluation.PV, None), alpha, 0),
+      #(Evaluation(neg_inf, evaluation.PV, None), alpha, 0),
     )
 
     let lmr_depth_reduction = {
@@ -420,31 +424,31 @@ fn do_negamax_alphabeta_failsoft(
 
     let go = fn(e1: Evaluation, depth, alpha, beta) -> InterruptableState(
       SearchState,
-      #(Evaluation, ExtendedInt),
+      #(Evaluation, Int),
     ) {
       use e2 <- interruptable.do({
         use neg_evaluation <- interruptable.map(negamax_alphabeta_failsoft(
           game.apply(game, move),
           depth,
-          xint.negate(beta),
-          xint.negate(alpha),
+          -beta,
+          -alpha,
           game_history.insert(game_history, game),
         ))
         Evaluation(..evaluation.negate(neg_evaluation), best_move: Some(move))
       })
 
       interruptable.return(#(
-        case xint.gt(e2.score, e1.score) {
+        case e2.score > e1.score {
           True -> e2
           False -> e1
         },
-        xint.max(alpha, e2.score),
+        int.max(alpha, e2.score),
       ))
     }
 
     let finish = fn(e: Evaluation, alpha, beta) {
       // beta-cutoff
-      case xint.gte(e.score, beta) {
+      case e.score >= beta {
         True -> {
           let new_e = Evaluation(..e, node_type: evaluation.Cut)
           let assert Some(move_context) = move.context
@@ -486,7 +490,7 @@ fn do_negamax_alphabeta_failsoft(
       beta,
     ))
 
-    case xint.gte(tentative_evaluation.score, beta), depth_reduction > 0 {
+    case tentative_evaluation.score >= beta, depth_reduction > 0 {
       // The search on the child node caused a beta-cutoff while reducing the
       // depth. We have to retry the search at the proper depth.
       True, True -> {
@@ -527,17 +531,15 @@ fn do_negamax_alphabeta_failsoft(
 ///
 fn quiesce(
   game: game.Game,
-  alpha: ExtendedInt,
-  beta: ExtendedInt,
-) -> InterruptableState(SearchState, ExtendedInt) {
+  alpha: Int,
+  beta: Int,
+) -> InterruptableState(SearchState, Int) {
   use <- interruptable.interruptable
-  let score =
-    evaluate.game(game)
-    |> xint.multiply({ evaluate.player(game.turn(game)) |> xint.from_int })
+  let score = evaluate.game(game) * evaluate.player(game.turn(game))
 
-  use <- bool.guard(xint.gte(score, beta), interruptable.return(score))
+  use <- bool.guard(score >= beta, interruptable.return(score))
 
-  let alpha = xint.max(alpha, score)
+  let alpha = int.max(alpha, score)
 
   let compare_mvv_lva = order_addons.or(compare_mvv, compare_lva)
 
@@ -555,17 +557,17 @@ fn quiesce(
     )
 
     use score <- interruptable.do(interruptable.map(
-      quiesce(game.apply(game, move), xint.negate(beta), xint.negate(alpha)),
-      xint.negate,
+      quiesce(game.apply(game, move), -beta, -alpha),
+      int.negate,
     ))
 
     use <- bool.guard(
-      xint.gte(score, beta),
+      score >= beta,
       interruptable.return(list.Stop(#(score, alpha))),
     )
 
     interruptable.return(
-      list.Continue(#(xint.max(best_score, score), xint.max(alpha, score))),
+      list.Continue(#(int.max(best_score, score), int.max(alpha, score))),
     )
   }
   |> interruptable.map(fn(x) { x.0 })
@@ -577,8 +579,8 @@ fn quiesce(
 pub fn iteratively_deepen(
   game: game.Game,
   current_depth: evaluation.Depth,
-  alpha: ExtendedInt,
-  beta: ExtendedInt,
+  alpha: Int,
+  beta: Int,
   opts: SearchOpts,
   game_history: game_history.GameHistory,
 ) {
@@ -629,7 +631,13 @@ const iid_min_leaf_distance = 9
 ///
 /// `depth` should represent the distance from the leaves.
 ///
-fn get_pv_move(game: game.Game, depth: evaluation.Depth, alpha, beta, history) {
+fn get_pv_move(
+  game: game.Game,
+  depth: evaluation.Depth,
+  alpha: Int,
+  beta: Int,
+  history,
+) {
   use cached_entry <- interruptable.do(
     interruptable.from_state(search_state.transposition_get(game.hash(game))),
   )
@@ -667,8 +675,8 @@ fn get_pv_move(game: game.Game, depth: evaluation.Depth, alpha, beta, history) {
 fn sorted_moves(
   game: game.Game,
   depth: evaluation.Depth,
-  alpha,
-  beta,
+  alpha: Int,
+  beta: Int,
   history,
 ) -> InterruptableState(
   SearchState,
