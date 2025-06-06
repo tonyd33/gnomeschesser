@@ -17,7 +17,6 @@ stockfish_skill_level=20
 stockfish_depth=24
 engine_cmd="$start_uci"
 results_dir="$repo_root_path/results"
-book="$repo_root_path/opening_books/8moves_v3.pgn"
 system=$(uname -sm)
 
 case "$system" in
@@ -46,7 +45,6 @@ Options:
   --sf-depth    depth       stockfish search depth. default $stockfish_depth
   --engine-cmd  cmd         command to start our engine. default $engine_cmd
   --results     dir         directory to store results. default $results_dir
-  --book        book        opening book. default $book
   --fc-level    level       fastchess log level: trace, warn, info, err, fatal. default "$fastchess_log_level"
 
 EOF
@@ -122,5 +120,4 @@ mkdir -p "$results_dir"
       "option.Skill Level=$stockfish_skill_level" \
     -rounds "$rounds" -games "$games" -concurrency "$concurrency" -maxmoves 100 \
     -pgnout file="$results_dir/stockfish.pgn" \
-    -log file="$results_dir/fastchess-stockfish.log" level=trace \
-    -openings file=$book format=pgn order=random
+    -log file="$results_dir/fastchess-stockfish.log" level=trace
