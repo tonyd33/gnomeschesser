@@ -271,9 +271,11 @@ fn do_negamax_alphabeta_failsoft(
     Evaluation(score:, node_type: evaluation.PV, best_move: None)
   })
   let is_check = game.is_check(game, game.turn(game))
+  // alpha == beta - 1
+  let do_pruning = alpha == xint.add(beta, xint.from_int(1))
 
   use rfp_evaluation <- interruptable.do({
-    let should_do_rfp = depth > 1 && !is_check
+    let should_do_rfp = do_pruning && depth > 1 && !is_check
     use <- bool.guard(!should_do_rfp, interruptable.return(Error(Nil)))
 
     let score =
@@ -308,7 +310,7 @@ fn do_negamax_alphabeta_failsoft(
   // vulnerable to zugzwangs.
   // https://www.chessprogramming.org/Null_Move_Reductions
   use null_evaluation <- interruptable.do({
-    let should_do_nmp = !is_check
+    let should_do_nmp = do_pruning && !is_check
     use <- bool.guard(!should_do_nmp, interruptable.return(Error(Nil)))
 
     let r = 4
@@ -423,11 +425,19 @@ fn do_negamax_alphabeta_failsoft(
       #(Evaluation, ExtendedInt),
     ) {
       use e2 <- interruptable.do({
+        let #(alpha_prime, beta_prime) = case move_number {
+          0 -> #(xint.negate(beta), xint.negate(alpha))
+          _ -> #(
+            // -alpha-1
+            xint.add(xint.negate(alpha), xint.from_int(-1)),
+            xint.negate(alpha),
+          )
+        }
         use neg_evaluation <- interruptable.map(negamax_alphabeta_failsoft(
           game.apply(game, move),
           depth,
-          xint.negate(beta),
-          xint.negate(alpha),
+          alpha_prime,
+          beta_prime,
           game_history.insert(game_history, game),
         ))
         Evaluation(..evaluation.negate(neg_evaluation), best_move: Some(move))
