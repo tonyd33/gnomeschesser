@@ -18,6 +18,8 @@ const mobility_weight = 85.0
 
 const king_pawn_shield_weight = 4.0
 
+const tempo_weight = 85.0
+
 /// Evaluates the score of the game position
 /// > 0 means white is winning
 /// < 0 means black is winning
@@ -37,6 +39,8 @@ pub fn game(game: game.Game) -> Score {
     + midgame.king_pawn_shield(game, player.Black)
     |> int.to_float
 
+  let tempo = 28.0 *. int.to_float(common.player(game.turn(game)))
+
   // combine scores with weight
   let score =
     {
@@ -44,12 +48,14 @@ pub fn game(game: game.Game) -> Score {
       +. { psq *. psqt_weight }
       +. { mobility *. mobility_weight }
       +. { king_pawn_shield *. king_pawn_shield_weight }
+      +. { tempo *. tempo_weight }
     }
     /. {
       material_weight
       +. psqt_weight
       +. mobility_weight
       +. king_pawn_shield_weight
+      +. tempo_weight
     }
   score
   |> float.truncate
