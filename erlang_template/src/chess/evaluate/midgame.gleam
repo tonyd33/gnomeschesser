@@ -10,7 +10,7 @@ import gleam/result
 /// Evaluate king safety score with a pawn shield
 /// Positive is good for white, negative is good for black
 pub fn king_pawn_shield(game: game.Game, side: player.Player) -> Int {
-  let assert Ok(#(king_square, _)) = game.find_player_king(game, side)
+  let king_square = game.find_player_king(game, side)
 
   // Pawn shield: When the king has castled, it is important to preserve
   // pawns next to it, in order to protect it against the assault. Generally

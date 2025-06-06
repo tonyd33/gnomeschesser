@@ -31,6 +31,9 @@ pub opaque type Game {
     halfmove_clock: Int,
     fullmove_number: Int,
     hash: Int,
+    //extra data we update incrementally
+    white_king_position: square.Square,
+    black_king_position: square.Square,
     evaluation_data: EvaluationData,
   )
 }
@@ -199,6 +202,11 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
       )
     })
   }
+
+  let assert Ok(#(white_king_position, _)) =
+    pieces |> list.find(fn(x) { x.1 == piece.Piece(player.White, piece.King) })
+  let assert Ok(#(black_king_position, _)) =
+    pieces |> list.find(fn(x) { x.1 == piece.Piece(player.Black, piece.King) })
   Game(
     board:,
     active_color:,
@@ -208,6 +216,8 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
     fullmove_number:,
     hash:,
     evaluation_data:,
+    white_king_position:,
+    black_king_position:,
   )
   |> Ok
 }
@@ -440,10 +450,7 @@ pub fn find_piece(game: Game, piece: piece.Piece) -> List(square.Square) {
 }
 
 pub fn is_check(game: Game, player: player.Player) -> Bool {
-  let assert Ok(#(king_position, _king_piece)) =
-    game.board
-    |> dict.to_list
-    |> list.find(fn(x) { x.1 == piece.Piece(player, piece.King) })
+  let king_position = find_player_king(game, player)
   square.is_attacked_at(game.board, king_position, player.opponent(player))
 }
 
@@ -746,6 +753,8 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     halfmove_clock:,
     hash:,
     evaluation_data:,
+    white_king_position:,
+    black_king_position:,
   ) = game
   let prev_castling_availability = castling_availability
   let them = player.opponent(us)
@@ -986,6 +995,12 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     })
   }
 
+  let #(white_king_position, black_king_position) = case piece {
+    piece.Piece(player.White, piece.King) -> #(to, black_king_position)
+    piece.Piece(player.Black, piece.King) -> #(white_king_position, to)
+    _ -> #(white_king_position, black_king_position)
+  }
+
   Game(
     board:,
     active_color: them,
@@ -995,15 +1010,16 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     halfmove_clock:,
     hash:,
     evaluation_data:,
+    white_king_position:,
+    black_king_position:,
   )
 }
 
 pub fn find_player_king(game: Game, player: player.Player) {
-  pieces(game)
-  |> list.find(fn(x) {
-    let #(_, piece) = x
-    piece.symbol == piece.King && piece.player == player
-  })
+  case player {
+    player.White -> game.white_king_position
+    player.Black -> game.black_king_position
+  }
 }
 
 // TODO: bring back explicitly validating it
@@ -1085,7 +1101,7 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
   let pieces = game.board |> dict.to_list
 
   let king_piece = piece.Piece(us, piece.King)
-  let assert [king_position] = find_piece(game, king_piece)
+  let king_position = find_player_king(game, us)
 
   // find attacks and pins to the king
   let #(king_attackers, king_blockers) =
