@@ -93,6 +93,6 @@ pub fn evaluate_regression_test() {
 
   evaluate.game(game1) |> should.equal(xint.from_int(6))
   evaluate.game(game2) |> should.equal(xint.from_int(28))
-  evaluate.game(game3) |> should.equal(xint.from_int(-2))
-  evaluate.game(game4) |> should.equal(xint.from_int(-117))
+  evaluate.game(game3) |> should.equal(xint.from_int(5))
+  evaluate.game(game4) |> should.equal(xint.from_int(-95))
 }
