@@ -18,14 +18,9 @@ import gleam/list
 ///
 pub fn score(game: game.Game, phase: Float) {
   // find attacks and pins to the king
-  let #(_, white_king_blockers) = {
-    let white_king_square = game.find_player_king(game, player.White)
-    game.attackers_and_blockers(game, white_king_square, player.Black)
-  }
-  let #(_, black_king_blockers) = {
-    let black_king_square = game.find_player_king(game, player.Black)
-    game.attackers_and_blockers(game, black_king_square, player.White)
-  }
+  let white_king_blockers = game.king_blockers(game, player.White)
+  let black_king_blockers = game.king_blockers(game, player.Black)
+
   let board = game.board(game)
   let #(midgame, endgame) = {
     use acc, square, piece <- dict.fold(board, #(0, 0))

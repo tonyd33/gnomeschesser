@@ -38,7 +38,15 @@ pub opaque type Game {
     knight_count: Int,
     // some cached data that we use often
     white_king_position: square.Square,
+    // list of attackers 
+    white_king_attackers: List(square.Square),
+    // dict of blocker and the pinning piece
+    white_king_blockers: dict.Dict(square.Square, square.Square),
     black_king_position: square.Square,
+    // list of attackers 
+    black_king_attackers: List(square.Square),
+    // dict of blocker and the pinning piece
+    black_king_blockers: dict.Dict(square.Square, square.Square),
     evaluation_data: EvaluationData,
   )
 }
@@ -218,6 +226,11 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
   let knight_count =
     pieces |> list.count(fn(x) { { x.1 }.symbol == piece.Knight })
 
+  let #(white_king_attackers, white_king_blockers) =
+    attackers_and_blockers(board, white_king_position, player.Black)
+  let #(black_king_attackers, black_king_blockers) =
+    attackers_and_blockers(board, black_king_position, player.White)
+
   Game(
     board:,
     active_color:,
@@ -230,7 +243,11 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
     bishop_count:,
     knight_count:,
     white_king_position:,
+    white_king_attackers:,
+    white_king_blockers:,
     black_king_position:,
+    black_king_attackers:,
+    black_king_blockers:,
   )
   |> Ok
 }
@@ -463,19 +480,19 @@ pub fn find_piece(game: Game, piece: piece.Piece) -> List(square.Square) {
 }
 
 pub fn is_check(game: Game, player: player.Player) -> Bool {
-  let king_position = find_player_king(game, player)
-  square.is_attacked_at(game.board, king_position, player.opponent(player))
+  case player {
+    player.White -> !list.is_empty(game.white_king_attackers)
+    player.Black -> !list.is_empty(game.black_king_attackers)
+  }
 }
 
 pub fn is_checkmate(game: Game) -> Bool {
   let us = turn(game)
   is_check(game, us)
   && {
+    // if it's checkmate then there are no valid moves for us
     valid_moves(game)
-    |> list.all(fn(move) {
-      // If every new move we try still result in a check, then it's checkmate
-      apply(game, move) |> is_check(us)
-    })
+    |> list.is_empty
   }
 }
 
@@ -521,14 +538,6 @@ pub fn is_insufficient_material(game: Game) -> Bool {
 
 pub fn is_stalemate(game: Game) -> Bool {
   !is_check(game, game.active_color) && valid_moves(game) |> list.is_empty
-}
-
-pub fn is_draw(_game: Game) -> Bool {
-  False
-}
-
-pub fn is_game_over(game: Game) -> Bool {
-  is_checkmate(game) || is_stalemate(game) || is_draw(game)
 }
 
 pub fn ascii(game: Game) -> String {
@@ -762,7 +771,11 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     bishop_count:,
     knight_count:,
     white_king_position:,
+    white_king_attackers:,
+    white_king_blockers:,
     black_king_position:,
+    black_king_attackers:,
+    black_king_blockers:,
   ) = game
   let prev_castling_availability = castling_availability
   let them = player.opponent(us)
@@ -1025,6 +1038,18 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     Some(piece.Bishop) -> #(bishop_count + 1, knight_count)
     _ -> #(bishop_count, knight_count)
   }
+  // TODO: update this incrementally more?
+  // we could possibly take advantage of the fact that we're not moving into check
+  // and we could maybe see if we're changing the block?
+  // either a blocking piece is moving, or we're moving into a block
+  // or we're capturing a pinning piece
+  // and only if it's a king move we regenerate everything
+  // or maybe we just leave it like this
+  let #(white_king_attackers, white_king_blockers) =
+    attackers_and_blockers(board, white_king_position, player.Black)
+  let #(black_king_attackers, black_king_blockers) =
+    attackers_and_blockers(board, black_king_position, player.White)
+
   Game(
     board:,
     active_color: them,
@@ -1037,7 +1062,11 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     bishop_count:,
     knight_count:,
     white_king_position:,
+    white_king_attackers:,
+    white_king_blockers:,
     black_king_position:,
+    black_king_attackers:,
+    black_king_blockers:,
   )
 }
 
@@ -1096,12 +1125,29 @@ fn generate_castle_move(game: Game, castle_player, castle) {
   move.new_valid(from:, to:, promotion: None, context:) |> Ok
 }
 
-pub fn attackers_and_blockers(
-  game: Game,
+/// get friendly squares that are blocking an attack for a player
+pub fn king_blockers(game: Game, for: player.Player) {
+  case for {
+    player.White -> game.white_king_blockers
+    player.Black -> game.black_king_blockers
+  }
+}
+
+/// get squares that are attacking a player's king
+pub fn king_attackers(game: Game, to: player.Player) {
+  case to {
+    player.White -> game.white_king_attackers
+    player.Black -> game.black_king_attackers
+  }
+}
+
+/// Calculates the attackers by a player to a square
+fn attackers_and_blockers(
+  board: Board,
   square: square.Square,
   by: player.Player,
 ) {
-  let attacks_pins = square.attacks_and_pins_to(game.board, square, by)
+  let attacks_pins = square.attacks_and_pins_to(board, square, by)
   let #(attackers, blockers) = {
     use #(attackers, blockers), #(attacker_square, pinned_square) <- list.fold(
       attacks_pins,
@@ -1130,8 +1176,8 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
   let king_position = find_player_king(game, us)
 
   // find attacks and pins to the king
-  let #(king_attackers, king_blockers) =
-    attackers_and_blockers(game, king_position, them)
+  let king_attackers = king_attackers(game, us)
+  let king_blockers = king_blockers(game, us)
 
   // We always generate king moves to squares not attacked
   let king_moves = {
