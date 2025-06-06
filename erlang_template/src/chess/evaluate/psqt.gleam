@@ -4,20 +4,32 @@ import chess/player
 import chess/square
 import gleam/int
 
-// always positive
-pub fn score_absolute_value(
+/// 1 is good for white
+/// -1 is good for black
+pub fn endgame(piece: piece.Piece, square: square.Square) {
+  endgame_raw(piece, square) * common.player(piece.player)
+}
+
+/// 1 is good for white
+/// -1 is good for black
+pub fn midgame(piece: piece.Piece, square: square.Square) {
+  midgame_raw(piece, square) * common.player(piece.player)
+}
+
+/// 1 is good 
+pub fn score_raw(
   piece: piece.Piece,
   square: square.Square,
   phase: Float,
 ) -> Float {
   common.taper(
-    midgame(piece, square) |> int.to_float,
-    endgame(piece, square) |> int.to_float,
+    midgame_raw(piece, square) |> int.to_float,
+    endgame_raw(piece, square) |> int.to_float,
     phase,
   )
 }
 
-pub fn endgame(piece: piece.Piece, square: square.Square) {
+fn endgame_raw(piece: piece.Piece, square: square.Square) {
   let file = square.file(square)
   let rank = case piece.player {
     player.White -> square.rank(square)
@@ -32,10 +44,10 @@ pub fn endgame(piece: piece.Piece, square: square.Square) {
     piece.Queen -> queen_eg
     piece.King -> king_eg
   }
-  index_psqt_table(table, rank, file) * common.player(piece.player)
+  index_psqt_table(table, rank, file)
 }
 
-pub fn midgame(piece: piece.Piece, square: square.Square) {
+fn midgame_raw(piece: piece.Piece, square: square.Square) {
   let file = square.file(square)
   let rank = case piece.player {
     player.White -> square.rank(square)
@@ -50,7 +62,7 @@ pub fn midgame(piece: piece.Piece, square: square.Square) {
     piece.Queen -> queen_mg
     piece.King -> king_mg
   }
-  index_psqt_table(table, rank, file) * common.player(piece.player)
+  index_psqt_table(table, rank, file)
 }
 
 fn index_psqt_table(

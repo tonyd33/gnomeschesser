@@ -37,8 +37,8 @@ pub fn piece_symbol_npm(symbol: piece.PieceSymbol) -> Int {
 //   piece.King -> 0
 // }
 
-pub fn piece_symbol_mg(symbol: piece.PieceSymbol) -> Int {
-  case symbol {
+pub fn piece_mg(piece: piece.Piece) -> Int {
+  case piece.symbol {
     piece.Pawn -> 100
     piece.Knight -> 300
     piece.Bishop -> 300
@@ -46,10 +46,11 @@ pub fn piece_symbol_mg(symbol: piece.PieceSymbol) -> Int {
     piece.Queen -> 900
     piece.King -> 0
   }
+  * player(piece.player)
 }
 
-pub fn piece_symbol_eg(symbol: piece.PieceSymbol) -> Int {
-  case symbol {
+pub fn piece_eg(piece: piece.Piece) -> Int {
+  case piece.symbol {
     piece.Pawn -> 100
     piece.Knight -> 300
     piece.Bishop -> 300
@@ -57,6 +58,7 @@ pub fn piece_symbol_eg(symbol: piece.PieceSymbol) -> Int {
     piece.Queen -> 900
     piece.King -> 0
   }
+  * player(piece.player)
 }
 
 /// The sign of each player in evaluations

@@ -2,7 +2,6 @@ import chess/actors/blake
 import chess/actors/yapper
 import chess/game
 import chess/move
-import chess/search/evaluation.{type Evaluation}
 import chess/uci
 import gleam/erlang
 import gleam/erlang/process.{type Subject}
