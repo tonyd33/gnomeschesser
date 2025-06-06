@@ -794,8 +794,8 @@ fn compare_psqt(phase) {
   ) {
     let assert Some(context1) = move1.context
     let assert Some(context2) = move2.context
-    let score1 = psqt.score_absolute_value(context1.piece, move1.to, phase)
-    let score2 = psqt.score_absolute_value(context2.piece, move2.to, phase)
+    let score1 = psqt.score_raw(context1.piece, move1.to, phase)
+    let score2 = psqt.score_raw(context2.piece, move2.to, phase)
 
     float.compare(score2, score1)
   }
@@ -811,14 +811,12 @@ fn compare_psqt_delta(phase) {
   ) {
     let assert Some(context1) = move1.context
     let assert Some(context2) = move2.context
-    let score_to1 = psqt.score_absolute_value(context1.piece, move1.to, phase)
-    let score_from1 =
-      psqt.score_absolute_value(context1.piece, move1.from, phase)
+    let score_to1 = psqt.score_raw(context1.piece, move1.to, phase)
+    let score_from1 = psqt.score_raw(context1.piece, move1.from, phase)
     let delta1 = score_to1 -. score_from1
 
-    let score_to2 = psqt.score_absolute_value(context2.piece, move2.to, phase)
-    let score_from2 =
-      psqt.score_absolute_value(context2.piece, move2.from, phase)
+    let score_to2 = psqt.score_raw(context2.piece, move2.to, phase)
+    let score_from2 = psqt.score_raw(context2.piece, move2.from, phase)
     let delta2 = score_to2 -. score_from2
 
     float.compare(delta2, delta1)

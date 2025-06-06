@@ -184,10 +184,9 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
     pieces
     |> list.fold(EvaluationData(0, 0, 0, 0, 0), fn(acc, piece) {
       let #(square, piece) = piece
-      let player = evaluate_common.player(piece.player)
       let npm = evaluate_common.piece_symbol_npm(piece.symbol)
-      let material_mg = evaluate_common.piece_symbol_mg(piece.symbol) * player
-      let material_eg = evaluate_common.piece_symbol_eg(piece.symbol) * player
+      let material_mg = evaluate_common.piece_mg(piece)
+      let material_eg = evaluate_common.piece_eg(piece)
       let psqt_mg = psqt.midgame(piece, square)
       let psqt_eg = psqt.endgame(piece, square)
       EvaluationData(
@@ -928,20 +927,16 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
       //  "to" 
       EvaluationData(
         npm: evaluate_common.piece_symbol_npm(new_piece.symbol),
-        material_mg: evaluate_common.piece_symbol_mg(new_piece.symbol)
-          * evaluate_common.player(new_piece.player),
-        material_eg: evaluate_common.piece_symbol_eg(new_piece.symbol)
-          * evaluate_common.player(new_piece.player),
+        material_mg: evaluate_common.piece_mg(new_piece),
+        material_eg: evaluate_common.piece_eg(new_piece),
         psqt_mg: psqt.midgame(new_piece, to),
         psqt_eg: psqt.endgame(new_piece, to),
       ),
       // "from"   
       EvaluationData(
         npm: -evaluate_common.piece_symbol_npm(piece.symbol),
-        material_mg: -evaluate_common.piece_symbol_mg(piece.symbol)
-          * evaluate_common.player(piece.player),
-        material_eg: -evaluate_common.piece_symbol_eg(piece.symbol)
-          * evaluate_common.player(piece.player),
+        material_mg: -evaluate_common.piece_mg(piece),
+        material_eg: -evaluate_common.piece_eg(piece),
         psqt_mg: -psqt.midgame(piece, from),
         psqt_eg: -psqt.endgame(piece, from),
       ),
@@ -950,10 +945,8 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
         Some(#(at, captured_piece)) ->
           EvaluationData(
             npm: -evaluate_common.piece_symbol_npm(captured_piece.symbol),
-            material_mg: -evaluate_common.piece_symbol_mg(captured_piece.symbol)
-              * evaluate_common.player(captured_piece.player),
-            material_eg: -evaluate_common.piece_symbol_eg(captured_piece.symbol)
-              * evaluate_common.player(captured_piece.player),
+            material_mg: -evaluate_common.piece_mg(captured_piece),
+            material_eg: -evaluate_common.piece_eg(captured_piece),
             psqt_mg: -psqt.midgame(captured_piece, at),
             psqt_eg: -psqt.endgame(captured_piece, at),
           )
