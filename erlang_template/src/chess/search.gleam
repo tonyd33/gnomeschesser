@@ -279,7 +279,7 @@ fn do_negamax_alphabeta_failsoft(
     let score =
       evaluate.game(game)
       |> xint.multiply(evaluate.player(game.turn(game)) |> xint.from_int)
-    let margin = 100 * depth
+    let margin = 125 * depth
 
     case xint.gte(score, xint.add(beta, xint.from_int(margin))) {
       True -> {
