@@ -68,7 +68,6 @@ pub fn game(game: game.Game) -> Score {
 /// - A value in between signifies the weight endgame should be given, scaling
 ///   linearly.
 ///
-/// 
 pub fn phase(npm: Int) -> Float {
   // We'll calculate a measure, clamp them between two bounds, and then treat
   // it as the interpolated value between midgame and endgame after scaling.
