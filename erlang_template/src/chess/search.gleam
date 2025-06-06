@@ -271,11 +271,10 @@ fn do_negamax_alphabeta_failsoft(
     Evaluation(score:, node_type: evaluation.PV, best_move: None)
   })
   let is_check = game.is_check(game, game.turn(game))
-  // alpha == beta - 1
-  let do_pruning = alpha == xint.add(beta, xint.from_int(1))
+  let is_zw = alpha == xint.subtract(beta, xint.from_int(1))
 
   use rfp_evaluation <- interruptable.do({
-    let should_do_rfp = do_pruning && depth > 1 && !is_check
+    let should_do_rfp = is_zw && depth > 1 && !is_check
     use <- bool.guard(!should_do_rfp, interruptable.return(Error(Nil)))
 
     let score =
@@ -310,7 +309,7 @@ fn do_negamax_alphabeta_failsoft(
   // vulnerable to zugzwangs.
   // https://www.chessprogramming.org/Null_Move_Reductions
   use null_evaluation <- interruptable.do({
-    let should_do_nmp = do_pruning && !is_check
+    let should_do_nmp = !is_check
     use <- bool.guard(!should_do_nmp, interruptable.return(Error(Nil)))
 
     let r = 4
@@ -346,8 +345,8 @@ fn do_negamax_alphabeta_failsoft(
   //   endgame, reduce depth by some amount (NMR)
   // - Otherwise, continue as usual
   use <- result.lazy_unwrap(result.map(
-    // Disable NMP during "endgame". 
-    case evaluate.phase(game.evaluation_data(game).npm - 3800) >. 0.0 {
+    // Disable NMP during "endgame" and non-zw searches
+    case evaluate.phase(game.evaluation_data(game).npm - 3800) >. 0.0 && is_zw {
       True -> null_evaluation
       False -> Error(Nil)
     },
@@ -425,19 +424,11 @@ fn do_negamax_alphabeta_failsoft(
       #(Evaluation, ExtendedInt),
     ) {
       use e2 <- interruptable.do({
-        let #(alpha_prime, beta_prime) = case move_number {
-          0 -> #(xint.negate(beta), xint.negate(alpha))
-          _ -> #(
-            // -alpha-1
-            xint.add(xint.negate(alpha), xint.from_int(-1)),
-            xint.negate(alpha),
-          )
-        }
         use neg_evaluation <- interruptable.map(negamax_alphabeta_failsoft(
           game.apply(game, move),
           depth,
-          alpha_prime,
-          beta_prime,
+          xint.negate(beta),
+          xint.negate(alpha),
           game_history.insert(game_history, game),
         ))
         Evaluation(..evaluation.negate(neg_evaluation), best_move: Some(move))
@@ -488,18 +479,33 @@ fn do_negamax_alphabeta_failsoft(
       }
     }
 
+    let #(alpha_pvs, beta_pvs) = case move_number {
+      0 -> #(alpha, beta)
+      _ -> #(alpha, xint.add(alpha, xint.from_int(1)))
+    }
+
     // Try to do a reduced search to see if it causes a beta-cutoff.
     use #(tentative_evaluation, tentative_alpha) <- interruptable.do(go(
       best_evaluation,
       depth - 1 - depth_reduction,
-      alpha,
-      beta,
+      alpha_pvs,
+      beta_pvs,
     ))
 
-    case xint.gte(tentative_evaluation.score, beta), depth_reduction > 0 {
+    let re_search =
+      { xint.gte(tentative_evaluation.score, beta) && depth_reduction > 0 }
+      || {
+        move_number > 0
+        // score > alpha
+        && xint.gt(tentative_evaluation.score, alpha)
+        // beta - alpha > 1
+        && xint.gt(xint.subtract(beta, alpha), xint.from_int(1))
+      }
+
+    case re_search {
       // The search on the child node caused a beta-cutoff while reducing the
       // depth. We have to retry the search at the proper depth.
-      True, True -> {
+      True -> {
         // use <- interruptable.discard(
         //   interruptable.from_state(
         //     search_state.stats_increment_lmr_verifications(depth),
@@ -514,7 +520,7 @@ fn do_negamax_alphabeta_failsoft(
         finish(best_evaluation, alpha, beta)
       }
       // If it didn't even cause a beta-cutoff, then continue as usual.
-      _, _ -> {
+      _ -> {
         // use <- interruptable.discard(case depth_reduction > 0 {
         //   True ->
         //     interruptable.from_state(search_state.stats_increment_lmrs(depth))
