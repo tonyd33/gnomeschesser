@@ -345,8 +345,7 @@ fn do_negamax_alphabeta_failsoft(
   // - Otherwise, continue as usual
   use <- result.lazy_unwrap(result.map(
     // Disable NMP during "endgame". 
-    case game.fullmove_number(game) < 28 {
-      // case evaluate.phase(game.evaluation_data(game).npm) >. 0.0 {
+    case evaluate.phase(game.evaluation_data(game).npm - 3800) >. 0.0 {
       True -> null_evaluation
       False -> Error(Nil)
     },
@@ -706,11 +705,8 @@ fn sorted_moves(
         False -> #(best, [move, ..capture_promotions], quiet, nmoves + 1)
       }
     })
-  let phase = case game.fullmove_number(game) > 25 {
-    True -> common.EndGame
-    False -> common.MidGame
-  }
-  //let phase = evaluate.phase(game.evaluation_data(game).npm)
+
+  let phase = evaluate.phase(game.evaluation_data(game).npm)
   let compare_psqt = compare_psqt(phase)
   let compare_psqt_delta = compare_psqt_delta(phase)
 
@@ -801,7 +797,7 @@ fn compare_psqt(phase) {
     let score1 = psqt.score_absolute_value(context1.piece, move1.to, phase)
     let score2 = psqt.score_absolute_value(context2.piece, move2.to, phase)
 
-    int.compare(score2, score1)
+    float.compare(score2, score1)
   }
 }
 
@@ -818,13 +814,13 @@ fn compare_psqt_delta(phase) {
     let score_to1 = psqt.score_absolute_value(context1.piece, move1.to, phase)
     let score_from1 =
       psqt.score_absolute_value(context1.piece, move1.from, phase)
-    let delta1 = score_to1 - score_from1
+    let delta1 = score_to1 -. score_from1
 
     let score_to2 = psqt.score_absolute_value(context2.piece, move2.to, phase)
     let score_from2 =
       psqt.score_absolute_value(context2.piece, move2.from, phase)
-    let delta2 = score_to2 - score_from2
+    let delta2 = score_to2 -. score_from2
 
-    int.compare(delta2, delta1)
+    float.compare(delta2, delta1)
   }
 }
