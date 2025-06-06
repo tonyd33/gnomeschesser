@@ -139,6 +139,13 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
   let r = case process.receive_forever(recv_chan) {
     Init -> Ok(Blake(..blake, tablebase: tablebase.load()))
     NewGame -> {
+      case blake.stop_timer {
+        Some(stop_timer) -> {
+          process.cancel_timer(stop_timer)
+          Nil
+        }
+        None -> Nil
+      }
       // I don't really know why but if I Clear Donovan instead of killing him,
       // subsequent searches seem slow and time out...? At least, this seems to
       // be the case.
@@ -155,6 +162,7 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
           history: [],
           donovan_chan: donovan.start(),
           nonces: set.new(),
+          stop_timer: None,
         ),
       )
     }
