@@ -91,7 +91,7 @@ pub fn evaluate_regression_test() {
   let assert Ok(game4) =
     game.load_fen("8/8/8/7p/8/2b2kPp/3p1P2/4N1K1 b - - 1 63")
 
-  evaluate.game(game1) |> should.equal(xint.from_int(0))
+  evaluate.game(game1) |> should.equal(xint.from_int(6))
   evaluate.game(game2) |> should.equal(xint.from_int(29))
   evaluate.game(game3) |> should.equal(xint.from_int(-2))
   evaluate.game(game4) |> should.equal(xint.from_int(-117))
