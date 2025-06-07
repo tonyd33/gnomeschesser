@@ -1,6 +1,10 @@
 import chess/game.{type Game}
 import chess/move.{type Move, type ValidInContext}
-import chess/tablebase/data
+import chess/tablebase/data1
+import chess/tablebase/data2
+import chess/tablebase/data3
+import chess/tablebase/data4
+import chess/tablebase/data5
 import gleam/dict.{type Dict}
 import gleam/float
 import gleam/int
@@ -11,7 +15,11 @@ pub type Tablebase =
   Dict(Int, List(#(Int, Int)))
 
 pub fn load() -> Tablebase {
-  dict.from_list(data.table)
+  dict.from_list(data1.table)
+  |> dict.merge(dict.from_list(data2.table))
+  |> dict.merge(dict.from_list(data3.table))
+  |> dict.merge(dict.from_list(data4.table))
+  |> dict.merge(dict.from_list(data5.table))
 }
 
 /// Picks a random element from a weighted list. Runs in linear time and
