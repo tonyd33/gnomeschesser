@@ -17,7 +17,7 @@ rounds=8
 concurrency=$(echo "Math.max(($(nproc)/2) - 2, 4)" | NO_COLOR=1 deno repl -q)
 games=2
 results_dir="$repo_root_path/results"
-st=3
+st=5
 pull=yes
 build=yes
 book="$repo_root_path/opening_books/8moves_v3.pgn"
