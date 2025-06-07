@@ -403,11 +403,11 @@ fn do_negamax_alphabeta_failsoft(
         // Reduce captures/promotions less
         // Original Weiss values were:
         // #(0.2, 3.35)
-        True -> #(0.1, 6.4)
+        True -> #(0.1, 6.3)
         // Reduce quiet moves more
         // Original Weiss values were:
         // #(1.35, 2.75)
-        False -> #(0.45, 3.1)
+        False -> #(0.5, 3.1)
       }
       let assert Ok(ln_depth) = maths.natural_logarithm(int.to_float(depth))
       let assert Ok(ln_move_number) =
