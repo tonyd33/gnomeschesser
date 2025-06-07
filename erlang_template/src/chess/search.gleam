@@ -346,7 +346,7 @@ fn do_negamax_alphabeta_failsoft(
   // - Otherwise, continue as usual
   use <- result.lazy_unwrap(result.map(
     // Disable NMP during "endgame" and non-zw searches
-    case evaluate.phase(game.evaluation_data(game).npm - 3800) >. 0.0 && is_zw {
+    case evaluate.phase(game.evaluation_data(game).npm) >. 0.0 && is_zw {
       True -> null_evaluation
       False -> Error(Nil)
     },
