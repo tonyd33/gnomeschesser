@@ -13,11 +13,11 @@ pub type Score =
 
 const material_weight = 100.0
 
-const psqt_weight = 90.0
+const psqt_weight = 100.0
 
-const mobility_weight = 90.0
+const mobility_weight = 100.0
 
-const king_pawn_shield_weight = 50.0
+const king_pawn_shield_weight = 30.0
 
 const tempo_weight = 100.0
 
@@ -60,7 +60,7 @@ pub fn game(game: game.Game) -> Score {
     // The number at the end is a multiplier to give us tighter margins so that
     // it's easier to prune. Take caution on setting this number too high, as
     // search relies on it being close to 1.0
-    /. { 600.0 *. 1.25 }
+    /. { 600.0 *. 1.1 }
 
   score
   |> float.truncate
