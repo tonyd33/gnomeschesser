@@ -8,8 +8,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  sprt-stockfish:
-    runs-on: [self-hosted, linux, x64, fast]
+  stockfish:
+    runs-on: [self-hosted, linux, x64, linode]
     env:
       ImageOS: ubuntu24
     steps:
@@ -73,8 +73,8 @@ jobs:
           name: sprt-stockfish
           path: results/
 
-  sprt-regression:
-    runs-on: [self-hosted, linux, x64, fast]
+  regression:
+    runs-on: [self-hosted, linux, x64, linode]
     env:
       ImageOS: ubuntu24
       REGISTRY: ghcr.io

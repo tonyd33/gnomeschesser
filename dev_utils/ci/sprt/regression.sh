@@ -14,7 +14,7 @@ fastchess_event_name="Fastchess Tournament"
 rounds=8
 # run (half #cores - 2) games at a time.
 # yes, we're piping into deno just for this. yes, it's cursed
-concurrency=$(echo "Math.min(($(nproc)/2) - 2)" | NO_COLOR=1 deno repl -q)
+concurrency=$(echo "Math.max(($(nproc)/2) - 2, 4)" | NO_COLOR=1 deno repl -q)
 games=2
 results_dir="$repo_root_path/results"
 st=3
