@@ -11,7 +11,7 @@ challenger_args="--tag local -- -m 500M --cpus 2"
 defender_args="--tag latest -- -m 500M --cpus 2"
 
 fastchess_event_name="Fastchess Tournament"
-rounds=8
+rounds=16
 # run (half #cores - 2) games at a time.
 # yes, we're piping into deno just for this. yes, it's cursed
 concurrency=$(echo "Math.max(($(nproc)/2) - 2, 4)" | NO_COLOR=1 deno repl -q)
