@@ -10,15 +10,15 @@ import util/xint.{type ExtendedInt}
 pub type Score =
   ExtendedInt
 
-const material_weight = 85.0
+const material_weight = 100.0
 
-const psqt_weight = 40.0
+const psqt_weight = 90.0
 
-const mobility_weight = 45.0
+const mobility_weight = 90.0
 
-const king_pawn_shield_weight = 4.0
+const king_pawn_shield_weight = 50.0
 
-const tempo_weight = 85.0
+const tempo_weight = 100.0
 
 /// Evaluates the score of the game position
 /// > 0 means white is winning
@@ -50,13 +50,13 @@ pub fn game(game: game.Game) -> Score {
       +. { king_pawn_shield *. king_pawn_shield_weight }
       +. { tempo *. tempo_weight }
     }
-    /. {
-      material_weight
-      +. psqt_weight
-      +. mobility_weight
-      +. king_pawn_shield_weight
-      +. tempo_weight
-    }
+    // 500 = 100.0 * 5
+    //     = max weight * number of terms
+    // The number at the end is a multiplier to give us tighter margins so that
+    // it's easier to prune. Take caution on setting this number too high, as
+    // search relies on it being close to 1.0
+    /. { 500.0 *. 1.25 }
+
   score
   |> float.truncate
   |> xint.from_int
