@@ -1,5 +1,4 @@
 import chess/evaluate
-import chess/evaluate/common
 import chess/evaluate/psqt
 import chess/game
 import chess/move
@@ -309,7 +308,7 @@ fn do_negamax_alphabeta_failsoft(
   // vulnerable to zugzwangs.
   // https://www.chessprogramming.org/Null_Move_Reductions
   use null_evaluation <- interruptable.do({
-    let should_do_nmp = !is_check
+    let should_do_nmp = !is_check && is_zw
     use <- bool.guard(!should_do_nmp, interruptable.return(Error(Nil)))
 
     let r = 4
@@ -346,15 +345,15 @@ fn do_negamax_alphabeta_failsoft(
   // - Otherwise, continue as usual
   use <- result.lazy_unwrap(result.map(
     // Disable NMP during "endgame" and non-zw searches
-    case evaluate.phase(game.evaluation_data(game).npm - 3800) >. 0.0 && is_zw {
+    case evaluate.phase(game.evaluation_data(game).npm - 3800) >. 0.0 {
       True -> null_evaluation
       False -> Error(Nil)
     },
     interruptable.return,
   ))
-  let depth = case null_evaluation {
-    Ok(_) -> depth - 4
-    Error(Nil) -> depth
+  let #(depth, is_nmr) = case null_evaluation {
+    Ok(_) -> #(depth - 4, True)
+    Error(Nil) -> #(depth, False)
   }
   // We may need to evaluate now that we reduced depth. Do another check.
   use <- bool.lazy_guard(depth <= 0, fn() {
@@ -414,10 +413,6 @@ fn do_negamax_alphabeta_failsoft(
         maths.natural_logarithm(int.to_float(move_number))
       float.round(c +. { { ln_depth *. ln_move_number } /. d })
     }
-
-    // Currently we only have one factor contributing to any depth reductions,
-    // but this is subject to change if we add null move reductions (NMR).
-    let depth_reduction = lmr_depth_reduction
 
     let go = fn(e1: Evaluation, depth, alpha, beta) -> InterruptableState(
       SearchState,
@@ -487,13 +482,16 @@ fn do_negamax_alphabeta_failsoft(
     // Try to do a reduced search to see if it causes a beta-cutoff.
     use #(tentative_evaluation, tentative_alpha) <- interruptable.do(go(
       best_evaluation,
-      depth - 1 - depth_reduction,
+      depth - 1 - lmr_depth_reduction,
       alpha_pvs,
       beta_pvs,
     ))
 
     let re_search =
-      { xint.gte(tentative_evaluation.score, beta) && depth_reduction > 0 }
+      {
+        xint.gte(tentative_evaluation.score, beta)
+        && { lmr_depth_reduction > 0 || is_nmr }
+      }
       || {
         move_number > 0
         // score > alpha
