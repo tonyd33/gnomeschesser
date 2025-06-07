@@ -1,10 +1,8 @@
 import chess/bitboard
-import chess/evaluate/midgame
 import chess/game
 import chess/player
 import chess/square
 import gleam/int
-import gleam/io
 import gleam/list
 import gleam/result
 import gleam/string
@@ -119,7 +117,7 @@ pub fn main() {
   let assert Ok(game) = game.load_fen("4k3/5p2/3pp3/8/8/3P4/4PP2/4K3 w - - 0 1")
   let bb = bitboard.from_pieces(game.pieces(game))
   echo int.to_base2(bb.white_pawns)
-  let white_king = echo game.find_player_king(game, player.White)
+  // let white_king = echo game.find_player_king(game, player.White)
   // echo int.to_base2(int.bitwise_or(bb.white_pawns, 0b00000011100000000000))
   // echo midgame.count_pawns_close(white_king, player.White, bb.white_pawns)
 }
