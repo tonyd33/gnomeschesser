@@ -77,6 +77,18 @@ pub fn load_fen_starting_position_test() {
   )
 }
 
+pub fn load_fen_lax_test() {
+  load_fen("r1b2rk1/2q1b1pp/p2ppn2/1p6/3QP3/1BN1B3/PPP3PP/R4RK1 w - -")
+  |> should.equal(load_fen(
+    "r1b2rk1/2q1b1pp/p2ppn2/1p6/3QP3/1BN1B3/PPP3PP/R4RK1 w - - 0 1",
+  ))
+
+  load_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+  |> should.equal(load_fen(
+    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -",
+  ))
+}
+
 // See: https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation#Examples
 pub fn load_fen_e4_test() {
   let assert Ok(game) =

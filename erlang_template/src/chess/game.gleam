@@ -89,6 +89,8 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
         // a-f are 1-1 to what's destructured above. I'm too lazy and it's too
         // verbose to type them all out.
         [a, b, c, d, e, f] -> Ok(#(a, b, c, d, e, f))
+        [a, b, c, d, e] -> Ok(#(a, b, c, d, e, "1"))
+        [a, b, c, d] -> Ok(#(a, b, c, d, "0", "1"))
         _ -> Error(Nil)
       }
     },
