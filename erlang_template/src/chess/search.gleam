@@ -506,11 +506,13 @@ fn do_negamax_alphabeta_failsoft(
       // The search on the child node caused a beta-cutoff while reducing the
       // depth. We have to retry the search at the proper depth.
       True -> {
-        // use <- interruptable.discard(
-        //   interruptable.from_state(
-        //     search_state.stats_increment_lmr_verifications(depth),
-        //   ),
-        // )
+        // use <- interruptable.discard(case depth_reduction > 0 {
+        //   True ->
+        //     interruptable.from_state(
+        //       search_state.stats_increment_lmr_verifications(depth),
+        //     )
+        //   False -> interruptable.return(Nil)
+        // })
         use #(best_evaluation, alpha) <- interruptable.do(go(
           best_evaluation,
           depth - 1,
@@ -624,7 +626,7 @@ pub fn iteratively_deepen(
 /// (internally) iteratively deepen to find a PV move. This is how far we'll
 /// deepen.
 ///
-const iid_depth = 4
+const iid_depth = 2
 
 /// Internal iterative deepening is not always a benefit even if we miss the
 /// cache. We want to be selective about when we deepen: if we're close to the
@@ -638,7 +640,7 @@ const iid_depth = 4
 /// an IID upon cache miss. To not deepen past the leaf, this number should
 /// always be quite a bit greater than `iid_depth`.
 ///
-const iid_min_leaf_distance = 9
+const iid_min_leaf_distance = 8
 
 /// Get the PV move for a game, trying to hit the cache and falling back to
 /// (internally) iteratively deepening if we're far from the leaves.
@@ -653,15 +655,23 @@ fn get_pv_move(game: game.Game, depth: evaluation.Depth, alpha, beta, history) {
     // We hit the cache. No need to for IID at all, just return the PV move.
     Ok(transposition.Entry(eval:, ..)), _ ->
       interruptable.return(eval.best_move)
-    // We missed the cache and we're far from the leaves. So we should
-    // iteratively deepen for the PV move.
+    // We missed the cache andwe're far from the leaves.
+    // Then we'll internally iteratively deepen for a PV move.
     Error(Nil), True -> {
+      let is_zw = alpha == xint.subtract(beta, xint.from_int(1))
+      let reduced_depth = case is_zw {
+        // We'll spend more time searching for the best move on a PV node.
+        False -> depth / 3
+        // Non-PV node. This node probably isn't important anyway, so do a
+        // fast scan.
+        True -> iid_depth
+      }
       use eval <- interruptable.do(iteratively_deepen(
         game,
         1,
         alpha,
         beta,
-        SearchOpts(max_depth: Some(iid_depth)),
+        SearchOpts(max_depth: Some(reduced_depth)),
         history,
       ))
       use <- interruptable.discard(
@@ -671,7 +681,7 @@ fn get_pv_move(game: game.Game, depth: evaluation.Depth, alpha, beta, history) {
       )
       interruptable.return(eval.best_move)
     }
-    // Cache miss but we're close to the leaves. Too bad.
+    // Cache miss but we're close to the leaves or this isn't a PV node.
     Error(Nil), False -> interruptable.return(None)
   }
 }
