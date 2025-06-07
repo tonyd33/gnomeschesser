@@ -145,8 +145,9 @@ pub fn transposition_insert_without_stats(
   // - The new entry is deeper than the existing entry's depth
   //   (depth-preferred)
   let assert Ok(transposition) = {
-    use existing_entry <- iv.update(search_state.transposition, key)
-    case existing_entry {
+    use maybe_existing_entry <- iv.update(search_state.transposition, key)
+
+    let updated_entry = case maybe_existing_entry {
       Some(existing_entry) -> {
         let override =
           eval.node_type == evaluation.PV
@@ -159,8 +160,9 @@ pub fn transposition_insert_without_stats(
       }
       None -> entry
     }
-    |> Some
+    Some(updated_entry)
   }
+
   SearchState(..search_state, transposition:)
 }
 
