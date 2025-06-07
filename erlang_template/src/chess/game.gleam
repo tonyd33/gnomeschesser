@@ -1,3 +1,4 @@
+import chess/bitboard.{type BitBoard, type GameBitboard}
 import chess/evaluate/common as evaluate_common
 import chess/evaluate/psqt
 import chess/game/castle.{type Castle, KingSide, QueenSide}
@@ -26,6 +27,7 @@ pub type Board =
 pub opaque type Game {
   Game(
     board: Board,
+    bitboard: GameBitboard,
     active_color: player.Player,
     castling_availability: castle.CastlingAvailability,
     en_passant_target_square: Option(#(player.Player, square.Square)),
@@ -185,6 +187,7 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
     "b" -> player.Black
     _ -> panic
   }
+  let bitboard = bitboard.from_pieces(pieces)
   let en_passant_target_square =
     square.from_string(en_passant_target_square)
     |> result.map(pair.new(player.opponent(active_color), _))
@@ -234,6 +237,7 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
 
   Game(
     board:,
+    bitboard:,
     active_color:,
     castling_availability:,
     en_passant_target_square:,
@@ -259,6 +263,10 @@ pub fn turn(game: Game) -> player.Player {
 
 pub fn board(game: Game) -> Dict(square.Square, piece.Piece) {
   game.board
+}
+
+pub fn get_game_bitboard(game: Game) {
+  game.bitboard
 }
 
 pub fn hash(game: Game) -> Int {
@@ -734,9 +742,11 @@ pub fn move_from_san(
 /// Removes a piece on the board with the side effect of updating the zobrist
 /// zobrist hash
 ///
-fn board_remove(board, hash, square, piece) {
+fn board_remove(board, bitboard, hash, square, piece) {
   #(
     dict.delete(board, square),
+    // mask it out
+    bitboard.and(bitboard, piece, int.bitwise_not(bitboard.from_square(square))),
     // (un)XOR squares out
     int.bitwise_exclusive_or(hash, piece_hash(square, piece)),
   )
@@ -745,9 +755,11 @@ fn board_remove(board, hash, square, piece) {
 /// Inserts a piece on the board with the side effect of updating the zobrist
 /// zobrist hash
 ///
-fn board_insert(board, hash, square, piece) {
+fn board_insert(board, bitboard, hash, square, piece) {
   #(
     dict.insert(board, square, piece),
+    // mask it in
+    bitboard.or(bitboard, piece, bitboard.from_square(square)),
     // XOR squares in
     int.bitwise_exclusive_or(hash, piece_hash(square, piece)),
   )
@@ -762,6 +774,7 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
   let assert Some(move_context) = move.context
   let Game(
     board:,
+    bitboard:,
     castling_availability:,
     active_color: us,
     en_passant_target_square: prev_en_passant_target_square,
@@ -793,24 +806,28 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     |> option.map(move.rook_castle(us, _))
 
   // Updates to the board.
-  let #(board, hash) = {
+  let #(board, bitboard, hash) = {
     // Over the course of hundreds of thousands of nodes, manually doing this
     // rather than folding over a list is marginally but measurably faster.
-    let #(board, hash) = board_remove(board, hash, from, move_context.piece)
-    let #(board, hash) = case move_context.capture {
-      Some(#(from, piece)) -> board_remove(board, hash, from, piece)
-      None -> #(board, hash)
+    let #(board, bitboard, hash) =
+      board_remove(board, bitboard, hash, from, move_context.piece)
+    let #(board, bitboard, hash) = case move_context.capture {
+      Some(#(from, piece)) -> board_remove(board, bitboard, hash, from, piece)
+      None -> #(board, bitboard, hash)
     }
-    let #(board, hash) = case castle_rook_move {
-      Some(x) -> board_remove(board, hash, x.from, piece.Piece(us, piece.Rook))
-      None -> #(board, hash)
+    let #(board, bitboard, hash) = case castle_rook_move {
+      Some(x) ->
+        board_remove(board, bitboard, hash, x.from, piece.Piece(us, piece.Rook))
+      None -> #(board, bitboard, hash)
     }
-    let #(board, hash) = board_insert(board, hash, to, new_piece)
-    let #(board, hash) = case castle_rook_move {
-      Some(x) -> board_insert(board, hash, x.to, piece.Piece(us, piece.Rook))
-      None -> #(board, hash)
+    let #(board, bitboard, hash) =
+      board_insert(board, bitboard, hash, to, new_piece)
+    let #(board, bitboard, hash) = case castle_rook_move {
+      Some(x) ->
+        board_insert(board, bitboard, hash, x.to, piece.Piece(us, piece.Rook))
+      None -> #(board, bitboard, hash)
     }
-    #(board, hash)
+    #(board, bitboard, hash)
   }
   // en passant target square update
   // if it's a pawn move and it has a 2 rank difference
@@ -1047,6 +1064,7 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
 
   Game(
     board:,
+    bitboard:,
     active_color: them,
     castling_availability:,
     en_passant_target_square:,
