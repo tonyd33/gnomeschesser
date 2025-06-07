@@ -84,7 +84,7 @@ pub fn history_update(
 
 /// To reduce the need of manual trimming when the transposition table gets too
 /// large, we reduce the key space by modding out by this key size.
-const key_size = 100_000
+const key_size = 0xFFFF
 
 fn transposition_key_reduce(key: Int) {
   key % key_size
