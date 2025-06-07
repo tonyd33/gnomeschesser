@@ -11,11 +11,12 @@ import gleam/dict.{type Dict}
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import gleam/otp/actor
+import gleam/order
 import gleam/pair
 import gleam/result
 import gleam/set
 import gleam/string
+import util/array8.{type Array8, Array8}
 import util/direction
 
 pub const start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -38,15 +39,9 @@ pub opaque type Game {
     knight_count: Int,
     // some cached data that we use often
     white_king_position: square.Square,
-    // list of attackers 
-    white_king_attackers: List(square.Square),
-    // dict of blocker and the pinning piece
-    white_king_blockers: dict.Dict(square.Square, square.Square),
     black_king_position: square.Square,
-    // list of attackers 
-    black_king_attackers: List(square.Square),
-    // dict of blocker and the pinning piece
-    black_king_blockers: dict.Dict(square.Square, square.Square),
+    white_king_ray_pieces: Array8(Array8(Option(#(square.Square, piece.Piece)))),
+    black_king_ray_pieces: Array8(Array8(Option(#(square.Square, piece.Piece)))),
     evaluation_data: EvaluationData,
   )
 }
@@ -227,10 +222,8 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
   let knight_count =
     pieces |> list.count(fn(x) { { x.1 }.symbol == piece.Knight })
 
-  let #(white_king_attackers, white_king_blockers) =
-    attackers_and_blockers(board, white_king_position, player.Black)
-  let #(black_king_attackers, black_king_blockers) =
-    attackers_and_blockers(board, black_king_position, player.White)
+  let white_king_ray_pieces = square.ray_pieces(board, white_king_position)
+  let black_king_ray_pieces = square.ray_pieces(board, black_king_position)
 
   Game(
     board:,
@@ -243,12 +236,10 @@ pub fn load_fen(fen: String) -> Result(Game, Nil) {
     evaluation_data:,
     bishop_count:,
     knight_count:,
+    white_king_ray_pieces:,
+    black_king_ray_pieces:,
     white_king_position:,
-    white_king_attackers:,
-    white_king_blockers:,
     black_king_position:,
-    black_king_attackers:,
-    black_king_blockers:,
   )
   |> Ok
 }
@@ -298,6 +289,13 @@ pub fn halfmove_clock(game: Game) -> Int {
 
 pub fn fullmove_number(game: Game) -> Int {
   game.fullmove_number
+}
+
+pub fn krps(game: Game, player: player.Player) {
+  case player {
+    player.White -> game.white_king_ray_pieces
+    player.Black -> game.black_king_ray_pieces
+  }
 }
 
 /// Makes a null move
@@ -482,8 +480,27 @@ pub fn find_piece(game: Game, piece: piece.Piece) -> List(square.Square) {
 
 pub fn is_check(game: Game, player: player.Player) -> Bool {
   case player {
-    player.White -> !list.is_empty(game.white_king_attackers)
-    player.Black -> !list.is_empty(game.black_king_attackers)
+    player.White -> {
+      // TODO: Optimize
+      let #(white_king_attackers, _) =
+        attackers_and_blockers(
+          game.board,
+          game.white_king_position,
+          game.white_king_ray_pieces,
+          player.Black,
+        )
+      !list.is_empty(white_king_attackers)
+    }
+    player.Black -> {
+      let #(black_king_attackers, _) =
+        attackers_and_blockers(
+          game.board,
+          game.black_king_position,
+          game.black_king_ray_pieces,
+          player.White,
+        )
+      !list.is_empty(black_king_attackers)
+    }
   }
 }
 
@@ -734,7 +751,7 @@ pub fn move_from_san(
 /// Removes a piece on the board with the side effect of updating the zobrist
 /// zobrist hash
 ///
-fn board_remove(board, hash, square, piece) {
+fn board_remove1(board, hash, square, piece) {
   #(
     dict.delete(board, square),
     // (un)XOR squares out
@@ -745,11 +762,113 @@ fn board_remove(board, hash, square, piece) {
 /// Inserts a piece on the board with the side effect of updating the zobrist
 /// zobrist hash
 ///
-fn board_insert(board, hash, square, piece) {
+fn board_insert1(board, hash, square, piece) {
   #(
     dict.insert(board, square, piece),
     // XOR squares in
     int.bitwise_exclusive_or(hash, piece_hash(square, piece)),
+  )
+}
+
+/// Removes a piece on the board with side effects
+///
+fn board_remove2(
+  board,
+  hash,
+  white_king_position,
+  black_king_position,
+  white_king_ray_pieces,
+  black_king_ray_pieces,
+  square,
+  piece,
+) {
+  let new_white_king_ray_pieces = case
+    square.direction_between(white_king_position, square)
+  {
+    Ok(#(direction, distance)) -> {
+      let idx = direction.number(direction)
+      let assert Ok(ret) =
+        array8.update(white_king_ray_pieces, idx, fn(xs) {
+          let assert Ok(xs) = array8.set(xs, distance, None)
+          xs
+        })
+      ret
+    }
+    Error(Nil) -> white_king_ray_pieces
+  }
+
+  let new_black_king_ray_pieces = case
+    square.direction_between(black_king_position, square)
+  {
+    Ok(#(direction, distance)) -> {
+      let idx = direction.number(direction)
+      let assert Ok(ret) =
+        array8.update(black_king_ray_pieces, idx, fn(xs) {
+          let assert Ok(xs) = array8.set(xs, distance, None)
+          xs
+        })
+      ret
+    }
+    Error(Nil) -> black_king_ray_pieces
+  }
+  #(
+    dict.delete(board, square),
+    // (un)XOR squares out
+    int.bitwise_exclusive_or(hash, piece_hash(square, piece)),
+    new_white_king_ray_pieces,
+    new_black_king_ray_pieces,
+  )
+}
+
+/// Inserts a piece on the board with the side effect of updating the zobrist
+/// zobrist hash
+///
+fn board_insert2(
+  board,
+  hash,
+  white_king_position,
+  black_king_position,
+  white_king_ray_pieces,
+  black_king_ray_pieces,
+  square,
+  piece,
+) {
+  let new_white_king_ray_pieces = case
+    square.direction_between(white_king_position, square)
+  {
+    Ok(#(direction, distance)) -> {
+      let idx = direction.number(direction)
+      let assert Ok(ret) =
+        array8.update(white_king_ray_pieces, idx, fn(xs) {
+          let assert Ok(xs) = array8.set(xs, distance, Some(#(square, piece)))
+          xs
+        })
+      ret
+    }
+    Error(Nil) -> white_king_ray_pieces
+  }
+
+  let new_black_king_ray_pieces = case
+    square.direction_between(black_king_position, square)
+  {
+    Ok(#(direction, distance)) -> {
+      let idx = direction.number(direction)
+      let assert Ok(ret) =
+        array8.update(black_king_ray_pieces, idx, fn(xs) {
+          let assert Ok(xs) = array8.set(xs, distance, Some(#(square, piece)))
+          xs
+        })
+      ret
+    }
+    Error(Nil) -> black_king_ray_pieces
+  }
+
+  #(
+    dict.insert(board, square, piece),
+    // XOR squares in
+    int.bitwise_exclusive_or(hash, piece_hash(square, piece)),
+    new_white_king_ray_pieces,
+    new_black_king_ray_pieces,
   )
 }
 
@@ -771,12 +890,10 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     evaluation_data:,
     bishop_count:,
     knight_count:,
+    white_king_ray_pieces: wkrp,
+    black_king_ray_pieces: bkrp,
     white_king_position:,
-    white_king_attackers:,
-    white_king_blockers:,
     black_king_position:,
-    black_king_attackers:,
-    black_king_blockers:,
   ) = game
   let prev_castling_availability = castling_availability
   let them = player.opponent(us)
@@ -793,24 +910,150 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     |> option.map(move.rook_castle(us, _))
 
   // Updates to the board.
-  let #(board, hash) = {
-    // Over the course of hundreds of thousands of nodes, manually doing this
-    // rather than folding over a list is marginally but measurably faster.
-    let #(board, hash) = board_remove(board, hash, from, move_context.piece)
-    let #(board, hash) = case move_context.capture {
-      Some(#(from, piece)) -> board_remove(board, hash, from, piece)
-      None -> #(board, hash)
+  // Over the course of hundreds of thousands of nodes, manually doing this
+  // rather than folding over a list is marginally but measurably faster.
+  let #(board, hash, wkrp, bkrp) = {
+    case piece {
+      piece.Piece(player, piece.King) -> {
+        let #(board, hash, wkrp, bkrp) =
+          board_remove2(
+            board,
+            hash,
+            white_king_position,
+            black_king_position,
+            wkrp,
+            bkrp,
+            from,
+            move_context.piece,
+          )
+        let #(board, hash, wkrp, bkrp) = case move_context.capture {
+          Some(#(from, piece)) ->
+            board_remove2(
+              board,
+              hash,
+              white_king_position,
+              black_king_position,
+              wkrp,
+              bkrp,
+              from,
+              piece,
+            )
+          None -> #(board, hash, wkrp, bkrp)
+        }
+        let #(board, hash, wkrp, bkrp) = case castle_rook_move {
+          Some(x) ->
+            board_remove2(
+              board,
+              hash,
+              white_king_position,
+              black_king_position,
+              wkrp,
+              bkrp,
+              x.from,
+              piece.Piece(us, piece.Rook),
+            )
+          None -> #(board, hash, wkrp, bkrp)
+        }
+        let #(board, hash, wkrp, bkrp) =
+          board_insert2(
+            board,
+            hash,
+            white_king_position,
+            black_king_position,
+            wkrp,
+            bkrp,
+            to,
+            new_piece,
+          )
+        let #(board, hash, wkrp, bkrp) = case castle_rook_move {
+          Some(x) ->
+            board_insert2(
+              board,
+              hash,
+              white_king_position,
+              black_king_position,
+              wkrp,
+              bkrp,
+              x.to,
+              piece.Piece(us, piece.Rook),
+            )
+          None -> #(board, hash, wkrp, bkrp)
+        }
+        // Recompute white/black king ray pieces
+        let #(wkrp, bkrp) = case player {
+          player.White -> #(square.ray_pieces(board, to), bkrp)
+          player.Black -> #(wkrp, square.ray_pieces(board, to))
+        }
+        #(board, hash, wkrp, bkrp)
+      }
+      _ -> {
+        let #(board, hash, wkrp, bkrp) =
+          board_remove2(
+            board,
+            hash,
+            white_king_position,
+            black_king_position,
+            wkrp,
+            bkrp,
+            from,
+            move_context.piece,
+          )
+        let #(board, hash, wkrp, bkrp) = case move_context.capture {
+          Some(#(from, piece)) ->
+            board_remove2(
+              board,
+              hash,
+              white_king_position,
+              black_king_position,
+              wkrp,
+              bkrp,
+              from,
+              piece,
+            )
+          None -> #(board, hash, wkrp, bkrp)
+        }
+        let #(board, hash, wkrp, bkrp) = case castle_rook_move {
+          Some(x) ->
+            board_remove2(
+              board,
+              hash,
+              white_king_position,
+              black_king_position,
+              wkrp,
+              bkrp,
+              x.from,
+              piece.Piece(us, piece.Rook),
+            )
+          None -> #(board, hash, wkrp, bkrp)
+        }
+        let #(board, hash, wkrp, bkrp) =
+          board_insert2(
+            board,
+            hash,
+            white_king_position,
+            black_king_position,
+            wkrp,
+            bkrp,
+            to,
+            new_piece,
+          )
+        let #(board, hash, wkrp, bkrp) = case castle_rook_move {
+          Some(x) ->
+            board_insert2(
+              board,
+              hash,
+              white_king_position,
+              black_king_position,
+              wkrp,
+              bkrp,
+              x.to,
+              piece.Piece(us, piece.Rook),
+            )
+          None -> #(board, hash, wkrp, bkrp)
+        }
+        #(board, hash, wkrp, bkrp)
+      }
     }
-    let #(board, hash) = case castle_rook_move {
-      Some(x) -> board_remove(board, hash, x.from, piece.Piece(us, piece.Rook))
-      None -> #(board, hash)
-    }
-    let #(board, hash) = board_insert(board, hash, to, new_piece)
-    let #(board, hash) = case castle_rook_move {
-      Some(x) -> board_insert(board, hash, x.to, piece.Piece(us, piece.Rook))
-      None -> #(board, hash)
-    }
-    #(board, hash)
   }
   // en passant target square update
   // if it's a pawn move and it has a 2 rank difference
@@ -956,7 +1199,7 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
 
   let evaluation_data = {
     [
-      //  "to" 
+      //  "to"
       EvaluationData(
         npm: evaluate_common.piece_symbol_npm(new_piece.symbol),
         material_mg: evaluate_common.piece_mg(new_piece),
@@ -964,7 +1207,7 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
         psqt_mg: psqt.midgame(new_piece, to),
         psqt_eg: psqt.endgame(new_piece, to),
       ),
-      // "from"   
+      // "from"
       EvaluationData(
         npm: -evaluate_common.piece_symbol_npm(piece.symbol),
         material_mg: -evaluate_common.piece_mg(piece),
@@ -1033,17 +1276,6 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     Some(piece.Bishop) -> #(bishop_count + 1, knight_count)
     _ -> #(bishop_count, knight_count)
   }
-  // TODO: update this incrementally more?
-  // we could possibly take advantage of the fact that we're not moving into check
-  // and we could maybe see if we're changing the block?
-  // either a blocking piece is moving, or we're moving into a block
-  // or we're capturing a pinning piece
-  // and only if it's a king move we regenerate everything
-  // or maybe we just leave it like this
-  let #(white_king_attackers, white_king_blockers) =
-    attackers_and_blockers(board, white_king_position, player.Black)
-  let #(black_king_attackers, black_king_blockers) =
-    attackers_and_blockers(board, black_king_position, player.White)
 
   Game(
     board:,
@@ -1056,12 +1288,10 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     evaluation_data:,
     bishop_count:,
     knight_count:,
+    white_king_ray_pieces: wkrp,
+    black_king_ray_pieces: bkrp,
     white_king_position:,
-    white_king_attackers:,
-    white_king_blockers:,
     black_king_position:,
-    black_king_attackers:,
-    black_king_blockers:,
   )
 }
 
@@ -1078,15 +1308,6 @@ pub fn validate_move(
   game: Game,
 ) -> Result(move.Move(move.ValidInContext), Nil) {
   valid_moves(game) |> list.find(move.equal(_, move))
-}
-
-fn can_pseudolegal_castle(game: Game, castle) {
-  let us = game.active_color
-
-  let occupancy_blocked =
-    castle.occupancy_squares(us, castle)
-    |> list.any(fn(square) { dict.has_key(game.board, square) })
-  !occupancy_blocked
 }
 
 fn generate_castle_move(game: Game, castle_player, castle) {
@@ -1121,23 +1342,23 @@ fn generate_castle_move(game: Game, castle_player, castle) {
 }
 
 /// get friendly squares that are blocking an attack for a player
-pub fn king_blockers(game: Game, for: player.Player) {
-  case for {
-    player.White -> game.white_king_blockers
-    player.Black -> game.black_king_blockers
-  }
-}
-
-/// get squares that are attacking a player's king
-pub fn king_attackers(game: Game, to: player.Player) {
-  case to {
-    player.White -> game.white_king_attackers
-    player.Black -> game.black_king_attackers
-  }
-}
+// pub fn king_blockers(game: Game, for: player.Player) {
+//   case for {
+//     player.White -> game.white_king_blockers
+//     player.Black -> game.black_king_blockers
+//   }
+// }
+//
+// /// get squares that are attacking a player's king
+// pub fn king_attackers(game: Game, to: player.Player) {
+//   case to {
+//     player.White -> game.white_king_attackers
+//     player.Black -> game.black_king_attackers
+//   }
+// }
 
 /// Calculates the attackers by a player to a square
-fn attackers_and_blockers(
+pub fn attackers_and_blockers_old(
   board: Board,
   square: square.Square,
   by: player.Player,
@@ -1160,6 +1381,111 @@ fn attackers_and_blockers(
   #(attackers, blockers)
 }
 
+type ScanInfo {
+  ScannedNothing
+  Attack(attacker: square.Square)
+  Pin(pinner: square.Square)
+  PinAndAttack(pinner: square.Square, attacker: square.Square)
+}
+
+pub fn king_attackers_and_blockers(game: Game, player) {
+  attackers_and_blockers(
+    game.board,
+    case player {
+      player.White -> game.white_king_position
+      player.Black -> game.black_king_position
+    },
+    case player {
+      player.White -> game.white_king_ray_pieces
+      player.Black -> game.black_king_ray_pieces
+    },
+    player.opponent(player),
+  )
+}
+
+pub fn attackers_and_blockers(
+  board: Board,
+  center: square.Square,
+  x: Array8(Array8(Option(#(square.Square, piece.Piece)))),
+  by: player.Player,
+) {
+  let #(attackers, blockers) = {
+    use #(attackers, blockers), ray_pieces <- array8.fold(x, #([], []))
+    let scan = {
+      use pinfo, maybe_piece <- array8.fold_until(ray_pieces, ScannedNothing)
+      case maybe_piece {
+        Some(#(square, piece.Piece(player, piece))) ->
+          case player == by, pinfo {
+            // The first piece along this ray was ours. We want to discover
+            // if the second piece along this ray is theirs.
+            False, ScannedNothing -> list.Continue(Pin(square))
+            // The first piece along this ray was theirs. Stop immediately
+            // either way, but we'll only consider it an attack if they can
+            // attack us
+            True, ScannedNothing ->
+              case square.has_right_attack_offsets(center, square, piece) {
+                True -> {
+                  case piece {
+                    piece.Pawn ->
+                      case player, int.compare(square - center, 0) {
+                        player.Black, order.Gt | player.White, order.Lt ->
+                          list.Stop(Attack(square))
+                        _, _ -> list.Stop(ScannedNothing)
+                      }
+                    _ -> list.Stop(Attack(square))
+                  }
+                }
+                False -> list.Stop(ScannedNothing)
+              }
+            // The first piece along this ray was ours, the second was theirs.
+            // Stop immediately
+            True, Pin(pin_square) ->
+              case square.has_right_attack_offsets(center, square, piece) {
+                True -> {
+                  case piece {
+                    piece.Pawn ->
+                      case player, int.compare(square - center, 0) {
+                        player.Black, order.Gt | player.White, order.Lt ->
+                          list.Stop(PinAndAttack(pin_square, square))
+                        _, _ -> list.Stop(ScannedNothing)
+                      }
+                    _ -> list.Stop(PinAndAttack(pin_square, square))
+                  }
+                }
+                False -> list.Stop(ScannedNothing)
+              }
+            // The first two pieces along this ray were ours. Stop immediately
+            False, Pin(_) -> list.Stop(pinfo)
+            // Can't happen. We always stop on Attack and PinAndAttack
+            _, Attack(_) -> panic
+            _, PinAndAttack(_, _) -> panic
+          }
+        None -> list.Continue(pinfo)
+      }
+    }
+
+    case scan {
+      ScannedNothing | Pin(_) -> #(attackers, blockers)
+      Attack(square) -> #([square, ..attackers], blockers)
+      PinAndAttack(pin_square, attack_square) -> #(attackers, [
+        #(pin_square, attack_square),
+        ..blockers
+      ])
+    }
+  }
+  let blockers = dict.from_list(blockers)
+  let knight_attacks =
+    square.knight_moves(center)
+    |> list.filter(fn(s) {
+      case dict.get(board, s) {
+        Ok(piece.Piece(player, piece.Knight)) if player == by -> True
+        _ -> False
+      }
+    })
+
+  #(list.append(knight_attacks, attackers), blockers)
+}
+
 /// generate valid moves
 pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
   let us = game.active_color
@@ -1171,8 +1497,7 @@ pub fn valid_moves(game: Game) -> List(move.Move(move.ValidInContext)) {
   let king_position = find_player_king(game, us)
 
   // find attacks and pins to the king
-  let king_attackers = king_attackers(game, us)
-  let king_blockers = king_blockers(game, us)
+  let #(king_attackers, king_blockers) = king_attackers_and_blockers(game, us)
 
   // We always generate king moves to squares not attacked
   let king_moves = {
