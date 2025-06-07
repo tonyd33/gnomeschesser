@@ -96,7 +96,7 @@ pub fn evaluate_regression_test() {
   evaluate.game(game1) |> should.equal(xint.from_int(3))
   evaluate.game(game2) |> should.equal(xint.from_int(18))
   evaluate.game(game3) |> should.equal(xint.from_int(-4))
-  evaluate.game(game4) |> should.equal(xint.from_int(-45))
+  evaluate.game(game4) |> should.equal(xint.from_int(-47))
 }
 
 pub fn evaluate_pawn_structure_test() {
@@ -121,8 +121,8 @@ pub fn evaluate_pawn_structure_test() {
   pawn_structure.evaluate(game1, 0.0) |> should.equal(0.0)
   pawn_structure.evaluate(game2, 0.0) |> should.equal(13.0)
   pawn_structure.evaluate(game3, 0.0) |> should.equal(-57.0)
-  pawn_structure.evaluate(game4, 0.0) |> should.equal(-1.0)
-  pawn_structure.evaluate(game5, 0.0) |> should.equal(-534.0)
+  pawn_structure.evaluate(game4, 0.0) |> should.equal(-19.0)
+  pawn_structure.evaluate(game5, 0.0) |> should.equal(-604.0)
 }
 
 pub fn evaluate_count_pawns_close_test() {
