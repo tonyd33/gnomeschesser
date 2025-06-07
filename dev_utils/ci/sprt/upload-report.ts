@@ -80,12 +80,19 @@ async function main() {
       default: 10,
       describe: "max number of retries before failing",
     })
+    .option("n", {
+      type: "number",
+      default: 8,
+      describe: "max number of games to upload",
+    })
     .option("title", {
       type: "string",
       default: "SPRT Results",
       describe: "title of the markdown result",
     })
     .parse(hideBin(process.argv));
+
+  const firstN = opts.n;
 
   dotenv.config();
   const lichessKey = process.env["LICHESS_KEY"];
@@ -137,8 +144,11 @@ async function main() {
       },
     );
 
-  for await (const { pgn, headers } of pgns) {
-    const game = await importGameWithRetries(pgn);
+  for (let i = 0; i < pgns.length; i++) {
+    const { pgn, headers } = pgns[i];
+    const game = i < firstN
+      ? await importGameWithRetries(pgn)
+      : { id: "n/a", url: "n/a" };
     await sleep(opts.rest);
     results.push({ pgn, headers, game });
   }
@@ -211,7 +221,7 @@ async function main() {
 - ${competitor2} wins: ${competitor2Wins}
 - Draws: ${draws}
 
-## Games
+## First ${firstN} Games
 
 ${mdtable}
 

@@ -11,7 +11,7 @@ fastchess_event_name="Fastchess Tournament"
 rounds=6
 # run (half #cores - 2) games at a time.
 # yes, we're piping into deno just for this. yes, it's cursed
-concurrency=$(echo "Math.max(($(nproc)/2) - 2, 1)" | NO_COLOR=1 deno repl -q)
+concurrency=$(echo "Math.max(($(nproc)/2) - 2, 4)" | NO_COLOR=1 deno repl -q)
 games=1
 stockfish_skill_level=20
 stockfish_depth=24
