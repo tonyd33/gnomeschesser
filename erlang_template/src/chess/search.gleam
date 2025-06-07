@@ -1,5 +1,4 @@
 import chess/evaluate
-import chess/evaluate/common
 import chess/evaluate/psqt
 import chess/game
 import chess/move
@@ -220,7 +219,9 @@ fn negamax_alphabeta_failsoft(
     search_state.transposition_get(game_hash)
     |> interruptable.from_state
     |> interruptable.map(fn(x) {
-      use transposition.Entry(cached_depth, evaluation, _) <- result.try(x)
+      use transposition.Entry(depth: cached_depth, eval: evaluation, ..) <- result.try(
+        x,
+      )
       use <- bool.guard(cached_depth < depth, Error(Nil))
       // If we find a cached entry that is deeper than our current search
       case evaluation {

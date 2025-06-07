@@ -14,18 +14,30 @@ import gleam/time/timestamp
 import iv
 import util/state.{type State, State}
 
+pub type Cluster {
+  Cluster(
+    always_replace: Option(transposition.Entry),
+    depth_preferred: Option(transposition.Entry),
+  )
+}
+
+const empty_cluster = Cluster(None, None)
+
 pub type SearchState {
   SearchState(
-    transposition: iv.Array(Option(transposition.Entry)),
+    // always-replace, depth-preferred
+    transposition: iv.Array(Cluster),
     history: dict.Dict(#(square.Square, piece.Piece), Int),
+    cycle: Int,
     stats: SearchStats,
   )
 }
 
 pub fn new(now: timestamp.Timestamp) {
   SearchState(
-    transposition: iv.repeat(None, key_size + 1),
+    transposition: iv.repeat(empty_cluster, key_size + 1),
     history: dict.new(),
+    cycle: 0,
     stats: SearchStats(
       iteration_depth: 0,
       total_nodes_searched: 0,
@@ -78,15 +90,85 @@ fn transposition_key_reduce(key: Int) {
   key % key_size
 }
 
+fn cluster_get(cluster: Cluster, hash: Int) {
+  case cluster {
+    Cluster(Some(always_replace), Some(depth_preferred))
+      if always_replace.hash == hash && depth_preferred.hash == hash
+    ->
+      // Both entry have the same hash. Break the tie by depth
+      case always_replace.depth > depth_preferred.depth {
+        True -> Ok(always_replace)
+        False -> Ok(depth_preferred)
+      }
+    Cluster(Some(always_replace), _) if always_replace.hash == hash ->
+      Ok(always_replace)
+    Cluster(_, Some(depth_preferred)) if depth_preferred.hash == hash ->
+      Ok(depth_preferred)
+    Cluster(None, None) -> Error(Nil)
+    _ -> Error(Nil)
+  }
+}
+
+fn cluster_insert(
+  cluster: Cluster,
+  hash: Int,
+  prospective_entry: transposition.Entry,
+) {
+  let is_new_entry = option.is_none(cluster.always_replace)
+  let always_replace = prospective_entry
+  let depth_preferred = case cluster.depth_preferred {
+    Some(depth_preferred) -> {
+      let is_pv = prospective_entry.eval.node_type == evaluation.PV
+      let pv_num = case is_pv {
+        True -> 1
+        False -> 0
+      }
+      // Update the transposition table if:
+      // - The new entry is a PV, or
+      // - The new entry replaces the existing hash, or
+      // - The new entry is considerably deeper than the existing entry's depth
+      //   (depth-preferred)
+      let override =
+        is_pv
+        || depth_preferred.hash != hash
+        // Consider the entry to be deeper if it's PV
+        || prospective_entry.depth + { 2 * pv_num } > depth_preferred.depth + 2
+      case override {
+        True -> prospective_entry
+        False -> depth_preferred
+      }
+    }
+    None -> prospective_entry
+  }
+  #(Cluster(Some(always_replace), Some(depth_preferred)), is_new_entry)
+}
+
 pub fn transposition_get(
   hash: Int,
 ) -> State(SearchState, Result(transposition.Entry, Nil)) {
   use search_state: SearchState <- State(run: _)
   let transposition = search_state.transposition
   let key = transposition_key_reduce(hash)
-  let entry = iv.get(transposition, key)
+  let assert Ok(cluster) = iv.get(transposition, key)
+  let entry = case cluster {
+    Cluster(_, Some(depth_preferred)) if depth_preferred.hash == hash ->
+      Ok(depth_preferred)
+    Cluster(Some(always_replace), Some(depth_preferred))
+      if always_replace.hash == hash && depth_preferred.hash == hash
+    ->
+      // Both entry have the same hash. Break the tie by depth
+      case always_replace.depth > depth_preferred.depth {
+        True -> Ok(always_replace)
+        False -> Ok(depth_preferred)
+      }
+    Cluster(Some(always_replace), _) if always_replace.hash == hash ->
+      Ok(always_replace)
+    Cluster(None, None) -> Error(Nil)
+    _ -> Error(Nil)
+  }
+
   case entry {
-    Ok(Some(entry)) if entry.hash == hash -> {
+    Ok(entry) -> {
       #(
         Ok(entry),
         SearchState(
@@ -98,8 +180,7 @@ pub fn transposition_get(
         ),
       )
     }
-    Error(_) -> panic as "shit"
-    _ -> #(
+    Error(Nil) -> #(
       Error(Nil),
       SearchState(
         ..search_state,
@@ -118,37 +199,41 @@ pub fn transposition_insert(
 ) -> State(SearchState, Nil) {
   let #(depth, eval) = entry
   use search_state: SearchState <- state.modify
-  let entry = transposition.Entry(hash:, depth:, eval:)
+  let entry = transposition.Entry(hash:, depth:, eval:, age: search_state.cycle)
   let key = transposition_key_reduce(hash)
 
-  // Update the transposition table if:
-  // - The new entry is a PV, or
-  // - The new entry replaces the existing hash, or
-  // - The new entry is deeper than the existing entry's depth
-  //   (depth-preferred)
-  let #(transposition, is_new_entry) = {
-    let assert Ok(maybe_existing_entry) =
-      iv.get(search_state.transposition, key)
-
-    let updated_entry = case maybe_existing_entry {
-      Some(existing_entry) -> {
+  let assert Ok(cluster) = iv.get(search_state.transposition, key)
+  let #(cluster, is_new_entry) = {
+    let is_new_entry = option.is_none(cluster.always_replace)
+    let always_replace = entry
+    let depth_preferred = case cluster.depth_preferred {
+      Some(depth_preferred) -> {
+        let is_pv = entry.eval.node_type == evaluation.PV
+        let pv_num = case is_pv {
+          True -> 1
+          False -> 0
+        }
+        // Update the transposition table if:
+        // - The new entry is a PV, or
+        // - The new entry replaces the existing hash, or
+        // - The new entry is considerably deeper than the existing entry's depth
+        //   (depth-preferred)
         let override =
-          eval.node_type == evaluation.PV
-          || existing_entry.hash != hash
-          || depth > existing_entry.depth
+          is_pv
+          || depth_preferred.hash != hash
+          // Consider the entry to be deeper if it's PV
+          || entry.depth + { 2 * pv_num } > depth_preferred.depth + 2
         case override {
           True -> entry
-          False -> existing_entry
+          False -> depth_preferred
         }
       }
       None -> entry
     }
-
-    let assert Ok(updated_transposition) =
-      iv.set(search_state.transposition, key, Some(updated_entry))
-
-    #(updated_transposition, option.is_none(maybe_existing_entry))
+    #(Cluster(Some(always_replace), Some(depth_preferred)), is_new_entry)
   }
+  let assert Ok(transposition) =
+    iv.set(search_state.transposition, key, cluster)
 
   case is_new_entry {
     True ->
@@ -316,7 +401,7 @@ pub fn stats_zero(now: timestamp.Timestamp) -> State(SearchState, Nil) {
       lmrs: dict.new(),
       lmr_verifications: dict.new(),
     )
-  SearchState(..search_state, stats:)
+  SearchState(..search_state, cycle: search_state.cycle + 1, stats:)
 }
 
 fn int_to_kilos(n: Int) {
