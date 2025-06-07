@@ -15,15 +15,32 @@ pub fn evaluate(game: game.Game, phase: Float) -> Float {
   let black_pawns =
     bitboard.get_bitboard_piece(bitboard, piece.Piece(player.Black, piece.Pawn))
 
+  let white_king_position = game.find_player_king(game, player.White)
+  let black_king_position = game.find_player_king(game, player.Black)
+
   let #(score_mg, score_eg) =
     game.board(game)
     |> dict.fold(#(0, 0), fn(acc, square, piece) {
       let score = case piece {
         piece.Piece(player.White, piece.Pawn) -> {
-          evaluate_at(square, player.White, white_pawns, black_pawns)
+          evaluate_at(
+            square,
+            player.White,
+            white_pawns,
+            black_pawns,
+            white_king_position,
+            black_king_position,
+          )
         }
         piece.Piece(player.Black, piece.Pawn) -> {
-          evaluate_at(square, player.Black, black_pawns, white_pawns)
+          evaluate_at(
+            square,
+            player.Black,
+            black_pawns,
+            white_pawns,
+            black_king_position,
+            white_king_position,
+          )
         }
         _ -> #(0, 0)
       }
@@ -42,6 +59,8 @@ fn evaluate_at(
   us: player.Player,
   our_pawns: bitboard.BitBoard,
   their_pawns: bitboard.BitBoard,
+  our_king_square: square.Square,
+  their_king_square: square.Square,
 ) {
   let them = player.opponent(us)
   let isolated = int.bitwise_and(isolated_mask(square), our_pawns) == 0
@@ -111,6 +130,9 @@ fn evaluate_at(
       supported:,
       phallanx:,
       passed:,
+      our_square: square,
+      our_king_square:,
+      their_king_square:,
     ),
   )
 }
@@ -164,6 +186,9 @@ fn score_eg(
   supported supported: Int,
   phallanx phallanx: Bool,
   passed passed: Bool,
+  our_square our_square: square.Square,
+  our_king_square our_king_square: square.Square,
+  their_king_square their_king_square: square.Square,
 ) {
   let connected = supported != 0 || phallanx
   // taken from stockfish (mostly, we're missing some terms )
@@ -193,7 +218,17 @@ fn score_eg(
     False -> 0
   }
   + case passed {
-    True -> rank_from_start * 10
+    True -> {
+      let rank = square.rank(our_square)
+      let file = square.file(our_square)
+      let our_king_distance =
+        int.absolute_value(square.rank(our_king_square) - rank)
+        + int.absolute_value(square.file(our_king_square) - file)
+      let their_king_distance =
+        int.absolute_value(square.rank(their_king_square) - rank)
+        + int.absolute_value(square.file(their_king_square) - file)
+      rank_from_start * 10 - our_king_distance * 4 + their_king_distance * 5
+    }
     False -> 0
   }
 }
