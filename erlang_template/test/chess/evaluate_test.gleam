@@ -1,5 +1,6 @@
 import chess/evaluate
 import chess/evaluate/midgame
+import chess/evaluate/pawn_structure
 import chess/game
 import chess/player
 import gleeunit/should
@@ -91,8 +92,34 @@ pub fn evaluate_regression_test() {
   let assert Ok(game4) =
     game.load_fen("8/8/8/7p/8/2b2kPp/3p1P2/4N1K1 b - - 1 63")
 
-  evaluate.game(game1) |> should.equal(xint.from_int(9))
-  evaluate.game(game2) |> should.equal(xint.from_int(23))
-  evaluate.game(game3) |> should.equal(xint.from_int(7))
-  evaluate.game(game4) |> should.equal(xint.from_int(-82))
+  evaluate.game(game1) |> should.equal(xint.from_int(3))
+  evaluate.game(game2) |> should.equal(xint.from_int(18))
+  evaluate.game(game3) |> should.equal(xint.from_int(-4))
+  evaluate.game(game4) |> should.equal(xint.from_int(-45))
+}
+
+pub fn evaluate_pawn_structure_test() {
+  let assert Ok(game1) = game.load_fen(game.start_fen)
+  let assert Ok(game2) =
+    game.load_fen(
+      "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+    )
+  let assert Ok(game3) =
+    game.load_fen("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1")
+  let assert Ok(game4) =
+    game.load_fen("8/8/8/7p/8/2b2kPp/3p1P2/4N1K1 b - - 1 63")
+  let assert Ok(game5) =
+    game.load_fen("8/8/8/P2P3p/PP1P4/1Pb2kPp/2pp1P2/4N1K1 b - - 1 63")
+
+  pawn_structure.evaluate(game1, 1.0) |> should.equal(0.0)
+  pawn_structure.evaluate(game2, 1.0) |> should.equal(27.0)
+  pawn_structure.evaluate(game3, 1.0) |> should.equal(-60.0)
+  pawn_structure.evaluate(game4, 1.0) |> should.equal(28.0)
+  pawn_structure.evaluate(game5, 1.0) |> should.equal(-329.0)
+
+  pawn_structure.evaluate(game1, 0.0) |> should.equal(0.0)
+  pawn_structure.evaluate(game2, 0.0) |> should.equal(13.0)
+  pawn_structure.evaluate(game3, 0.0) |> should.equal(-57.0)
+  pawn_structure.evaluate(game4, 0.0) |> should.equal(-1.0)
+  pawn_structure.evaluate(game5, 0.0) |> should.equal(-534.0)
 }

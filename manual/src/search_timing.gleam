@@ -69,7 +69,7 @@ pub fn main() {
     ]),
     [
       bencher.Warmup(2),
-      bencher.Parallel(2),
+      bencher.Parallel(4),
       bencher.Inputs(dict.from_list(inputs)),
     ],
   )
