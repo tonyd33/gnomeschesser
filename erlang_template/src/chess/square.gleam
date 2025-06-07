@@ -4,12 +4,13 @@ import gleam/bool
 import gleam/dict
 import gleam/int
 import gleam/list
-import gleam/option
+import gleam/option.{type Option, None, Some}
 import gleam/order
 import gleam/pair
 import gleam/result
 import gleam/string
-import util/direction
+import util/array8.{type Array8, Array8}
+import util/direction.{type Direction}
 import util/yielder
 
 pub const king_file = 4
@@ -120,6 +121,42 @@ pub fn from_ox88(ox88: Int) -> Result(Square, Nil) {
   }
 }
 
+pub fn direction_between(from, to) -> Result(#(Direction, Int), Nil) {
+  let difference = to - from
+  use <- bool.guard(difference == 0, Error(Nil))
+
+  use <- bool.lazy_guard(difference % 15 == 0, fn() {
+    let multiple = difference / 15
+    case multiple > 0 {
+      True -> Ok(#(direction.UpLeft, multiple))
+      False -> Ok(#(direction.DownRight, -multiple))
+    }
+  })
+  use <- bool.lazy_guard(difference % 16 == 0, fn() {
+    let multiple = difference / 16
+    case multiple > 0 {
+      True -> Ok(#(direction.Up, multiple))
+      False -> Ok(#(direction.Down, -multiple))
+    }
+  })
+  use <- bool.lazy_guard(difference % 17 == 0, fn() {
+    let multiple = difference / 17
+    case multiple > 0 {
+      True -> Ok(#(direction.UpRight, multiple))
+      False -> Ok(#(direction.DownLeft, -multiple))
+    }
+  })
+
+  use <- bool.lazy_guard(-8 <= difference && difference <= 8, fn() {
+    case difference > 0 {
+      True -> Ok(#(direction.Right, difference))
+      False -> Ok(#(direction.Left, -difference))
+    }
+  })
+
+  Error(Nil)
+}
+
 pub fn move(
   square: Square,
   direction: direction.Direction,
@@ -130,6 +167,10 @@ pub fn move(
     direction.Down -> -16
     direction.Left -> -1
     direction.Right -> 1
+    direction.DownLeft -> -17
+    direction.DownRight -> -15
+    direction.UpLeft -> 15
+    direction.UpRight -> 17
   }
   * int.clamp(distance, -8, 8)
   + square
@@ -1397,6 +1438,16 @@ pub fn is_attacked_at(
   })
 }
 
+pub fn has_right_attack_offsets(
+  victim_square,
+  attacker_square,
+  attacker_piece: piece.PieceSymbol,
+) {
+  let difference = attacker_square - victim_square
+  let index = difference + 0x77
+  int.bitwise_and(attacks(index), piece_masks(attacker_piece)) != 0
+}
+
 /// calculates all attacks (and pinned pieces from attacks) to a certain square
 /// Does not handle en passant specialcase, that is specially checked later on
 /// This is for determining if the king is in check
@@ -1476,6 +1527,38 @@ pub fn attacks_and_pins_to(
     }
     case x {
       Ok(x) -> [x, ..acc]
+      _ -> acc
+    }
+  })
+}
+
+const none_array8 = Array8(
+  x0: None,
+  x1: None,
+  x2: None,
+  x3: None,
+  x4: None,
+  x5: None,
+  x6: None,
+  x7: None,
+)
+
+pub fn ray_pieces(
+  board: dict.Dict(Square, piece.Piece),
+  at: Square,
+) -> Array8(Array8(Option(#(Square, piece.Piece)))) {
+  board
+  |> dict.fold(array8.of(none_array8), fn(acc, from, piece) {
+    case direction_between(at, from) {
+      Ok(#(direction, distance)) -> {
+        let idx = direction.number(direction)
+        let assert Ok(acc) =
+          array8.update(acc, idx, fn(xs) {
+            let assert Ok(xs) = array8.set(xs, distance, Some(#(from, piece)))
+            xs
+          })
+        acc
+      }
       _ -> acc
     }
   })

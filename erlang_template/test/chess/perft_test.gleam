@@ -107,7 +107,8 @@ pub fn perft_extras_9_test() {
   perft.perft(game, 3) |> should.equal(89_890)
 }
 
-pub fn perft_extras_10_test() {
+pub fn perft_extras_10_test_() {
+  use <- Timeout(7.0)
   let assert Ok(game) = game.load_fen("3k4/3p4/8/K1P4r/8/8/8/8 b - - 0 1")
   perft.perft(game, 6) |> should.equal(1_134_888)
 }
@@ -117,7 +118,8 @@ pub fn perft_extras_11_test() {
   perft.perft(game, 6) |> should.equal(1_015_133)
 }
 
-pub fn perft_extras_12_test() {
+pub fn perft_extras_12_test_() {
+  use <- Timeout(7.0)
   let assert Ok(game) = game.load_fen("8/8/1k6/2b5/2pP4/8/5K2/8 b - d3 0 1")
   perft.perft(game, 6) |> should.equal(1_440_467)
 }
@@ -138,7 +140,8 @@ pub fn perft_extras_15_test() {
   perft.perft(game, 4) |> should.equal(1_274_206)
 }
 
-pub fn perft_extras_16_test() {
+pub fn perft_extras_16_test_() {
+  use <- Timeout(7.0)
   let assert Ok(game) =
     game.load_fen("r3k2r/8/3Q4/8/8/5q2/8/R3K2R b KQkq - 0 1")
   perft.perft(game, 4) |> should.equal(1_720_476)
