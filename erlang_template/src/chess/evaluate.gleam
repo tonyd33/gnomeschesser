@@ -13,9 +13,9 @@ pub type Score =
 
 const material_weight = 100.0
 
-const psqt_weight = 100.0
+const psqt_weight = 90.0
 
-const mobility_weight = 100.0
+const mobility_weight = 90.0
 
 const king_pawn_shield_weight = 30.0
 
