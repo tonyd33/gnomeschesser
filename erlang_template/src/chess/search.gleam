@@ -338,6 +338,7 @@ fn do_negamax_alphabeta_failsoft(
       }
     }
   })
+  let phase = evaluate.phase(game.evaluation_data(game).npm - 3800)
   // The intended flow control is:
   // - If we have a null evaluation that caused a beta-cutoff and we're not in
   //   endgame, return early (NMP)
@@ -346,7 +347,7 @@ fn do_negamax_alphabeta_failsoft(
   // - Otherwise, continue as usual
   use <- result.lazy_unwrap(result.map(
     // Disable NMP during "endgame" and non-zw searches
-    case evaluate.phase(game.evaluation_data(game).npm - 3800) >. 0.0 && is_zw {
+    case phase >. 0.0 && is_zw {
       True -> null_evaluation
       False -> Error(Nil)
     },
@@ -412,7 +413,11 @@ fn do_negamax_alphabeta_failsoft(
       let assert Ok(ln_depth) = maths.natural_logarithm(int.to_float(depth))
       let assert Ok(ln_move_number) =
         maths.natural_logarithm(int.to_float(move_number))
-      float.round(c +. { { ln_depth *. ln_move_number } /. d })
+      float.round(
+        { c +. { { ln_depth *. ln_move_number } /. d } }
+        // Reduce more in the midgame and taper off to less in the endgame.
+        *. { 1.15 -. { 0.25 *. phase } },
+      )
     }
 
     // Currently we only have one factor contributing to any depth reductions,
