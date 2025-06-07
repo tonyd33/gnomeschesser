@@ -1,3 +1,4 @@
+import chess/bitboard
 import chess/evaluate
 import chess/evaluate/midgame
 import chess/evaluate/pawn_structure
@@ -122,4 +123,32 @@ pub fn evaluate_pawn_structure_test() {
   pawn_structure.evaluate(game3, 0.0) |> should.equal(-57.0)
   pawn_structure.evaluate(game4, 0.0) |> should.equal(-1.0)
   pawn_structure.evaluate(game5, 0.0) |> should.equal(-534.0)
+}
+
+pub fn evaluate_count_pawns_close_test() {
+  let assert Ok(game) = game.load_fen("4k3/8/8/8/8/8/3PPP2/4K3 w - - 0 1")
+  midgame.count_pawns_close(game, player.White)
+  |> should.equal(3)
+
+  let assert Ok(game) = game.load_fen("4k3/8/8/8/8/3P4/4PP2/4K3 w - - 0 1")
+  midgame.count_pawns_close(game, player.White)
+  |> should.equal(2)
+
+  let assert Ok(game) = game.load_fen("8/8/4k3/3ppp2/8/3P4/4PP2/4K3 w - - 0 1")
+  midgame.count_pawns_close(game, player.Black)
+  |> should.equal(3)
+
+  let assert Ok(game) = game.load_fen("8/8/4k3/5p2/3pp3/3P4/4PP2/4K3 w - - 0 1")
+  midgame.count_pawns_close(game, player.Black)
+  |> should.equal(1)
+}
+
+pub fn evaluate_count_pawns_close_far_test() {
+  let assert Ok(game) = game.load_fen("4k3/5p2/3pp3/8/8/3P4/4PP2/4K3 w - - 0 1")
+  midgame.count_pawns_far(game, player.White)
+  |> should.equal(1)
+
+  let assert Ok(game) = game.load_fen("4k3/5p2/3pp3/8/8/3P4/4PP2/4K3 w - - 0 1")
+  midgame.count_pawns_far(game, player.Black)
+  |> should.equal(2)
 }
