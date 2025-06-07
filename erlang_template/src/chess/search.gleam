@@ -399,15 +399,17 @@ fn do_negamax_alphabeta_failsoft(
       // Base formula from Weiss
       // c + (ln(depth) * ln(move_number))/d
       // https://www.chessprogramming.org/Late_Move_Reductions#Reduction_Depth
-      let #(c, d) = case move.is_capture(move) || move.is_promotion(move) {
+      let #(c, d) = case move.is_capture(move) || move.is_promotion(move), is_zw {
         // Reduce captures/promotions less
         // Original Weiss values were:
         // #(0.2, 3.35)
-        True -> #(0.1, 6.7)
+        True, _ -> #(0.1, 6.7)
         // Reduce quiet moves more
         // Original Weiss values were:
         // #(1.35, 2.75)
-        False -> #(0.4, 3.1)
+        False, False -> #(0.4, 3.1)
+        // Reduce more in zero-window searches (on non-PV nodes)
+        False, True -> #(0.5, 3.0)
       }
       let assert Ok(ln_depth) = maths.natural_logarithm(int.to_float(depth))
       let assert Ok(ln_move_number) =
