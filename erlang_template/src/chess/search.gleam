@@ -353,7 +353,7 @@ fn do_negamax_alphabeta_failsoft(
     interruptable.return,
   ))
   let depth = case null_evaluation {
-    Ok(_) -> depth - 4
+    Ok(_) -> depth / 2
     Error(Nil) -> depth
   }
   // We may need to evaluate now that we reduced depth. Do another check.
