@@ -1,4 +1,5 @@
 import chess/evaluate/common
+import chess/evaluate/king_attacks
 import chess/evaluate/midgame
 import chess/evaluate/mobility
 import chess/evaluate/pawn_structure
@@ -23,6 +24,8 @@ const tempo_weight = 100.0
 
 const pawn_structure_weight = 100.0
 
+const king_attacks_weight = 100.0
+
 /// Evaluates the score of the game position
 /// > 0 means white is winning
 /// < 0 means black is winning
@@ -45,6 +48,8 @@ pub fn game(game: game.Game) -> Score {
   let tempo = 28.0 *. int.to_float(common.player(game.turn(game)))
 
   let pawn_structure = pawn_structure.evaluate(game, phase)
+
+  let king_attacks = king_attacks.evaluate(game)
   // combine scores with weight
   let score =
     {
@@ -54,13 +59,14 @@ pub fn game(game: game.Game) -> Score {
       +. { king_pawn_shield *. king_pawn_shield_weight }
       +. { tempo *. tempo_weight }
       +. { pawn_structure *. pawn_structure_weight }
+      +. { king_attacks *. king_attacks_weight }
     }
     // 500 = 100.0 * 5
     //     = max weight * number of terms
     // The number at the end is a multiplier to give us tighter margins so that
     // it's easier to prune. Take caution on setting this number too high, as
     // search relies on it being close to 1.0
-    /. { 600.0 *. 1.25 }
+    /. { 700.0 *. 1.25 }
 
   score
   |> float.truncate
