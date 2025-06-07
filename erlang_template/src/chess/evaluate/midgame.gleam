@@ -1,6 +1,7 @@
 import chess/evaluate/common
 import chess/game
 import chess/player
+import gleam/bool
 import gleam/int
 
 /// Evaluate king safety score with a pawn shield
@@ -12,6 +13,11 @@ pub fn king_pawn_shield(game: game.Game, side: player.Player) -> Int {
   // square. The lack of a shielding pawn deserves a penalty, even more so if
   // there is an open file next to the king.
   {
+    // If we haven't even castled, no bonus will be applied for
+    // the pawn shield score
+    // TODO: this currently just check castling availability
+    // We could have this be part of a more general king safety term?
+    use <- bool.guard(!game.has_castled(game, side), 0)
     // This is the number of pawns that are 1 square away vertically
     let num_pawns_around_king_close = count_pawns_close(game, side)
     // This is the number of pawns that are 2 squares away vertically
