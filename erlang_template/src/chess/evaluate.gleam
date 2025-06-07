@@ -17,7 +17,7 @@ const psqt_weight = 90.0
 
 const mobility_weight = 90.0
 
-const king_pawn_shield_weight = 30.0
+const king_pawn_shield_weight = 40.0
 
 const tempo_weight = 100.0
 
