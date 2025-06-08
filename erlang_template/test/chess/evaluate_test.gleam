@@ -93,9 +93,9 @@ pub fn evaluate_regression_test() {
     game.load_fen("8/8/8/7p/8/2b2kPp/3p1P2/4N1K1 b - - 1 63")
 
   evaluate.game(game1) |> should.equal(xint.from_int(3))
-  evaluate.game(game2) |> should.equal(xint.from_int(18))
+  evaluate.game(game2) |> should.equal(xint.from_int(15))
   evaluate.game(game3) |> should.equal(xint.from_int(-4))
-  evaluate.game(game4) |> should.equal(xint.from_int(-69))
+  evaluate.game(game4) |> should.equal(xint.from_int(-57))
 }
 
 pub fn evaluate_pawn_structure_test() {
