@@ -14,6 +14,9 @@ pub fn is_previous_game(game_history: GameHistory, game: game.Game) -> Bool {
 }
 
 pub fn insert(game_history: GameHistory, game: game.Game) -> GameHistory {
-  game_history
+  case game.halfmove_clock(game) {
+    0 -> dict.new()
+    _ -> game_history
+  }
   |> dict.insert(game.hash(game), game)
 }
