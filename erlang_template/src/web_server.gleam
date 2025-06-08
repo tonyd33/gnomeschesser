@@ -64,7 +64,6 @@ pub fn start_robot() -> Nil {
 fn handle_request(request: Request, robot) -> Response {
   case wisp.path_segments(request) {
     ["move"] -> handle_move(request, robot)
-    ["setverbosity"] -> set_verbosity(request, robot)
     _ -> wisp.ok()
   }
 }
@@ -92,7 +91,7 @@ fn handle_move(request: Request, robot: Robot) -> Response {
       // Stop any currently-running searches.
       process.send(blake_chan, blake.Stop)
 
-      process.send(blake_chan, blake.AppendHistoryFEN(fen))
+      process.send(blake_chan, blake.AppendHistoryFEN(fen, blake.HalfmoveClock))
       let blake_res =
         process.try_call(
           blake_chan,
@@ -124,34 +123,6 @@ fn handle_move(request: Request, robot: Robot) -> Response {
           |> wisp.string_body("Didn't get a move!!!")
         }
       }
-    }
-  }
-}
-
-type SetVerbosityRequest {
-  SetVerbosityRequest(verbosity: yapper.Level)
-}
-
-fn set_verbosity_decoder() -> decode.Decoder(SetVerbosityRequest) {
-  use verbosity_str <- decode.field("verbosity", decode.string)
-
-  case verbosity_str {
-    "debug" -> decode.success(SetVerbosityRequest(yapper.Debug))
-    "info" -> decode.success(SetVerbosityRequest(yapper.Info))
-    "warn" -> decode.success(SetVerbosityRequest(yapper.Warn))
-    "err" -> decode.success(SetVerbosityRequest(yapper.Err))
-    _ -> decode.failure(SetVerbosityRequest(yapper.Info), "debug|info|warn|err")
-  }
-}
-
-fn set_verbosity(request, robot) {
-  let Robot(yapper_chan:, ..) = robot
-  use body <- wisp.require_string_body(request)
-  case json.parse(body, set_verbosity_decoder()) {
-    Error(_) -> wisp.bad_request()
-    Ok(SetVerbosityRequest(level)) -> {
-      process.send(yapper_chan, yapper.SetLevel(level))
-      wisp.ok() |> wisp.string_body("ok")
     }
   }
 }

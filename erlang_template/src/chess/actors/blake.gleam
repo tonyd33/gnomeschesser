@@ -75,8 +75,8 @@ pub type Message {
   LoadFEN(fen: String)
 
   DoMoves(moves: List(String))
-  AppendHistory(game: Game)
-  AppendHistoryFEN(fen: String)
+  AppendHistory(game: Game, validation: HistoryValidation)
+  AppendHistoryFEN(fen: String, validation: HistoryValidation)
 
   Go(
     deadline: Option(Timestamp),
@@ -93,6 +93,12 @@ pub type Message {
   // an explanation.
   AtomicNonceUse(Nonce, f: fn() -> Nil)
   NonceCheck(Nonce, f: fn() -> Nil)
+}
+
+pub type HistoryValidation {
+  Smart
+  Dumb
+  HalfmoveClock
 }
 
 pub fn start() {
@@ -199,13 +205,21 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
         }
       }
     }
-    AppendHistory(game:) -> {
-      Ok(smart_append_history(blake, game))
+    AppendHistory(game:, validation:) -> {
+      case validation {
+        Smart -> Ok(smart_append_history(blake, game))
+        Dumb -> Ok(dumb_append_history(blake, game))
+        HalfmoveClock -> Ok(halfmove_clock_append_history(blake, game))
+      }
     }
-    AppendHistoryFEN(fen:) -> {
+    AppendHistoryFEN(fen:, validation:) -> {
       case game.load_fen(fen) {
-        Ok(game) -> Ok(smart_append_history(blake, game))
-
+        Ok(game) ->
+          case validation {
+            Smart -> Ok(smart_append_history(blake, game))
+            Dumb -> Ok(dumb_append_history(blake, game))
+            HalfmoveClock -> Ok(halfmove_clock_append_history(blake, game))
+          }
         Error(Nil) -> {
           yapper.warn("Failed to load FEN: " <> fen)
           |> yap(blake, _)
@@ -553,5 +567,17 @@ fn smart_append_history(blake: Blake, game) {
 
       Blake(..blake, game:, history: [])
     }
+  }
+}
+
+fn dumb_append_history(blake: Blake, game) {
+  Blake(..blake, game:, history: [blake.game, ..blake.history])
+}
+
+fn halfmove_clock_append_history(blake: Blake, game) {
+  let flush = game.halfmove_clock(game) == 0
+  case flush {
+    True -> Blake(..blake, game:, history: [])
+    False -> Blake(..blake, game:, history: [blake.game, ..blake.history])
   }
 }

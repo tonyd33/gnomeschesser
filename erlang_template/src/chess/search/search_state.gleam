@@ -78,7 +78,23 @@ fn transposition_key_reduce(key: Int) {
   key % key_size
 }
 
-pub fn transposition_get(
+pub const transposition_get = transposition_get_without_stats
+
+pub fn transposition_get_without_stats(
+  hash: Int,
+) -> State(SearchState, Result(transposition.Entry, Nil)) {
+  use search_state: SearchState <- state.select
+  let transposition = search_state.transposition
+  let key = transposition_key_reduce(hash)
+  let entry = iv.get(transposition, key)
+  case entry {
+    Ok(Some(entry)) if entry.hash == hash -> Ok(entry)
+    Error(_) -> panic as "shit"
+    _ -> Error(Nil)
+  }
+}
+
+pub fn transposition_get_with_stats(
   hash: Int,
 ) -> State(SearchState, Result(transposition.Entry, Nil)) {
   use search_state: SearchState <- State(run: _)
@@ -112,7 +128,45 @@ pub fn transposition_get(
   }
 }
 
-pub fn transposition_insert(
+pub const transposition_insert = transposition_insert_without_stats
+
+pub fn transposition_insert_without_stats(
+  hash: Int,
+  entry: #(evaluation.Depth, Evaluation),
+) -> State(SearchState, Nil) {
+  let #(depth, eval) = entry
+  use search_state: SearchState <- state.modify
+  let entry = transposition.Entry(hash:, depth:, eval:)
+  let key = transposition_key_reduce(hash)
+
+  // Update the transposition table if:
+  // - The new entry is a PV, or
+  // - The new entry replaces the existing hash, or
+  // - The new entry is deeper than the existing entry's depth
+  //   (depth-preferred)
+  let assert Ok(transposition) = {
+    use maybe_existing_entry <- iv.update(search_state.transposition, key)
+
+    let updated_entry = case maybe_existing_entry {
+      Some(existing_entry) -> {
+        let override =
+          eval.node_type == evaluation.PV
+          || existing_entry.hash != hash
+          || depth > existing_entry.depth
+        case override {
+          True -> entry
+          False -> existing_entry
+        }
+      }
+      None -> entry
+    }
+    Some(updated_entry)
+  }
+
+  SearchState(..search_state, transposition:)
+}
+
+pub fn transposition_insert_with_stats(
   hash: Int,
   entry: #(evaluation.Depth, Evaluation),
 ) -> State(SearchState, Nil) {
