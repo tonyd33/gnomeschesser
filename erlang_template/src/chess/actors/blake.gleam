@@ -8,9 +8,7 @@ import chess/game.{type Game}
 import chess/move
 import chess/player
 import chess/search/evaluation.{type Evaluation, Evaluation, PV}
-import chess/search/search_state.{
-  type SearchState, type SearchStats, SearchState,
-}
+import chess/search/search_state.{type SearchStats}
 import chess/tablebase.{type Tablebase}
 import gleam/bool
 import gleam/erlang/process.{type Subject, type Timer}

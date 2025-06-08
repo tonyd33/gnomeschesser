@@ -2,7 +2,7 @@
 //// outside world.
 ////
 
-import gleam/erlang/process.{type Selector, type Subject}
+import gleam/erlang/process.{type Subject}
 import gleam/function.{identity}
 import gleam/io
 import gleam/list

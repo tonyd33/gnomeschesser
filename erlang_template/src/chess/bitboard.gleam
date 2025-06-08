@@ -1,10 +1,8 @@
 import chess/piece
 import chess/player
 import chess/square
-import gleam/bool
 import gleam/int
 import gleam/list
-import util/direction
 
 pub type BitBoard =
   Int

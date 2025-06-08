@@ -1,4 +1,4 @@
-import chess/bitboard.{type BitBoard, type GameBitboard}
+import chess/bitboard.{type GameBitboard}
 import chess/evaluate/common as evaluate_common
 import chess/evaluate/psqt
 import chess/game/castle.{type Castle, KingSide, QueenSide}
@@ -9,16 +9,13 @@ import chess/player
 import chess/square
 import gleam/bool
 import gleam/dict.{type Dict}
-import gleam/function
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import gleam/otp/actor
 import gleam/pair
 import gleam/result
 import gleam/set
 import gleam/string
-import glearray
 import util/direction
 
 pub const start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
@@ -787,11 +784,11 @@ pub fn apply(game: Game, move: move.Move(move.ValidInContext)) -> Game {
     bishop_count:,
     knight_count:,
     white_king_position:,
-    white_king_attackers:,
-    white_king_blockers:,
+    white_king_attackers: _,
+    white_king_blockers: _,
     black_king_position:,
-    black_king_attackers:,
-    black_king_blockers:,
+    black_king_attackers: _,
+    black_king_blockers: _,
   ) = game
   let prev_castling_availability = castling_availability
   let them = player.opponent(us)
@@ -1100,14 +1097,14 @@ pub fn validate_move(
   valid_moves(game) |> list.find(move.equal(_, move))
 }
 
-fn can_pseudolegal_castle(game: Game, castle) {
-  let us = game.active_color
-
-  let occupancy_blocked =
-    castle.occupancy_squares(us, castle)
-    |> list.any(fn(square) { dict.has_key(game.board, square) })
-  !occupancy_blocked
-}
+// fn can_pseudolegal_castle(game: Game, castle) {
+//   let us = game.active_color
+//
+//   let occupancy_blocked =
+//     castle.occupancy_squares(us, castle)
+//     |> list.any(fn(square) { dict.has_key(game.board, square) })
+//   !occupancy_blocked
+// }
 
 fn generate_castle_move(game: Game, castle_player, castle) {
   let us = game.active_color

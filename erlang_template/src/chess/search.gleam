@@ -1,5 +1,4 @@
 import chess/evaluate
-import chess/evaluate/common
 import chess/evaluate/psqt
 import chess/game
 import chess/move
