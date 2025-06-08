@@ -12,10 +12,8 @@
 
 import chess/game.{type Game}
 import chess/search
-import chess/search/evaluation.{type Evaluation, Evaluation}
-import chess/search/search_state.{
-  type SearchState, type SearchStats, SearchState,
-}
+import chess/search/evaluation.{type Evaluation}
+import chess/search/search_state.{type SearchState, type SearchStats}
 import gleam/erlang/process.{type Subject}
 import gleam/option.{type Option}
 import gleam/time/timestamp.{type Timestamp}

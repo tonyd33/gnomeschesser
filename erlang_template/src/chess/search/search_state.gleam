@@ -1,5 +1,5 @@
 import chess/piece
-import chess/search/evaluation.{type Evaluation, Evaluation}
+import chess/search/evaluation.{type Evaluation}
 import chess/search/transposition
 import chess/square
 import gleam/dict
