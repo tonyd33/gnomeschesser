@@ -1,5 +1,6 @@
 import chess/evaluate/common
 import chess/game
+import chess/piece
 import chess/player
 import gleam/dict
 import gleam/int
@@ -18,11 +19,21 @@ pub fn evaluate(game: game.Game) {
 fn evaluate_blockers(game: game.Game, player: player.Player) {
   let board = game.board(game)
   game.king_blockers(game, player)
-  |> dict.fold(0, fn(acc, blocker, _pinning) {
-    case dict.get(board, blocker) {
-      Ok(piece) -> acc + common.piece_mg(piece) / -10
-      _ -> acc
+  |> dict.fold(0, fn(acc, blocker, pinner) {
+    let assert Ok(blocker) = dict.get(board, blocker)
+    let assert Ok(pinner) = dict.get(board, pinner)
+    case pinner.symbol, blocker.symbol {
+      _, piece.Knight -> -10
+      piece.Bishop, piece.Rook -> -80
+      piece.Rook, piece.Bishop -> -40
+      piece.Queen, piece.Queen -> -25
+      _, piece.Queen -> -150
+      _, piece.King -> 0
+      _, piece.Pawn -> -2
+      _, _ -> 0
     }
+    * common.player(blocker.player)
+    + acc
   })
 }
 
