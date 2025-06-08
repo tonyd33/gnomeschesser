@@ -1,187 +1,195 @@
-# The Gleam Chess Tournament
+# **gnomeschesser**
 
-Welcome to the inaugural Unofficial Gleam Chess Tournament!
+[gnomeschesser](https://github.com/tonyd33/gnomeschesser) is a classical chess engine using standard techniques, implemented in Gleam. It uses minimax and employs a variety of techniques to reduce the search space.
 
-This is a friendly competition to see who can create the best chess bot in the
-[Gleam](https://gleam.run) programming language. Once submissions are closed,
-the tournament will be turned into a Twitch stream or YouTube video on
-[my channel](https://youtube.com/IsaacHarrisHolt).
+### Search:
 
-## Changelog
+- [Alpha beta pruning](https://www.chessprogramming.org/Alpha-Beta)
+- [Iterative deepening](https://www.chessprogramming.org/Iterative_Deepening)
+- [Quiescence search](https://www.chessprogramming.org/Quiescence_Search)
+- [Move ordering](https://www.chessprogramming.org/Move_Ordering)
+    - We order our moves using:
+        1. [PV-move](https://www.chessprogramming.org/PV-Move)
+            1. Using [Hash Moves](https://www.chessprogramming.org/Hash_Move) if it exists, otherwise we try [Internal Iterative Deepening](https://www.chessprogramming.org/Internal_Iterative_Deepening)
+        2. [Most Valuable Victim - Least Valuable Attacker](https://www.chessprogramming.org/MVV-LVA) for non-quiet moves
+        3. [History Heuristic](https://www.chessprogramming.org/History_Heuristic) for quiet moves
+        4. [Piece-Square Tables](https://www.chessprogramming.org/Piece-Square_Tables) to resolve any ties
+- [Transposition tables](https://www.chessprogramming.org/Transposition_Table)
+    - Indexed by [zobrist hashes](https://www.chessprogramming.org/Zobrist_Hashing)
+- [Late move reduction](https://www.chessprogramming.org/Late_Move_Reductions)
+- [Null move pruning](https://www.chessprogramming.org/Null_Move_Pruning)
+    - We do this very aggressively, using the game phase to determine the cut-off
+    - This makes us pretty vulnerable to zugzwang, but we decided to accept that tradeoff
+- [Null move reduction](https://www.chessprogramming.org/Null_Move_Reductions)
+- [Principal Variation Search](https://www.chessprogramming.org/Principal_Variation_Search)
+- [Aspiration windows](https://www.chessprogramming.org/Aspiration_Windows)
+- Opening table
+    - We used the data from <data>, and wrote a program to filter out unique positions then convert from polyglot .bin format to a big gleam dict. This data is then passed around the search.
 
-### 2025-03-15
+### Evaluation:
 
-- Added a testing script to the `testing_utils` directory. See
-  [the section on testing](#testing) for more information.
+- [Material](https://www.chessprogramming.org/Material) score with values taken from Stockfish
+- [Piece-Square Tables](https://www.chessprogramming.org/Piece-Square_Tables) encoding preferred positions of pieces
+- [Mobility](https://www.chessprogramming.org/Mobility) scores to encourage searching for advantages through board control
+- [Pawn structure](https://www.chessprogramming.org/Pawn_Structure) to enable strong pawn positions
+    - Pawn shield for when the king is castled
+    - Supported pawns, doubled pawns, etc.
+    - Passed pawns (important for endgame)
+- [Tapered](https://www.chessprogramming.org/Tapered_Eval) midgame to endgame evaluation, based on game phase
+    - Phase is calculated based on the total non-pawn material scores
+- [Check](https://www.chessprogramming.org/Check)/[Pin](https://www.chessprogramming.org/Pin) penalty
+    - We add a small penalty if a piece is pinned, scaled based on its material value
+    - We add a penalty if the king is in check, with a bigger penalty for a double check
+- [Tempo](https://www.chessprogramming.org/Tempo) bonus
+    - couldn’t hurt
 
-### 2025-03-12
+Given that calculating these evaluation terms can be expensive, our engine incrementally updates many of these terms so that, while searching, we have access to evaluation at a low cost.
 
-- Updated Dockerfiles (#4, thanks @MoeDevelops!) to be a bit slimmer. You may still
-  use the old Dockerfiles, which are now prefixed with `pre-2025-03-11-`.
-- Added a new rule to limit the total number of failures a bot is allowed per game
-  before forfeiting. This is to prevent the potential workaround outlined in #5.
-  The limit is currently **15** failures.
-- Added new prizes! Thanks [CodeCrafters](https://www.codecrafters.io/) for the
-  sponsorship!
+### Data Representations:
 
-### 2025-03-11
+- Game
+    - Board is a dictionary of square → pieces
+    - We also hold all the other data contained in FEN
+    - Contains bitboard information for pawns specifically
+    - Also maintains king checks and pins
+- Square
+    - Square is an integer in [0x88](https://www.chessprogramming.org/0x88) format
+        - This can take advantage of off-the-board checks with 0x88 squares easily
+- Move
+    - From, to, and promotion
+    - We also contain extra context for the piece being moved, captures (if it exists), whether it’s a castle move.
+    - We use phantom types to distinguish between pseudo moves and legal moves, though this is rarely used as we perform a full legal move generation anyways
+        - I just wanted to have a phantom type
 
-- Added [birl](https://hexdocs.pm/birl/index.html),
-  [gtempo](https://hexdocs.pm/gtempo/index.html) and
-  [gleam_time](https://hexdocs.pm/gleam_time/index.html) as allowed libraries for all
-  targets.
+### Optimizations:
 
-## How does it work?
+On the topic of optimization, we pre-computed values and encoded them as constants in case expressions, which end up more performant than array and dictionary lookups. For example, the squares that each piece can move to at each square are stored in a large case expression. Other data are stored in a similar fashion.
 
-Essentially, each entry will be a Gleam web server that responds to HTTP requests sent
-to a `/move` endpoint. The body will be a JSON object containing three fields:
+- We also incrementally update data in our game state for optimization.
+    - [Zobrist hashes](https://www.chessprogramming.org/Zobrist_Hashing)
+    - King checks/pins
+    - Bitboards
+    - Bishop/Knight count for cheaper checking of insufficient material endgames
+    - Material count
+- For threefold repetition, we can clear the game history when the half-move counter is 0, as that indicates an irreversible move
+- A lot of other stuff we can’t remember, there’s a decent amount that are Gleam crimes
 
-```json
-{
-  "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-  "turn": "white",
-  "failed_moves": ["Nf3"]
+### State Implementation details:
+
+While traversing the search tree, we must maintain and update values like the transposition table, and as a luxury, search statistics (e.g. number of beta-cutoffs, transposition table cache hits, etc.). In Gleam, where variables are immutable, this is cumbersome: functions would have to accept extraneous arguments and return extraneous values, making the code noisy and hard-to-read. For example, it would be strange for a function that does a transposition table lookup to accept and return statistics just because it needs to increment a statistic.
+
+The solution was using the State monad, a popular construct in other functional programming languages to simulate stateful code. This works well in Gleam with its `use` syntax and transforms code like this:
+
+```gleam
+/// Get a value in the transposition table
+fn tt_get(
+	tt: TranspositionTable,
+	key: Key,
+	stats: Stats
+) -> #(Result(Entry, Nil), Stats) {
+	case tt.get(tt, key) {
+		Ok(entry) -> #(
+			Ok(entry),
+			Stats(..stats, hits: stats.hits + 1)
+		)
+		Error(Nil) -> #(
+			Error(Nil),
+			Stats(..stats, misses: stats.misses + 1)
+		)
+	}
 }
 ```
 
-| Field          | Description                                                                                              |
-| -------------- | -------------------------------------------------------------------------------------------------------- |
-| `fen`          | The [FEN](https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation) of the current board position. |
-| `turn`         | The side to move. Either `"white"` or `"black"`.                                                         |
-| `failed_moves` | A list of moves that your bot attempted to make for this turn, but were not legal moves.                 |
+...into code like this:
 
-The task of parsing the FEN and returning a move is left up to you.
+```gleam
+fn tt_get(
+	tt: TranspositionTable,
+	key: Key
+) -> State(Stats, Entry) {
+	use stats: Stats <- state.do(state.get_state())
+	let entry = tt.get(tt, key)
+	use _ <- state.do(state.put(case entry {
+		Ok(_) -> State(..stats, hits: stats.hits + 1)
+		Error(Nil) -> State(..stats, misses: stats.misses + 1)
+	}))
+	state.return(entry)
+}
+```
 
-## Prizes
+### Actor/Search Management Implementation Details:
 
-Prizes will be awarded to the top three entries. The winner will be determined by
-tournament.
+Being able to stop the engine effectively while it’s searching and preserving any progress it’s made is critical. To that end, we considered a few options: we may poll frequently to check if a stop condition has been met, or we may send updates to an intermediary actor that sends the most recent value upon a signal.
 
-An additional prize will be awarded to the entry with the most interesting strategy.
+We ended up choosing the former. We use a layered architecture, with the outermost layer around the engine, Blake, an actor that serves as the main shell to interact with our engine. This allows us to create multiple entrypoints to our engine, including the HTTP entrypoint and a UCI entrypoint for compatibility with existing tooling.
 
-- 1st place: $500, a Lucy T-shirt and a Lucy mug, and CodeCrafters VIP memberships for
-  you and your team
-- 2nd place: $300 and a T-shirt OR mug, and 1 year CodeCrafters memberships for you
-  and your team
-- 3rd place: $100 and a T-shirt OR mug, and 3 month CodeCrafters memberships for you
-  and your team
-- Most interesting strategy: $50 and a T-shirt OR mug, and 1 month CodeCrafters
-  memberships for you and your team
+Blake keeps track of the game history, tablebases, and controls the search, which is done on another actor, Donovan.
 
-See the [Gleam shop](https://shop.gleam.run/) for more information on merch.
+Donovan is our search thread and is capable of receiving only a “start search” and “stop search” command. Donovan only keeps track of state that’s used in the search: the transposition table, history heuristic, statistics. As the transposition table can be large, Donovan never communicates its state to other actors, only communicating evaluations. It’s for this reason that Donovan is never killed – we would lose the entire transposition table.
 
-### CodeCrafters
+We turn to discussing how Donovan is able to receive the “stop search” command, respond in a timely fashion, yet not forcibly be killed and preserve its state.
 
-Thanks to [CodeCrafters](https://www.codecrafters.io/) for sponsoring the prizes!
-Check them out for an awesome way to get better at coding.
+### Search Timing Implementation Details:
 
-<a href="https://www.codecrafters.io/" target="_blank" rel="noopener noreferrer">
-    <img src="https://codecrafters.io/_next/static/media/logo.df7bb93f.png" width="200px">
-</a>
+By regularly sprinkling “interruption checks” as well as performing strategic “checkpoints” throughout the search, we can be pretty confident that the search can be terminated in time without losing much progress. In practice, with Gleam’s `use` syntax, it gives us declarative code like this:
 
-## Submissions
+```gleam
+fn iterative_deepening(game, alpha, beta, depth) {
+	use <- interruptable
+	use evaluation <- do(minimax(game, alpha, beta, depth))
+	use <- checkpoint(evaluation)
+	iterative_deepening(game, alpha, beta, depth + 1)
+}
+```
 
-Submissions should be Gleam web servers and may use either the Erlang or JavaScript
-targets. Templates for both are provided in the `erlang_template` and
-`javascript_template` directories respectively.
+This is implemented by storing an “interrupt checker” within the State monad mentioned earlier, and calling upon it and returning an error if there’s an interrupt:
 
-Submissions will be pitted against each other by a client running the
-[chess.js](https://github.com/jhlywa/chess.js) library for tracking and validation.
+```gleam
+fn interruptable(f) {
+	use interrupt <- state.do(state.get_state())
+	case interrupt() {
+		True -> state.return(Error(Nil))
+		False -> f()
+	}
+}
+```
 
-The format of the tournament is yet to be decided and will likely depend on the
-number of submissions.
+The interrupt checker simply checks if it has received a stop command on a subject.
 
-Submissions should be made [here](https://docs.google.com/forms/d/e/1FAIpQLSfhmo_0zxN7IDIEL6ZHZiyDaNJ2Y7_rkdt661DTaCdK2oHpSA/viewform?usp=dialog).
-The submission deadline is **noon UTC on June 8th 2025**.
+```gleam
+let interrupt = fn() {
+	case process.receive(recv, 0) {
+		Ok(Stop) -> True
+		_ -> False
+	}
+}
+```
 
-## How to participate
+Polling for messages regularly adds surprisingly little overhead and, with interrupt checks properly sprinkled throughout the search, it makes stopping the search incredibly responsive at relatively little cost.
 
-- Install [Gleam](https://gleam.run) and clone this repository.
-- Create a new directory for your submission and copy the `erlang-template` or
-  `javascript-template` directory into it.
-- Ensure you can run `gleam run` and the webserver starts correctly on port `8000`.
-- Fill out the `move` function in `src/<target>_template/chess.gleam` with your bot's logic.
-  - The function should return a `Result(String, String)` where the `Ok` variant
-    is a move in [SAN](<https://en.wikipedia.org/wiki/Algebraic_notation_(chess)>)
-    format. The client will validate using `chess.js`'s permissive move parser
-    (see [here](https://github.com/jhlywa/chess.js?tab=readme-ov-file#parsers-permissive--strict)).
-- Ensure your program compiles and runs correctly.
-- Ensure you can build a Docker image for your submission using the `Dockerfile`
-  provided in the template project.
-- Write up a brief description of how your bot works in the `README.md` file.
-- Once you're happy with your bot, submit your project [here](TODO).
+As for checkpointing, it’s likely simpler than you might think:
 
-## Rules
+```gleam
+pub fn checkpoint(a_chkpt: a, f: fn() -> InterruptableState(s, a)) {
+  use ra <- state.do(f())
 
-- You can participate alone or in a group.
-- You may only submit one entry per person.
-  - If you wish to update your entry before the tournament closes, please reach out
-    to me via [Bluesky](https://bsky.app/profile/ihh.dev) or in the #chess-tournament
-    channel in [my Discord](https://discord.com/invite/bWrctJ7).
-- You may only use a limited set of external libraries. See [the libraries list](#libraries).
-  for more information.
-- You may not do any IO operations to the filesystem or network.
-- FFI is not allowed.
-- Your bot may not use more than the following resources. These will be enforced by Docker:
-  - 2 CPU cores
-  - 512mb of RAM
-- Each move will be timed out after 5 seconds.
-- If your bot fails three times for the same turn, either by timing out or by failing
-  to make a legal move, it will forfeit the match.
-  - Your bot will also forfeit if it fails or times out **15** times total during the
-    match. See #5 for details.
-- You may not modify the provided Dockerfile.
-- The bots will run on Gleam **1.9.1**.
-  - The JavaScript bot will run on Deno, as that's what's best supported by Glen.
-- You may not modify the project names (sorry, it'll break Dockerfiles!).
+  case ra {
+    Ok(a) -> state.return(Ok(a))
+    Error(Nil) -> state.return(Ok(a_chkpt))
+  }
+}
+```
 
-### Libraries
+For more details, take a look at the `interruptable_state.gleam` and `state.gleam` files.
 
-The following is a list of libraries allowed on each target. If you feel that the list
-is missing something, please open an issue.
+### Tooling:
 
-You may use any dev dependencies you wish, but they must not be included in the built
-output.
+We built a chess tui and a web UI to test against the web interface initially. Then we built a UCI adapter to connect to the web interface, in order to use existing chess tooling. We eventually built a full UCI parser into our engine, as the design of UCI required us to rework the way our program communicates with itself.
 
-#### All targets
+We used fastchess to run SPRT tests on our changes, which allowed us to be confident that the change is a statistical improvement. We also have automated CI to run regression SPRT tests, and positional tests against Bratko-Kopec, Win At Chess, and many other positions.
 
-- [gleam_stdlib](https://hexdocs.pm/gleam_stdlib/index.html)
-- [gleam_http](https://hexdocs.pm/gleam_http/index.html)
-- [gleam_json](https://hexdocs.pm/gleam_json/index.html)
-- [gleam_time](https://hexdocs.pm/gleam_time/index.html)
-- [gleam_community_maths](https://hexdocs.pm/gleam_community_maths/index.html)
-- [flash](https://hexdocs.pm/flash/index.html)
-- [iv](https://hexdocs.pm/iv/index.html)
-- [glearray](https://hexdocs.pm/glearray/index.html)
-- [snag](https://hexdocs.pm/snag/index.html)
-- [birl](https://hexdocs.pm/birl/index.html)
-- [gtempo](https://hexdocs.pm/gtempo/index.html)
+We also created a separate gleam project with gnomeschesser as a dependency, which contained scripts using glychee (and later our own benchee binding), in order to profile sprt and overall search speeds.
 
-#### Erlang
+### Multithreading:
 
-- [gleam_erlang](https://hexdocs.pm/gleam_erlang/index.html)
-- [gleam_otp](https://hexdocs.pm/gleam_otp/index.html)
-- [mist](https://hexdocs.pm/mist/index.html)
-- [wisp](https://hexdocs.pm/wisp/index.html)
-
-#### JavaScript
-
-- [gleam_javascript](https://hexdocs.pm/gleam_javascript/index.html)
-- [glen](https://hexdocs.pm/glen/index.html)
-
-## Testing
-
-The [`testing_utils`](./testing_utils) directory contains a Deno test script that
-will run a suite of test moves against your bot. Feel free to use it as you see fit.
-
-Run the tests with `deno run test`, assuming your bot is running on port `8000`
-(which it should be!).
-
-## Newsletter
-
-To be kept up to date with the latest news and updates, rule changes and so forth,
-subscribe to the [Gleam Chess newsletter](https://buttondown.com/gleamchess).
-
-## Useful resources
-
-- [The Chess Programming Wiki](https://www.chessprogramming.org/Main_Page)
+It ended up being difficult to make use of both threads. PVS splitting seemed the most promising, we had some attempts but we ended up not going through with it. We also tried Lazy SMP, but the communication overhead in accessing a shared transposition table through message passing ends up about equal in strength compared to a single-threaded search.
