@@ -1,6 +1,6 @@
 # **gnomeschesser**
 
-[gnomeschesser](https://github.com/tonyd33/gnomeschesser) is a classical chess engine using standard techniques, implemented in Gleam. It uses minimax and employs a variety of techniques to reduce the search space. 
+[gnomeschesser](https://github.com/tonyd33/gnomeschesser) is a classical chess engine using standard techniques, implemented in Gleam. It uses minimax and employs a variety of techniques to reduce the search space.
 
 ### Search:
 
@@ -9,7 +9,7 @@
 - [Quiescence search](https://www.chessprogramming.org/Quiescence_Search)
 - [Move ordering](https://www.chessprogramming.org/Move_Ordering)
     - We order our moves using:
-        1. [PV-move](https://www.chessprogramming.org/PV-Move) 
+        1. [PV-move](https://www.chessprogramming.org/PV-Move)
             1. Using [Hash Moves](https://www.chessprogramming.org/Hash_Move) if it exists, otherwise we try [Internal Iterative Deepening](https://www.chessprogramming.org/Internal_Iterative_Deepening)
         2. [Most Valuable Victim - Least Valuable Attacker](https://www.chessprogramming.org/MVV-LVA) for non-quiet moves
         3. [History Heuristic](https://www.chessprogramming.org/History_Heuristic) for quiet moves
@@ -78,9 +78,9 @@ On the topic of optimization, we pre-computed values and encoded them as constan
 
 While traversing the search tree, we must maintain and update values like the transposition table, and as a luxury, search statistics (e.g. number of beta-cutoffs, transposition table cache hits, etc.). In Gleam, where variables are immutable, this is cumbersome: functions would have to accept extraneous arguments and return extraneous values, making the code noisy and hard-to-read. For example, it would be strange for a function that does a transposition table lookup to accept and return statistics just because it needs to increment a statistic.
 
-The solution was porting the State monad, a popular construct in other functional programming languages to simulate stateful code. This works well in Gleam with its `use` syntax and transforms code like this:
+The solution was using the State monad, a popular construct in other functional programming languages to simulate stateful code. This works well in Gleam with its `use` syntax and transforms code like this:
 
-```rust
+```gleam
 /// Get a value in the transposition table
 fn tt_get(
 	tt: TranspositionTable,
@@ -100,9 +100,9 @@ fn tt_get(
 }
 ```
 
-Into code like this:
+...into code like this:
 
-```rust
+```gleam
 fn tt_get(
 	tt: TranspositionTable,
 	key: Key
@@ -133,7 +133,7 @@ We turn to discussing how Donovan is able to receive the “stop search” comma
 
 By regularly sprinkling “interruption checks” as well as performing strategic “checkpoints” throughout the search, we can be pretty confident that the search can be terminated in time without losing much progress. In practice, with Gleam’s `use` syntax, it gives us declarative code like this:
 
-```rust
+```gleam
 fn iterative_deepening(game, alpha, beta, depth) {
 	use <- interruptable
 	use evaluation <- do(minimax(game, alpha, beta, depth))
@@ -144,7 +144,7 @@ fn iterative_deepening(game, alpha, beta, depth) {
 
 This is implemented by storing an “interrupt checker” within the State monad mentioned earlier, and calling upon it and returning an error if there’s an interrupt:
 
-```rust
+```gleam
 fn interruptable(f) {
 	use interrupt <- state.do(state.get_state())
 	case interrupt() {
@@ -156,7 +156,7 @@ fn interruptable(f) {
 
 The interrupt checker simply checks if it has received a stop command on a subject.
 
-```rust
+```gleam
 let interrupt = fn() {
 	case process.receive(recv, 0) {
 		Ok(Stop) -> True
@@ -169,7 +169,7 @@ Polling for messages regularly adds surprisingly little overhead and, with inter
 
 As for checkpointing, it’s likely simpler than you might think:
 
-```rust
+```gleam
 pub fn checkpoint(a_chkpt: a, f: fn() -> InterruptableState(s, a)) {
   use ra <- state.do(f())
 
