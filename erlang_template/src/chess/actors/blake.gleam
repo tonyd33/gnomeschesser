@@ -75,8 +75,8 @@ pub type Message {
   LoadFEN(fen: String)
 
   DoMoves(moves: List(String))
-  AppendHistory(game: Game)
-  AppendHistoryFEN(fen: String)
+  AppendHistory(game: Game, dumb: Bool)
+  AppendHistoryFEN(fen: String, dumb: Bool)
 
   Go(
     deadline: Option(Timestamp),
@@ -199,13 +199,19 @@ fn loop(blake: Blake, recv_chan: Subject(Message)) {
         }
       }
     }
-    AppendHistory(game:) -> {
-      Ok(smart_append_history(blake, game))
+    AppendHistory(game:, dumb:) -> {
+      case dumb {
+        True -> Ok(dumb_append_history(blake, game))
+        False -> Ok(smart_append_history(blake, game))
+      }
     }
-    AppendHistoryFEN(fen:) -> {
+    AppendHistoryFEN(fen:, dumb:) -> {
       case game.load_fen(fen) {
-        Ok(game) -> Ok(smart_append_history(blake, game))
-
+        Ok(game) ->
+          case dumb {
+            True -> Ok(dumb_append_history(blake, game))
+            False -> Ok(smart_append_history(blake, game))
+          }
         Error(Nil) -> {
           yapper.warn("Failed to load FEN: " <> fen)
           |> yap(blake, _)
@@ -554,4 +560,8 @@ fn smart_append_history(blake: Blake, game) {
       Blake(..blake, game:, history: [])
     }
   }
+}
+
+fn dumb_append_history(blake: Blake, game) {
+  Blake(..blake, game:, history: [blake.game, ..blake.history])
 }
