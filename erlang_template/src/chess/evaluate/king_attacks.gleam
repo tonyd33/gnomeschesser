@@ -23,13 +23,12 @@ fn evaluate_blockers(game: game.Game, player: player.Player) {
     let assert Ok(blocker) = dict.get(board, blocker)
     let assert Ok(pinner) = dict.get(board, pinner)
     case pinner.symbol, blocker.symbol {
-      _, piece.Knight -> -10
-      piece.Bishop, piece.Rook -> -80
-      piece.Rook, piece.Bishop -> -40
+      _, piece.Knight -> -50
+      piece.Bishop, piece.Rook -> -140
+      piece.Rook, piece.Bishop -> -100
       piece.Queen, piece.Queen -> -25
-      _, piece.Queen -> -150
-      _, piece.King -> 0
-      _, piece.Pawn -> -2
+      _, piece.Queen -> -250
+      _, piece.Pawn -> -10
       _, _ -> 0
     }
     * common.player(blocker.player)
