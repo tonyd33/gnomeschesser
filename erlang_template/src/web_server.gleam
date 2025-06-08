@@ -91,7 +91,7 @@ fn handle_move(request: Request, robot: Robot) -> Response {
       // Stop any currently-running searches.
       process.send(blake_chan, blake.Stop)
 
-      process.send(blake_chan, blake.AppendHistoryFEN(fen, dumb: True))
+      process.send(blake_chan, blake.AppendHistoryFEN(fen, blake.HalfmoveClock))
       let blake_res =
         process.try_call(
           blake_chan,
