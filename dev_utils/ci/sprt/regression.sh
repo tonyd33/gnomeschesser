@@ -107,12 +107,12 @@ download_fastchess() {
 run_fastchess=$(ls "$repo_root_path"/fastchess/fastchess-*)
 
 if [ "$pull" = yes ]; then
-  docker pull ghcr.io/tonyd33/gleam-chess-tournament/chess-bot:latest
+  docker pull ghcr.io/tonyd33/gnomeschesser/chess-bot:latest
 fi
 
 if [ "$build" = yes ]; then
   docker build \
-    -t ghcr.io/tonyd33/gleam-chess-tournament/chess-bot:local \
+    -t ghcr.io/tonyd33/gnomeschesser/chess-bot:local \
     -f "$repo_root_path/erlang_template/Dockerfile" \
     "$repo_root_path/erlang_template"
 fi
