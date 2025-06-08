@@ -47,14 +47,145 @@ pub fn get_squares() -> List(Square) {
 /// Extracts the file of a square from 0 to 7
 ///
 pub fn file(square: Square) -> Int {
-  int.bitwise_and(square, 0x0f)
+  case square {
+    0x70 -> 0
+    0x60 -> 0
+    0x50 -> 0
+    0x40 -> 0
+    0x30 -> 0
+    0x20 -> 0
+    0x10 -> 0
+    0x0 -> 0
+    0x71 -> 1
+    0x61 -> 1
+    0x51 -> 1
+    0x41 -> 1
+    0x31 -> 1
+    0x21 -> 1
+    0x11 -> 1
+    0x1 -> 1
+    0x72 -> 2
+    0x62 -> 2
+    0x52 -> 2
+    0x42 -> 2
+    0x32 -> 2
+    0x22 -> 2
+    0x12 -> 2
+    0x2 -> 2
+    0x73 -> 3
+    0x63 -> 3
+    0x53 -> 3
+    0x43 -> 3
+    0x33 -> 3
+    0x23 -> 3
+    0x13 -> 3
+    0x3 -> 3
+    0x74 -> 4
+    0x64 -> 4
+    0x54 -> 4
+    0x44 -> 4
+    0x34 -> 4
+    0x24 -> 4
+    0x14 -> 4
+    0x4 -> 4
+    0x75 -> 5
+    0x65 -> 5
+    0x55 -> 5
+    0x45 -> 5
+    0x35 -> 5
+    0x25 -> 5
+    0x15 -> 5
+    0x5 -> 5
+    0x76 -> 6
+    0x66 -> 6
+    0x56 -> 6
+    0x46 -> 6
+    0x36 -> 6
+    0x26 -> 6
+    0x16 -> 6
+    0x6 -> 6
+    0x77 -> 7
+    0x67 -> 7
+    0x57 -> 7
+    0x47 -> 7
+    0x37 -> 7
+    0x27 -> 7
+    0x17 -> 7
+    0x7 -> 7
+    _ -> panic
+  }
 }
 
 /// Extracts the rank of a square from 0 to 7
 ///
 pub fn rank(square: Square) -> Int {
-  // Extract the 0x_0 bit
-  int.bitwise_shift_right(square, 4)
+  case square {
+    0x70 -> 7
+    0x60 -> 6
+    0x50 -> 5
+    0x40 -> 4
+    0x30 -> 3
+    0x20 -> 2
+    0x10 -> 1
+    0x0 -> 0
+    0x71 -> 7
+    0x61 -> 6
+    0x51 -> 5
+    0x41 -> 4
+    0x31 -> 3
+    0x21 -> 2
+    0x11 -> 1
+    0x1 -> 0
+    0x72 -> 7
+    0x62 -> 6
+    0x52 -> 5
+    0x42 -> 4
+    0x32 -> 3
+    0x22 -> 2
+    0x12 -> 1
+    0x2 -> 0
+    0x73 -> 7
+    0x63 -> 6
+    0x53 -> 5
+    0x43 -> 4
+    0x33 -> 3
+    0x23 -> 2
+    0x13 -> 1
+    0x3 -> 0
+    0x74 -> 7
+    0x64 -> 6
+    0x54 -> 5
+    0x44 -> 4
+    0x34 -> 3
+    0x24 -> 2
+    0x14 -> 1
+    0x4 -> 0
+    0x75 -> 7
+    0x65 -> 6
+    0x55 -> 5
+    0x45 -> 4
+    0x35 -> 3
+    0x25 -> 2
+    0x15 -> 1
+    0x5 -> 0
+    0x76 -> 7
+    0x66 -> 6
+    0x56 -> 5
+    0x46 -> 4
+    0x36 -> 3
+    0x26 -> 2
+    0x16 -> 1
+    0x6 -> 0
+    0x77 -> 7
+    0x67 -> 6
+    0x57 -> 5
+    0x47 -> 4
+    0x37 -> 3
+    0x27 -> 2
+    0x17 -> 1
+    0x7 -> 0
+    _ -> panic
+  }
 }
 
 pub fn rank_to_string(rank: Int) -> String {
@@ -107,9 +238,72 @@ pub fn from_string(square: String) -> Result(Square, Nil) {
 /// Where rank and file are from 0 to 7
 ///
 pub fn from_rank_file(rank: Int, file: Int) -> Result(Square, Nil) {
-  case file >= 0 && file < 8 && rank >= 0 && rank < 8 {
-    True -> Ok(int.bitwise_or(int.bitwise_shift_left(rank, 4), file))
-    False -> Error(Nil)
+  case rank, file {
+    7, 0 -> Ok(112)
+    6, 0 -> Ok(96)
+    5, 0 -> Ok(80)
+    4, 0 -> Ok(64)
+    3, 0 -> Ok(48)
+    2, 0 -> Ok(32)
+    1, 0 -> Ok(16)
+    0, 0 -> Ok(0)
+    7, 1 -> Ok(113)
+    6, 1 -> Ok(97)
+    5, 1 -> Ok(81)
+    4, 1 -> Ok(65)
+    3, 1 -> Ok(49)
+    2, 1 -> Ok(33)
+    1, 1 -> Ok(17)
+    0, 1 -> Ok(1)
+    7, 2 -> Ok(114)
+    6, 2 -> Ok(98)
+    5, 2 -> Ok(82)
+    4, 2 -> Ok(66)
+    3, 2 -> Ok(50)
+    2, 2 -> Ok(34)
+    1, 2 -> Ok(18)
+    0, 2 -> Ok(2)
+    7, 3 -> Ok(115)
+    6, 3 -> Ok(99)
+    5, 3 -> Ok(83)
+    4, 3 -> Ok(67)
+    3, 3 -> Ok(51)
+    2, 3 -> Ok(35)
+    1, 3 -> Ok(19)
+    0, 3 -> Ok(3)
+    7, 4 -> Ok(116)
+    6, 4 -> Ok(100)
+    5, 4 -> Ok(84)
+    4, 4 -> Ok(68)
+    3, 4 -> Ok(52)
+    2, 4 -> Ok(36)
+    1, 4 -> Ok(20)
+    0, 4 -> Ok(4)
+    7, 5 -> Ok(117)
+    6, 5 -> Ok(101)
+    5, 5 -> Ok(85)
+    4, 5 -> Ok(69)
+    3, 5 -> Ok(53)
+    2, 5 -> Ok(37)
+    1, 5 -> Ok(21)
+    0, 5 -> Ok(5)
+    7, 6 -> Ok(118)
+    6, 6 -> Ok(102)
+    5, 6 -> Ok(86)
+    4, 6 -> Ok(70)
+    3, 6 -> Ok(54)
+    2, 6 -> Ok(38)
+    1, 6 -> Ok(22)
+    0, 6 -> Ok(6)
+    7, 7 -> Ok(119)
+    6, 7 -> Ok(103)
+    5, 7 -> Ok(87)
+    4, 7 -> Ok(71)
+    3, 7 -> Ok(55)
+    2, 7 -> Ok(39)
+    1, 7 -> Ok(23)
+    0, 7 -> Ok(7)
+    _, _ -> Error(Nil)
   }
 }
 
@@ -141,8 +335,74 @@ pub fn add(square: Square, increment: Int) -> Result(Square, Nil) {
   from_ox88(ox88)
 }
 
-fn is_valid(ox88: Int) -> Bool {
-  0 == int.bitwise_and(ox88, int.bitwise_not(0x77))
+pub fn is_valid(ox88: Int) -> Bool {
+  case ox88 {
+    112
+    | 96
+    | 80
+    | 64
+    | 48
+    | 32
+    | 16
+    | 0
+    | 113
+    | 97
+    | 81
+    | 65
+    | 49
+    | 33
+    | 17
+    | 1
+    | 114
+    | 98
+    | 82
+    | 66
+    | 50
+    | 34
+    | 18
+    | 2
+    | 115
+    | 99
+    | 83
+    | 67
+    | 51
+    | 35
+    | 19
+    | 3
+    | 116
+    | 100
+    | 84
+    | 68
+    | 52
+    | 36
+    | 20
+    | 4
+    | 117
+    | 101
+    | 85
+    | 69
+    | 53
+    | 37
+    | 21
+    | 5
+    | 118
+    | 102
+    | 86
+    | 70
+    | 54
+    | 38
+    | 22
+    | 6
+    | 119
+    | 103
+    | 87
+    | 71
+    | 55
+    | 39
+    | 23
+    | 7 -> True
+    _ -> False
+  }
 }
 
 pub fn pawn_start_rank(player: player.Player) -> Int {
