@@ -62,22 +62,23 @@ pub fn pawn_direction(player: player.Player) {
   }
 }
 
+/// These should be based on the material weights
 /// TODO: see if comparing directly is faster
 pub fn compare_symbol(symbol1: PieceSymbol, symbol2: PieceSymbol) {
   int.compare(
     case symbol1 {
       King -> 0
-      Queen -> 4
-      Rook -> 3
-      Bishop -> 2
+      Queen -> 5
+      Rook -> 4
+      Bishop -> 3
       Knight -> 2
       Pawn -> 1
     },
     case symbol2 {
       King -> 0
-      Queen -> 4
-      Rook -> 3
-      Bishop -> 2
+      Queen -> 5
+      Rook -> 4
+      Bishop -> 3
       Knight -> 2
       Pawn -> 1
     },
